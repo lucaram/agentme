@@ -80,6 +80,8 @@ export async function decideProposalAction(proposalId: string, decision: "accept
 export async function respondToProposalAction(proposalId: string, response: "accepted" | "declined") {
   const { user, agent } = await requireAgent();
   await respondToProposal(proposalId, user.id, agent, response);
+  // Show the responder their own answer immediately (others get it via Realtime).
+  revalidatePath("/chats", "layout");
 }
 
 // ------------------------------------------------------------- contacts
