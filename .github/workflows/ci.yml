@@ -46,7 +46,10 @@ jobs:
             echo "LLM_PROVIDER=mock"
           } > .env.local
 
-      - name: Unit & security tests (offline)
+      - name: Seed demo data
+        run: npm run seed
+
+      - name: Unit & security tests (incl. RLS against the database)
         run: npm test
 
       - run: npx playwright install --with-deps chromium
