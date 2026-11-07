@@ -1,0 +1,99 @@
+import { ActionButton } from "@/components/ActionButton";
+import { CATEGORY_LABELS, type FactCategory } from "@/lib/policy/disclosure";
+import type { Database } from "@/lib/database.types";
+import { approveTaskAction, cancelTaskAction } from "../../actions";
+
+export type TaskView = Database["public"]["Tables"]["tasks"]["Row"] & {
+  parsed: { event: string; window: string; participants: string[]; categories: string[] };
+};
+type Exchange = Database["public"]["Tables"]["task_exchanges"]["Row"];
+type AgentLite = { handle: string; avatar: string };
+
+const STATUS: Record<TaskView["status"], string> = {
+  awaiting_approval: "Waiting for your approval",
+  running: "Agents are coordinating…",
+  proposal_ready: "Proposal ready",
+  accepted: "Plan shared",
+  rejected: "Plan dropped",
+  cancelled: "Stopped",
+  failed: "Failed",
+};
+
+const EXCHANGE: Record<Exchange["status"], string> = {
+  pending: "⏳ asking…",
+  completed: "· replied automatically",
+  refused: "🚫 refused to share",
+  failed: "⚠️ no reply",
+};
+
+export function TaskCard({
+  task,
+  exchanges,
+  agents,
+  canAct,
+}: {
+  task: TaskView;
+  exchanges: Exchange[];
+  agents: Map<string, AgentLite>;
+  canAct: boolean;
+}) {
+  const asks = task.parsed.categories.map((c) => CATEGORY_LABELS[c as FactCategory] ?? c).join(", ");
+  return (
+    <section className="mt-2 w-full max-w-[85%] rounded-2xl border border-agent-border bg-surface p-3 text-sm" aria-label="Agent task">
+      <div className="flex items-center justify-between">
+        <span className="font-medium">🗂️ Agent coordination</span>
+        <span className={`text-xs ${task.status === "failed" ? "text-danger" : "text-muted"}`} data-testid="task-status">
+          {STATUS[task.status]}
+        </span>
+      </div>
+      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+        <dt className="text-muted">Agents</dt>
+        <dd>{task.parsed.participants.map((h) => `@${h}`).join(", ")}</dd>
+        <dt className="text-muted">Will ask for</dt>
+        <dd>{asks}</dd>
+        <dt className="text-muted">When</dt>
+        <dd>{task.parsed.window}</dd>
+      </dl>
+
+      {exchanges.length > 0 && (
+        <ul className="mt-3 space-y-1 border-t border-border pt-2">
+          {exchanges.map((e) => {
+            const to = e.to_agent ? agents.get(e.to_agent) : undefined;
+            const reply = e.response as { data?: { availability?: string | null; food?: string | null }; text?: string } | null;
+            return (
+              <li key={e.id} className="text-xs" data-testid="exchange">
+                <span className="font-medium">{to?.avatar} @{to?.handle}&apos;s agent</span> {EXCHANGE[e.status]}
+                {e.status === "completed" && reply?.data && (
+                  <span className="block pl-5 text-muted">
+                    {[reply.data.availability && `Available: ${reply.data.availability}`, reply.data.food && `Food: ${reply.data.food}`]
+                      .filter(Boolean)
+                      .join(" · ") || reply.text}
+                  </span>
+                )}
+                {(e.status === "failed" || e.status === "refused") && e.error && <span className="block pl-5 text-muted">{e.error}</span>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {exchanges.some((e) => e.status === "completed") && (
+        <p className="mt-2 text-[11px] text-muted">
+          Agents answer within what their owners allowed them to share. Nobody has agreed to anything yet.
+        </p>
+      )}
+      {task.error && <p className="mt-2 text-xs text-danger">{task.error}</p>}
+
+      {canAct && (
+        <div className="mt-3 flex gap-2">
+          {task.status === "awaiting_approval" && (
+            <ActionButton action={approveTaskAction.bind(null, task.id)} label="Approve" pendingLabel="Starting…" variant="btn-primary" />
+          )}
+          {["awaiting_approval", "running"].includes(task.status) && (
+            <ActionButton action={cancelTaskAction.bind(null, task.id)} label={task.status === "running" ? "Stop" : "Cancel"} />
+          )}
+        </div>
+      )}
+    </section>
+  );
+}

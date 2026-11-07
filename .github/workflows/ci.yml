@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LLM_PROVIDER: mock
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      APP_URL: http://localhost:3000
+      A2A_SIGNING_SECRET: ci-only-signing-secret-ci-only-signing-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Typecheck & lint
+        run: |
+          npx next typegen
+          npm run typecheck
+          npm run lint
+
+      - name: Start local Supabase
+        run: |
+          npx supabase start -x storage-api,edge-runtime,logflare,vector,imgproxy
+          npx supabase status -o env 2>/dev/null | tr -d '"' > /tmp/sb.env
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(grep '^ANON_KEY=' /tmp/sb.env | cut -d= -f2-)" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$(grep '^SERVICE_ROLE_KEY=' /tmp/sb.env | cut -d= -f2-)" >> "$GITHUB_ENV"
+
+      - name: Write .env.local for scripts
+        run: |
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY"
+            echo "APP_URL=$APP_URL"
+            echo "A2A_SIGNING_SECRET=$A2A_SIGNING_SECRET"
+            echo "LLM_PROVIDER=mock"
+          } > .env.local
+
+      - name: Unit & security tests (offline)
+        run: npm test
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests (seeds the database, starts the app)
+        run: npm run test:e2e
+
+      - name: Live A2A security, RLS and interop tests
+        run: |
+          npm run dev &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3000/login && break; sleep 2; done
+          npm test
+          npm run test:interop
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
