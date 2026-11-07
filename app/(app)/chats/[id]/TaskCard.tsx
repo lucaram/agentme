@@ -1,7 +1,7 @@
 import { ActionButton } from "@/components/ActionButton";
 import { CATEGORY_LABELS, type FactCategory } from "@/lib/policy/disclosure";
 import type { Database } from "@/lib/database.types";
-import { approveTaskAction, cancelTaskAction } from "../../actions";
+import { approveTaskAction, cancelTaskAction, continueWithoutWaitingAction } from "../../actions";
 
 export type TaskView = Database["public"]["Tables"]["tasks"]["Row"] & {
   parsed: { event: string; window: string; participants: string[]; categories: string[] };
@@ -12,6 +12,7 @@ type AgentLite = { handle: string; avatar: string };
 const STATUS: Record<TaskView["status"], string> = {
   awaiting_approval: "Waiting for your approval",
   running: "Agents are coordinating…",
+  waiting: "Waiting for people to answer",
   proposal_ready: "Proposal ready",
   accepted: "Plan shared",
   rejected: "Plan dropped",
@@ -19,12 +20,20 @@ const STATUS: Record<TaskView["status"], string> = {
   failed: "Failed",
 };
 
-const EXCHANGE: Record<Exchange["status"], string> = {
-  pending: "⏳ asking…",
-  completed: "· replied automatically",
-  refused: "🚫 refused to share",
-  failed: "⚠️ no reply",
-};
+function exchangeLabel(e: Exchange, handle: string | undefined): string {
+  switch (e.status) {
+    case "pending":
+      return "⏳ asking…";
+    case "waiting_human":
+      return `· ⏳ asked @${handle ?? "them"} personally, waiting for their answer`;
+    case "completed":
+      return e.answered_by === "human" ? `· answered by @${handle ?? "them"} personally` : "· replied automatically";
+    case "refused":
+      return e.answered_by === "human" ? "🚫 preferred not to share" : "🚫 refused to share";
+    case "failed":
+      return "⚠️ no reply";
+  }
+}
 
 export function TaskCard({
   task,
@@ -38,6 +47,8 @@ export function TaskCard({
   canAct: boolean;
 }) {
   const asks = task.parsed.categories.map((c) => CATEGORY_LABELS[c as FactCategory] ?? c).join(", ");
+  // Retried/interrupted attempts stay in History; the card shows the latest per person.
+  const latest = [...new Map(exchanges.map((e) => [e.to_agent ?? e.id, e])).values()];
   return (
     <section className="mt-2 w-full max-w-[85%] rounded-2xl border border-agent-border bg-surface p-3 text-sm" aria-label="Agent task">
       <div className="flex items-center justify-between">
@@ -55,14 +66,14 @@ export function TaskCard({
         <dd>{task.parsed.window}</dd>
       </dl>
 
-      {exchanges.length > 0 && (
+      {latest.length > 0 && (
         <ul className="mt-3 space-y-1 border-t border-border pt-2">
-          {exchanges.map((e) => {
+          {latest.map((e) => {
             const to = e.to_agent ? agents.get(e.to_agent) : undefined;
             const reply = e.response as { data?: { availability?: string | null; food?: string | null }; text?: string } | null;
             return (
               <li key={e.id} className="text-xs" data-testid="exchange">
-                <span className="font-medium">{to?.avatar} @{to?.handle}&apos;s agent</span> {EXCHANGE[e.status]}
+                <span className="font-medium">{to?.avatar} @{to?.handle}&apos;s agent</span> {exchangeLabel(e, to?.handle)}
                 {e.status === "completed" && reply?.data && (
                   <span className="block pl-5 text-muted">
                     {[reply.data.availability && `Available: ${reply.data.availability}`, reply.data.food && `Food: ${reply.data.food}`]
@@ -77,20 +88,23 @@ export function TaskCard({
         </ul>
       )}
 
-      {exchanges.some((e) => e.status === "completed") && (
+      {latest.some((e) => e.status === "completed") && (
         <p className="mt-2 text-[11px] text-muted">
-          Agents answer within what their owners allowed them to share. Nobody has agreed to anything yet.
+          Agents answer within what their owners allowed them to share; anything else is asked to the person. Nobody has agreed to anything yet.
         </p>
       )}
       {task.error && <p className="mt-2 text-xs text-danger">{task.error}</p>}
 
       {canAct && (
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           {task.status === "awaiting_approval" && (
             <ActionButton action={approveTaskAction.bind(null, task.id)} label="Approve" pendingLabel="Starting…" variant="btn-primary" />
           )}
-          {["awaiting_approval", "running"].includes(task.status) && (
-            <ActionButton action={cancelTaskAction.bind(null, task.id)} label={task.status === "running" ? "Stop" : "Cancel"} />
+          {task.status === "waiting" && (
+            <ActionButton action={continueWithoutWaitingAction.bind(null, task.id)} label="Continue without waiting" pendingLabel="Continuing…" />
+          )}
+          {["awaiting_approval", "running", "waiting"].includes(task.status) && (
+            <ActionButton action={cancelTaskAction.bind(null, task.id)} label={task.status === "awaiting_approval" ? "Cancel" : "Stop"} />
           )}
         </div>
       )}

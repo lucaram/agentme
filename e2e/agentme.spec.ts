@@ -1,4 +1,8 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
+import { config } from "dotenv";
+
+config({ path: ".env.local", quiet: true });
 
 const PASSWORD = "password123";
 
@@ -161,4 +165,41 @@ test("a business agent answers questions over A2A without taking bookings", asyn
   await expect(luca.page.getByText(/can't take bookings/)).toBeVisible();
   await expect(luca.page.getByTitle("Written by an AI agent").first()).toBeVisible();
   await luca.close();
+});
+
+test("an agent asks its human when it may not share, and the plan continues with their answer", async ({ browser }) => {
+  // Paul keeps his availability private: his agent can't answer by itself.
+  const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  const { data: paulAgent } = await db.from("agents").select("id").eq("handle", "paul").single();
+  const setPaul = (disclosure: "private" | "contacts") =>
+    db.from("agent_facts").update({ disclosure }).eq("agent_id", paulAgent!.id).eq("category", "availability");
+  await setPaul("private");
+
+  try {
+    const luca = await as(browser, "luca");
+    await openMyAgent(luca.page);
+    await send(luca.page, "Arrange drinks with @paul on Saturday evening");
+    const task = luca.page.getByRole("region", { name: "Agent task" }).last();
+    await task.getByRole("button", { name: "Approve" }).click();
+    await expect(task.getByTestId("task-status")).toHaveText("Waiting for people to answer");
+    await expect(task.getByTestId("exchange")).toContainText("asked @paul personally");
+
+    // Paul sees it in his Inbox, prefilled from his own (private) info, and chooses to share.
+    const paul = await as(browser, "paul");
+    await expect(paul.page.getByTestId("inbox-badge")).toHaveText("1");
+    await paul.page.getByRole("link", { name: /Inbox/ }).click();
+    const item = paul.page.getByTestId("inbox-item");
+    await expect(item).toContainText("@luca's agent");
+    await expect(item.getByLabel("Availability")).toHaveValue("Saturdays after 6 PM");
+    await item.getByRole("button", { name: "Share answer" }).click();
+    await expect(paul.page.getByText("Nothing needs your answer right now.")).toBeVisible();
+
+    // Luca's plan continues on its own, and shows that Paul answered personally.
+    await expect(task.getByTestId("exchange")).toContainText("answered by @paul personally");
+    await expect(luca.page.getByTestId("proposal").last()).toContainText("6:30 PM");
+    await luca.close();
+    await paul.close();
+  } finally {
+    await setPaul("contacts");
+  }
 });

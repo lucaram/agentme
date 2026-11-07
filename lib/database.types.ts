@@ -129,6 +129,44 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"inbox_items": {
+                  Row: {
+                    "agent_id": string,"answer": Json | null,"answered_at": string | null,"created_at": string,"exchange_id": string | null,"from_agent": string | null,"id": string,"kind": string,"owner_id": string,"payload": NonNullable<Json>,"status": string,"task_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "agent_id": string,"answer"?: Json | null,"answered_at"?: string | null,"created_at"?: string,"exchange_id"?: string | null,"from_agent"?: string | null,"id"?: string,"kind"?: string,"owner_id": string,"payload": NonNullable<Json>,"status"?: string,"task_id"?: string | null
+                  }
+                  Update: {
+                    "agent_id"?: string,"answer"?: Json | null,"answered_at"?: string | null,"created_at"?: string,"exchange_id"?: string | null,"from_agent"?: string | null,"id"?: string,"kind"?: string,"owner_id"?: string,"payload"?: NonNullable<Json>,"status"?: string,"task_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "inbox_items_agent_id_fkey"
+      columns: ["agent_id"]
+isOneToOne: false
+      referencedRelation: "agents"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inbox_items_exchange_id_fkey"
+      columns: ["exchange_id"]
+isOneToOne: false
+      referencedRelation: "task_exchanges"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inbox_items_from_agent_fkey"
+      columns: ["from_agent"]
+isOneToOne: false
+      referencedRelation: "agents"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inbox_items_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"llm_usage": {
                   Row: {
                     "agent_id": string | null,"cache_read_tokens": number,"cost_usd": number,"created_at": string,"id": string,"input_tokens": number,"model": string,"ok": boolean,"output_tokens": number,"provider": string,"purpose": string,"task_id": string | null,"user_id": string | null
@@ -178,6 +216,26 @@ isOneToOne: false
       columns: ["sender_agent_id"]
 isOneToOne: false
       referencedRelation: "agents"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"plan_steps": {
+                  Row: {
+                    "config": NonNullable<Json>,"id": string,"position": number,"result": Json | null,"status": string,"task_id": string,"type": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "config"?: NonNullable<Json>,"id"?: string,"position": number,"result"?: Json | null,"status"?: string,"task_id": string,"type": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "config"?: NonNullable<Json>,"id"?: string,"position"?: number,"result"?: Json | null,"status"?: string,"task_id"?: string,"type"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "plan_steps_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
       referencedColumns: ["id"]
     }
                   ]
@@ -249,14 +307,14 @@ isOneToOne: true
                   ]
                 },"task_exchanges": {
                   Row: {
-                    "a2a_task_id": string | null,"created_at": string,"disclosed_categories": (string)[],"error": string | null,"from_agent": string | null,"id": string,"latency_ms": number | null,"request": NonNullable<Json>,"response": Json | null,"skill": string,"status": Database["public"]['Enums']["exchange_status"],"task_id": string | null,"to_agent": string | null
+                    "a2a_task_id": string | null,"answered_by": string | null,"created_at": string,"disclosed_categories": (string)[],"error": string | null,"from_agent": string | null,"id": string,"latency_ms": number | null,"request": NonNullable<Json>,"response": Json | null,"skill": string,"status": Database["public"]['Enums']["exchange_status"],"task_id": string | null,"to_agent": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "a2a_task_id"?: string | null,"created_at"?: string,"disclosed_categories"?: (string)[],"error"?: string | null,"from_agent"?: string | null,"id"?: string,"latency_ms"?: number | null,"request"?: NonNullable<Json>,"response"?: Json | null,"skill": string,"status"?: Database["public"]['Enums']["exchange_status"],"task_id"?: string | null,"to_agent"?: string | null
+                    "a2a_task_id"?: string | null,"answered_by"?: string | null,"created_at"?: string,"disclosed_categories"?: (string)[],"error"?: string | null,"from_agent"?: string | null,"id"?: string,"latency_ms"?: number | null,"request"?: NonNullable<Json>,"response"?: Json | null,"skill": string,"status"?: Database["public"]['Enums']["exchange_status"],"task_id"?: string | null,"to_agent"?: string | null
                   }
                   Update: {
-                    "a2a_task_id"?: string | null,"created_at"?: string,"disclosed_categories"?: (string)[],"error"?: string | null,"from_agent"?: string | null,"id"?: string,"latency_ms"?: number | null,"request"?: NonNullable<Json>,"response"?: Json | null,"skill"?: string,"status"?: Database["public"]['Enums']["exchange_status"],"task_id"?: string | null,"to_agent"?: string | null
+                    "a2a_task_id"?: string | null,"answered_by"?: string | null,"created_at"?: string,"disclosed_categories"?: (string)[],"error"?: string | null,"from_agent"?: string | null,"id"?: string,"latency_ms"?: number | null,"request"?: NonNullable<Json>,"response"?: Json | null,"skill"?: string,"status"?: Database["public"]['Enums']["exchange_status"],"task_id"?: string | null,"to_agent"?: string | null
                   }
                   Relationships: [
                     {
@@ -311,7 +369,10 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "claim_task":
+            "can_see_proposal":
+{ Args: { "p_proposal": string }; Returns: boolean
+                           },
+"claim_task":
 { Args: { "p_lease_seconds": number,"p_task": string }; Returns: {
               "attempts": number,
 "conversation_id": string,
@@ -349,7 +410,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "agent_type": "personal"|"business","contact_policy": "contacts_only"|"anyone"|"nobody","contact_status": "pending"|"accepted"|"blocked","conversation_kind": "dm"|"group"|"my_agent"|"agent_chat","disclosure_level": "private"|"contacts","exchange_status": "pending"|"completed"|"refused"|"failed","proposal_status": "pending"|"accepted"|"rejected","task_status": "awaiting_approval"|"running"|"proposal_ready"|"accepted"|"rejected"|"cancelled"|"failed"
+            "agent_type": "personal"|"business","contact_policy": "contacts_only"|"anyone"|"nobody","contact_status": "pending"|"accepted"|"blocked","conversation_kind": "dm"|"group"|"my_agent"|"agent_chat","disclosure_level": "private"|"contacts","exchange_status": "pending"|"completed"|"refused"|"failed"|"waiting_human","proposal_status": "pending"|"accepted"|"rejected","task_status": "awaiting_approval"|"running"|"proposal_ready"|"accepted"|"rejected"|"cancelled"|"failed"|"waiting"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -469,7 +530,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "agent_type": ["personal", "business"],"contact_policy": ["contacts_only", "anyone", "nobody"],"contact_status": ["pending", "accepted", "blocked"],"conversation_kind": ["dm", "group", "my_agent", "agent_chat"],"disclosure_level": ["private", "contacts"],"exchange_status": ["pending", "completed", "refused", "failed"],"proposal_status": ["pending", "accepted", "rejected"],"task_status": ["awaiting_approval", "running", "proposal_ready", "accepted", "rejected", "cancelled", "failed"]
+            "agent_type": ["personal", "business"],"contact_policy": ["contacts_only", "anyone", "nobody"],"contact_status": ["pending", "accepted", "blocked"],"conversation_kind": ["dm", "group", "my_agent", "agent_chat"],"disclosure_level": ["private", "contacts"],"exchange_status": ["pending", "completed", "refused", "failed", "waiting_human"],"proposal_status": ["pending", "accepted", "rejected"],"task_status": ["awaiting_approval", "running", "proposal_ready", "accepted", "rejected", "cancelled", "failed", "waiting"]
           }
         }
 } as const

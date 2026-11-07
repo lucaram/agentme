@@ -1,5 +1,5 @@
 import "server-only";
-import { recoverStuckTasks } from "./orchestrator";
+import { recoverStuckTasks } from "@/lib/plans/engine";
 import { pruneRateLimits } from "@/lib/limits";
 
 const SWEEP_EVERY_MS = 30_000;

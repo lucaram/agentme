@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { requireAgent } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { signOut } from "../(auth)/actions";
 
 const NAV = [
   ["/chats", "Chats"],
+  ["/inbox", "Inbox"],
   ["/contacts", "Contacts"],
   ["/discover", "Discover"],
   ["/history", "History"],
@@ -11,9 +14,17 @@ const NAV = [
 ] as const;
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
-  const { agent } = await requireAgent();
+  const { user, agent } = await requireAgent();
+  const supabase = await createClient();
+  // RLS: counts only this user's own open requests.
+  const { count: inboxCount } = await supabase
+    .from("inbox_items")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "open");
+
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
+      <RealtimeRefresh channel={`inbox-badge-${user.id}`} tables={["inbox_items"]} />
       <header className="sticky top-0 z-10 border-b border-border bg-background/90 px-4 pt-3 backdrop-blur">
         <div className="flex items-center justify-between">
           <Link href="/chats" className="flex items-center gap-2 font-semibold">
@@ -29,8 +40,13 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         </div>
         <nav className="-mx-1 mt-2 flex gap-1 overflow-x-auto pb-2 text-sm">
           {NAV.map(([href, label]) => (
-            <Link key={href} href={href} className="rounded-full px-3 py-1 hover:bg-accent-soft">
+            <Link key={href} href={href} className="flex items-center gap-1 rounded-full px-3 py-1 hover:bg-accent-soft">
               {label}
+              {href === "/inbox" && Boolean(inboxCount) && (
+                <span className="rounded-full bg-danger px-1.5 text-[10px] font-semibold text-white" data-testid="inbox-badge" aria-label={`${inboxCount} open`}>
+                  {inboxCount}
+                </span>
+              )}
             </Link>
           ))}
         </nav>

@@ -73,7 +73,7 @@ export default async function HistoryPage() {
                 <ul className="mt-2 space-y-1 text-xs">
                   {own.map((e) => (
                     <li key={e.id}>
-                      → {byId.get(e.to_agent ?? "")?.avatar} @{byId.get(e.to_agent ?? "")?.handle}: {e.status}
+                      → {byId.get(e.to_agent ?? "")?.avatar} @{byId.get(e.to_agent ?? "")?.handle}: {e.status === "waiting_human" ? "waiting for them to answer" : e.status}{e.answered_by === "human" && " (answered personally)"}
                       {e.latency_ms ? ` · ${(e.latency_ms / 1000).toFixed(1)}s` : ""}
                       {e.disclosed_categories.length > 0 && ` · they shared: ${e.disclosed_categories.map(label).join(", ")}`}
                       {e.error && ` · ${e.error}`}
@@ -102,9 +102,11 @@ export default async function HistoryPage() {
                 <p className="text-xs text-muted">
                   {e.status === "completed"
                     ? e.disclosed_categories.length
-                      ? `Shared: ${e.disclosed_categories.map(label).join(", ")}`
+                      ? `Shared: ${e.disclosed_categories.map(label).join(", ")}${e.answered_by === "human" ? " (you answered personally)" : ""}`
                       : "Shared nothing"
-                    : `${e.status}${e.error ? ` (${e.error})` : ""} — nothing shared`}
+                    : e.status === "waiting_human"
+                      ? "Asked you in your Inbox — nothing shared yet"
+                      : `${e.status}${e.error ? ` (${e.error})` : ""} — nothing shared`}
                 </p>
               </li>
             );

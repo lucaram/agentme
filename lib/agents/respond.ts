@@ -1,10 +1,11 @@
 import { llm } from "@/lib/llm";
 import { canContact, type ContactPolicy, type Relationship } from "@/lib/policy/contactPolicy";
-import { selectDisclosableFacts, type Fact, type RequestableCategory } from "@/lib/policy/disclosure";
+import { isRequestableCategory, selectDisclosableFacts, type Fact, type RequestableCategory } from "@/lib/policy/disclosure";
 import {
   CoordinationReplySchema,
   CoordinationRequestSchema,
   type CoordinationReply,
+  type CoordinationRequest,
 } from "@/lib/coordination/schemas";
 import { BUSINESS_FAQ_SYSTEM, COORDINATION_REPLY_SYSTEM, wrapUntrusted } from "./prompts";
 
@@ -27,7 +28,22 @@ export type IncomingA2A = {
 
 export type AgentResponse =
   | { status: "completed"; text: string; data?: Record<string, unknown>; disclosed: string[]; skill: string }
-  | { status: "refused"; text: string; reason: string; disclosed: []; skill: string };
+  | { status: "refused"; text: string; reason: string; disclosed: []; skill: string }
+  | {
+      /** The agent may not answer this by itself: its owner is asked via the inbox. */
+      status: "needs_human";
+      text: string;
+      skill: string;
+      disclosed: [];
+      request: CoordinationRequest;
+      /** Requested categories the agent has no permission (or no data) to share. */
+      missing: RequestableCategory[];
+      /** Requested categories it could share automatically, for the owner to review. */
+      shareable: Partial<Record<RequestableCategory, string>>;
+    };
+
+/** Categories without which a coordination reply is useless; if not shareable, ask the human. */
+const ESSENTIAL: readonly RequestableCategory[] = ["availability"];
 
 const refuse = (skill: string, reason: string, text: string): AgentResponse => ({
   status: "refused",
@@ -76,6 +92,24 @@ export async function respondAsAgent(
   const allowed = Object.fromEntries(shareable.map((f) => [f.category, f.value])) as Partial<
     Record<RequestableCategory, string>
   >;
+
+  // "Ask my human": an accepted contact needs something essential that this agent
+  // isn't allowed to share. Hand it to the owner instead of guessing or going
+  // silent. Only contacts can reach the inbox, so strangers can't spam it, and
+  // no model runs (nothing is shared) until the owner decides.
+  const requested = request.categories.filter(isRequestableCategory);
+  const missingEssential = ESSENTIAL.filter((c) => requested.includes(c) && !allowed[c]);
+  if (incoming.relationship === "accepted" && missingEssential.length) {
+    return {
+      status: "needs_human",
+      skill,
+      text: `I've asked my owner directly; I'll reply once they answer.`,
+      disclosed: [],
+      request,
+      missing: requested.filter((c) => !allowed[c]),
+      shareable: allowed,
+    };
+  }
 
   const factsBlock = shareable.length
     ? shareable.map((f) => `- ${f.category}: ${f.value}`).join("\n")
