@@ -1,26 +1,18 @@
 /**
- * Security tests against the live A2A HTTP endpoint (requires `npm run dev`
- * and a seeded local database; skipped otherwise).
+ * Security tests against the live A2A HTTP endpoint. Needs a seeded database and
+ * a mock-mode server at LIVE_TEST_URL; skipped otherwise (see ./env.ts).
  */
-import { config } from "dotenv";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import { signAgentToken } from "@/lib/a2a/auth";
-
-config({ path: ".env.local", quiet: true });
-const BASE = process.env.APP_URL ?? "http://localhost:3000";
-const SECRET = process.env.A2A_SIGNING_SECRET ?? "";
-
-const reachable = await fetch(`${BASE}/api/a2a/marco/.well-known/agent-card.json`)
-  .then((r) => r.ok)
-  .catch(() => false);
+import { LIVE_URL as BASE, SECRET, serverUp as reachable } from "./env";
 
 const ids: Record<string, string> = {};
 
-async function rpc(handle: string, body: unknown, token?: string) {
+async function rpc(handle: string, body: unknown, token?: string, headers: Record<string, string> = {}) {
   const res = await fetch(`${BASE}/api/a2a/${handle}`, {
     method: "POST",
-    headers: { "content-type": "application/json", "A2A-Version": "1.0", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    headers: { "content-type": "application/json", "A2A-Version": "1.0", ...headers, ...(token ? { authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify(body),
   });
   return { status: res.status, json: (await res.json()) as { result?: { task?: Record<string, unknown> }; error?: { message: string } } };
@@ -85,5 +77,30 @@ describe.skipIf(!reachable || !SECRET)("A2A endpoint security (live)", () => {
     expect(body).toContain('"disclosed":["availability","food"]');
     expect(body).not.toContain("Islington"); // location is private
     expect(body).not.toContain("knee surgery"); // notes are private
+  });
+
+  it("rate-limits anonymous callers with HTTP 429 and Retry-After", async () => {
+    // A unique test IP so this doesn't throttle other suites.
+    const ip = { "x-forwarded-for": `198.51.100.${Math.floor(Math.random() * 250) + 1}` };
+    const question = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "SendMessage",
+      params: { message: { messageId: crypto.randomUUID(), role: "ROLE_USER", parts: [{ text: "What are your opening hours?" }] } },
+    };
+    const statuses: number[] = [];
+    let retryAfter: string | null = null;
+    for (let i = 0; i < 11; i++) {
+      const res = await fetch(`${BASE}/api/a2a/trattoria`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "A2A-Version": "1.0", ...ip },
+        body: JSON.stringify({ ...question, id: i }),
+      });
+      statuses.push(res.status);
+      if (res.status === 429) retryAfter = res.headers.get("retry-after");
+    }
+    expect(statuses.slice(0, 10).every((s) => s === 200)).toBe(true);
+    expect(statuses[10]).toBe(429);
+    expect(Number(retryAfter)).toBeGreaterThan(0);
   });
 });

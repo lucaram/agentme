@@ -8,6 +8,9 @@ import { getAgentByHandle, getAgentById, getFacts, getRelationship, type AgentRo
 import { createConversation, findConversation, getConversation, isMember, postMessage } from "@/lib/data/chat";
 import { INTENT_SYSTEM, OWNER_CHAT_SYSTEM, PROPOSAL_SYSTEM, wrapUntrusted } from "@/lib/agents/prompts";
 import { asJson } from "@/lib/data/json";
+import type { Database } from "@/lib/database.types";
+import { withUsageContext } from "@/lib/usage/context";
+import { describeRetry, hit } from "@/lib/limits";
 import { displayClock, heuristicIntent, heuristicPlan, relevantClause, type ParticipantReply } from "./heuristics";
 import {
   CoordinationReplySchema,
@@ -88,6 +91,17 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
     });
   }
   if (!valid.length) return;
+
+  const limit = await hit("tasksPerUser", userId);
+  if (!limit.allowed) {
+    await postMessage({
+      conversationId,
+      from: "agent",
+      agentId: agent.id,
+      content: `You've started a lot of plans recently. Please try again in ${describeRetry(limit.retryAfterSeconds)}.`,
+    });
+    return;
+  }
 
   const categories = [...new Set(["availability", ...intent.categories])].filter(isRequestableCategory);
   const parsed: TaskParsed = { event: intent.event || "meetup", window: intent.window || "this week", participants: valid, categories };
@@ -174,30 +188,89 @@ export async function cancelTask(taskId: string, userId: string) {
   }
 }
 
-async function isCancelled(taskId: string) {
-  const { data } = await adminClient().from("tasks").select("status").eq("id", taskId).single();
-  return data?.status === "cancelled";
+// ------------------------------------------------------------- durable execution
+//
+// A running task is advanced only by the worker holding its lease. If the
+// server dies mid-task the lease expires and recoverStuckTasks() (run by the
+// background sweeper) resumes it: replies that already arrived are reused,
+// interrupted exchanges are retried, and after MAX_ATTEMPTS the task fails
+// visibly instead of hanging in "running".
+
+const LEASE_SECONDS = 180;
+export const MAX_ATTEMPTS = 3;
+/** A freshly approved task gets this long to be claimed before the sweeper steps in. */
+const UNCLAIMED_GRACE_MS = 30_000;
+
+type TaskRow = Database["public"]["Tables"]["tasks"]["Row"];
+type ExchangeRow = Database["public"]["Tables"]["task_exchanges"]["Row"];
+
+class LeaseLost extends Error {}
+
+/** Claims the task and runs it to completion (or failure). Safe to call concurrently. */
+export async function runTask(taskId: string) {
+  const { data } = await adminClient().rpc("claim_task", { p_task: taskId, p_lease_seconds: LEASE_SECONDS });
+  const task = data?.[0];
+  if (!task) return; // not running, or another worker holds a live lease
+  await withUsageContext({ taskId, agentId: task.initiator_agent, userId: task.owner_id }, () => executeTask(task));
 }
 
-/**
- * Runs an approved task: asks each participant's agent over A2A (in parallel),
- * then drafts and validates a proposal. Every step is recorded and visible.
- */
-export async function runTask(taskId: string) {
-  const db = adminClient();
-  const { data: task } = await db.from("tasks").select("*").eq("id", taskId).single();
-  if (!task || task.status !== "running") return;
-  const parsed = task.parsed as unknown as TaskParsed;
-  const organiser = await getAgentById(task.initiator_agent);
-  if (!organiser) return setTaskStatus(taskId, "failed", "Your agent no longer exists.");
+/** Resumes running tasks whose worker disappeared. Returns how many were picked up. */
+export async function recoverStuckTasks(): Promise<number> {
+  const now = new Date().toISOString();
+  const grace = new Date(Date.now() - UNCLAIMED_GRACE_MS).toISOString();
+  const { data } = await adminClient()
+    .from("tasks")
+    .select("id")
+    .eq("status", "running")
+    .or(`lease_until.lt.${now},and(lease_until.is.null,updated_at.lt.${grace})`)
+    .limit(20);
+  const ids = (data ?? []).map((t) => t.id);
+  await Promise.allSettled(ids.map((id) => runTask(id)));
+  return ids.length;
+}
 
+async function executeTask(task: TaskRow) {
+  const db = adminClient();
+  const taskId = task.id;
+  const token = task.lease_token!;
+  const parsed = task.parsed as unknown as TaskParsed;
+
+  /** Status change that only succeeds while we still hold the lease. */
+  const finish = async (status: "proposal_ready" | "failed", error?: string) => {
+    const { data } = await db
+      .from("tasks")
+      .update({ status, error: error ?? null, lease_until: null })
+      .eq("id", taskId)
+      .eq("status", "running")
+      .eq("lease_token", token)
+      .select("id");
+    return Boolean(data?.length);
+  };
+  const renew = async () => {
+    const { data } = await db.rpc("renew_task_lease", { p_task: taskId, p_token: token, p_lease_seconds: LEASE_SECONDS });
+    if (!data) throw new LeaseLost(); // cancelled by the owner, or taken over
+  };
   const fail = async (message: string) => {
-    if (await setTaskStatus(taskId, "failed", message, ["running"])) {
-      await postMessage({ conversationId: task.conversation_id, from: "agent", agentId: organiser.id, content: `I couldn't finish: ${message}`, metadata: { kind: "error", task_id: taskId } });
+    if (await finish("failed", message)) {
+      await postMessage({
+        conversationId: task.conversation_id,
+        from: "agent",
+        agentId: task.initiator_agent,
+        content: `I couldn't finish: ${message}`,
+        metadata: { kind: "error", task_id: taskId },
+      });
     }
   };
 
+  if (task.attempts > MAX_ATTEMPTS) {
+    return fail("I was interrupted several times, so I stopped. Nothing was booked or shared beyond what's shown here. You can ask me again.");
+  }
+
   try {
+    const organiser = await getAgentById(task.initiator_agent);
+    if (!organiser) return fail("your agent no longer exists.");
+
+    const { data: previous } = await db.from("task_exchanges").select("*").eq("task_id", taskId).order("created_at");
     const request: CoordinationRequest = {
       type: "agentme.coordination.request",
       event: parsed.event,
@@ -206,42 +279,10 @@ export async function runTask(taskId: string) {
     };
 
     const replies = await Promise.all(
-      parsed.participants.map(async (handle): Promise<ParticipantReply | null> => {
-        const target = await getAgentByHandle(handle);
-        const { data: exchange } = await db
-          .from("task_exchanges")
-          .insert({ task_id: taskId, from_agent: organiser.id, to_agent: target?.id ?? null, skill: "coordination.availability", request: asJson(request) })
-          .select("id")
-          .single();
-        if (!target || !exchange) {
-          if (exchange) await db.from("task_exchanges").update({ status: "failed", error: "Agent not found" }).eq("id", exchange.id);
-          return null;
-        }
-        if (await isCancelled(taskId)) return null;
-
-        const started = Date.now();
-        const result = await sendAgentMessage({
-          fromAgentId: organiser.id,
-          toHandle: handle,
-          text: `@${organiser.handle}'s agent is organising ${parsed.event} (${parsed.window}). Could you share ${parsed.categories.join(", ")}?`,
-          data: request,
-          taskId,
-          exchangeId: exchange.id,
-        });
-        const latency = Date.now() - started;
-
-        if (!result.ok) {
-          await db.from("task_exchanges").update({ status: "failed", error: result.error, latency_ms: latency }).eq("id", exchange.id).eq("status", "pending");
-          return null;
-        }
-        await db.from("task_exchanges").update({ latency_ms: latency }).eq("id", exchange.id);
-        const reply = CoordinationReplySchema.safeParse(result.data);
-        if (!reply.success) return null;
-        return { handle, availability: reply.data.availability, food: reply.data.food };
-      }),
+      parsed.participants.map((handle) => askParticipant({ taskId, organiser, handle, request, parsed, previous: previous ?? [] })),
     );
 
-    if (await isCancelled(taskId)) return;
+    await renew();
     const answered = replies.filter((r): r is ParticipantReply => r !== null);
     if (!answered.length) return fail("none of the agents replied.");
 
@@ -253,26 +294,112 @@ export async function runTask(taskId: string) {
       availability: ownAvailability ? relevantClause(ownAvailability, parsed.window) : null,
       food: ownFacts.find((f) => f.category === "food")?.value ?? null,
     };
-    const everyone = [own, ...answered];
 
-    const proposal = await draftProposal(organiser.handle, everyone, parsed);
-    if (!proposal) return fail("I couldn't find a time that works for everyone.");
-    if (await isCancelled(taskId)) return;
+    // A proposal may already exist if we crashed right after saving it.
+    let { data: saved } = await db.from("proposals").select("id, content").eq("task_id", taskId).maybeSingle();
+    if (!saved) {
+      const proposal = await draftProposal(organiser.handle, [own, ...answered], parsed);
+      if (!proposal) return fail("I couldn't find a time that works for everyone.");
+      await renew();
+      const inserted = await db
+        .from("proposals")
+        .insert({ task_id: taskId, content: asJson({ ...proposal, disclaimer: DISCLAIMER }) })
+        .select("id, content")
+        .single();
+      if (inserted.error) {
+        // Unique violation: a concurrent worker saved one first. Use it.
+        const existing = await db.from("proposals").select("id, content").eq("task_id", taskId).single();
+        saved = existing.data;
+      } else {
+        saved = inserted.data;
+      }
+    }
+    if (!saved) throw new Error("could not save the proposal");
+    if (!(await finish("proposal_ready"))) return;
 
-    const content = { ...proposal, disclaimer: DISCLAIMER };
-    const { data: saved, error } = await db.from("proposals").insert({ task_id: taskId, content: asJson(content) }).select("id").single();
-    if (error) throw error;
-    if (!(await setTaskStatus(taskId, "proposal_ready", undefined, ["running"]))) return;
-    await postMessage({
+    const content = saved.content as unknown as Proposal;
+    await postMessageOnce(task.conversation_id, saved.id, {
       conversationId: task.conversation_id,
       from: "agent",
       agentId: organiser.id,
-      content: `Here's a suggested plan: ${proposal.title}, ${proposal.day} at ${displayClock(proposal.time)}. ${DISCLAIMER}`,
+      content: `Here's a suggested plan: ${content.title}, ${content.day} at ${displayClock(content.time)}. ${DISCLAIMER}`,
       metadata: { kind: "proposal", proposal_id: saved.id, task_id: taskId },
     });
   } catch (error) {
+    if (error instanceof LeaseLost) return; // cancelled or taken over: stop quietly
     await fail(errorText(error));
   }
+}
+
+/** Asks one participant's agent, reusing a reply that already arrived on an earlier attempt. */
+async function askParticipant(opts: {
+  taskId: string;
+  organiser: AgentRow;
+  handle: string;
+  request: CoordinationRequest;
+  parsed: TaskParsed;
+  previous: ExchangeRow[];
+}): Promise<ParticipantReply | null> {
+  const { taskId, organiser, handle, request, parsed } = opts;
+  const db = adminClient();
+  const target = await getAgentByHandle(handle);
+  const prior = target ? opts.previous.filter((e) => e.to_agent === target.id) : [];
+
+  const done = prior.find((e) => e.status === "completed");
+  if (done) {
+    const reply = CoordinationReplySchema.safeParse((done.response as { data?: unknown } | null)?.data);
+    return reply.success ? { handle, availability: reply.data.availability, food: reply.data.food } : null;
+  }
+  if (prior.some((e) => e.status === "refused")) return null; // a refusal is final
+  const interrupted = prior.filter((e) => e.status === "pending").map((e) => e.id);
+  if (interrupted.length) {
+    await db
+      .from("task_exchanges")
+      .update({ status: "failed", error: "Interrupted (server restarted); retried." })
+      .in("id", interrupted)
+      .eq("status", "pending");
+  }
+
+  const { data: exchange } = await db
+    .from("task_exchanges")
+    .insert({ task_id: taskId, from_agent: organiser.id, to_agent: target?.id ?? null, skill: "coordination.availability", request: asJson(request) })
+    .select("id")
+    .single();
+  if (!target || !exchange) {
+    if (exchange) await db.from("task_exchanges").update({ status: "failed", error: "Agent not found" }).eq("id", exchange.id);
+    return null;
+  }
+
+  const started = Date.now();
+  const result = await sendAgentMessage({
+    fromAgentId: organiser.id,
+    toHandle: handle,
+    text: `@${organiser.handle}'s agent is organising ${parsed.event} (${parsed.window}). Could you share ${parsed.categories.join(", ")}?`,
+    data: request,
+    taskId,
+    exchangeId: exchange.id,
+  });
+  const latency = Date.now() - started;
+
+  if (!result.ok) {
+    await db.from("task_exchanges").update({ status: "failed", error: result.error, latency_ms: latency }).eq("id", exchange.id).eq("status", "pending");
+    return null;
+  }
+  await db.from("task_exchanges").update({ latency_ms: latency }).eq("id", exchange.id);
+  const reply = CoordinationReplySchema.safeParse(result.data);
+  if (!reply.success) return null;
+  return { handle, availability: reply.data.availability, food: reply.data.food };
+}
+
+/** Posts a proposal message unless one for this proposal is already in the conversation. */
+async function postMessageOnce(conversationId: string, proposalId: string, message: Parameters<typeof postMessage>[0]) {
+  const { data } = await adminClient()
+    .from("messages")
+    .select("id")
+    .eq("conversation_id", conversationId)
+    .eq("metadata->>proposal_id", proposalId)
+    .limit(1);
+  if (!data?.length) await postMessage(message);
 }
 
 async function draftProposal(organiser: string, replies: ParticipantReply[], parsed: TaskParsed): Promise<Proposal | null> {

@@ -63,7 +63,8 @@ async function deleteExisting(emails) {
     const { data, error } = await db.auth.admin.listUsers({ page, perPage: 200 });
     if (error) throw error;
     for (const user of data.users) {
-      if (emails.includes(user.email)) await db.auth.admin.deleteUser(user.id);
+      // Demo accounts, plus throwaway accounts created by the e2e sign-up test.
+      if (emails.includes(user.email) || /^new\d+@agentme\.test$/.test(user.email ?? "")) await db.auth.admin.deleteUser(user.id);
     }
     if (data.users.length < 200) break;
   }

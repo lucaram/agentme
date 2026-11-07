@@ -1,0 +1,41 @@
+import "server-only";
+import { recoverStuckTasks } from "./orchestrator";
+import { pruneRateLimits } from "@/lib/limits";
+
+const SWEEP_EVERY_MS = 30_000;
+const PRUNE_EVERY_MS = 15 * 60_000;
+
+declare global {
+  var __agentmeSweeper: ReturnType<typeof setInterval> | undefined;
+}
+
+/**
+ * Background maintenance for a long-running Node server (`next dev` / `next start`):
+ * resumes coordination tasks whose worker died, and prunes old rate-limit windows.
+ * Safe with several instances: task claims are atomic in Postgres.
+ * (On serverless hosting, call the same functions from a scheduled cron route instead.)
+ */
+export function startSweeper() {
+  if (globalThis.__agentmeSweeper) return;
+  let lastPrune = 0;
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const resumed = await recoverStuckTasks();
+      if (resumed) console.log(`[agentme] resumed ${resumed} interrupted task(s)`);
+      if (Date.now() - lastPrune > PRUNE_EVERY_MS) {
+        lastPrune = Date.now();
+        await pruneRateLimits();
+      }
+    } catch (error) {
+      console.error("[agentme] sweeper error", error instanceof Error ? error.message : error);
+    } finally {
+      running = false;
+    }
+  };
+  globalThis.__agentmeSweeper = setInterval(tick, SWEEP_EVERY_MS);
+  // Run soon after boot so tasks interrupted by a restart resume quickly.
+  setTimeout(tick, 5_000);
+}

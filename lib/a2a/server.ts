@@ -25,6 +25,13 @@ import { verifyAgentToken } from "./auth";
 import { buildMessage, dataPart, extractContent, textPart } from "./messages";
 import type { Relationship } from "@/lib/policy/contactPolicy";
 import { asJson } from "@/lib/data/json";
+import { hit } from "@/lib/limits";
+import { withUsageContext } from "@/lib/usage/context";
+
+/** Best-effort client IP. Behind a proxy/host this is set by the platform; locally it's "local". */
+function clientIp(request: Request): string {
+  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "local";
+}
 
 // Tasks complete synchronously, so an in-memory store per process is enough for
 // the MVP. Swap for @a2a-js/sdk/server/database to support getTask across restarts.
@@ -64,16 +71,27 @@ export async function handleA2ARequest(request: Request, handle: string): Promis
     caller.taskId = verified.claims.tid;
   }
 
+  // --- Rate limiting, before any work (and any model cost) happens.
+  const limit = caller.agent
+    ? await hit("a2aPerCaller", `${caller.agent.id}->${recipient.id}`)
+    : await hit("a2aAnonymousPerIp", `${clientIp(request)}->${recipient.id}`);
+  if (!limit.allowed) {
+    return Response.json(
+      { jsonrpc: "2.0", id: body.id ?? null, error: { code: -32005, message: "Rate limit exceeded" } },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+    );
+  }
+
   const relationship: Relationship = caller.agent ? await getRelationship(caller.agent.id, recipient.id) : "none";
   const card = buildAgentCard(recipient, env.appUrl);
 
   const executor = new AgentmeExecutor(async (text, data) => {
     // Facts are loaded for the recipient only; respondAsAgent minimises them.
     const facts = recipient.type === "personal" ? await getFacts(recipient.id) : [];
-    return respondAsAgent(
-      recipient,
-      { callerHandle: caller.agent?.handle ?? null, relationship, text, data },
-      facts,
+    // AI cost of this reply is attributed to the recipient's owner and, when the
+    // platform-signed token names one, to the coordination task it serves.
+    return withUsageContext({ taskId: caller.taskId ?? null, agentId: recipient.id, userId: recipient.owner_id }, () =>
+      respondAsAgent(recipient, { callerHandle: caller.agent?.handle ?? null, relationship, text, data }, facts),
     );
   }, (response, a2aTaskId, requestData) => recordExchange(recipient, caller, response, a2aTaskId, requestData));
 

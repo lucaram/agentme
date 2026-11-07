@@ -72,12 +72,50 @@ official A2A client, so the protocol path is always exercised, and external A2A 
 | RLS on every table. Browsers can only read their own data and can't write directly. | `supabase/migrations` |
 | Deleting an account cascades: agent, facts, contacts, private chats, tasks, audit. | `app/(app)/actions.ts` |
 
+## Reliability, limits and cost
+
+- **Coordination survives restarts.** A running task is advanced only by the worker that holds its
+  lease (`claim_task`), and the lease is renewed between steps. A background sweeper
+  (`instrumentation.ts` → `lib/coordination/sweeper.ts`, every 30s) resumes tasks whose lease expired:
+  - Replies that already arrived are reused.
+  - Interrupted exchanges are retried.
+  - The proposal and its message are created at most once.
+  - After 3 attempts the task fails visibly.
+
+  Cancelling a task makes the worker lose its lease, so it stops.
+- **Rate limits** (`lib/limits.ts`) are Postgres-backed fixed windows that hold across restarts and instances:
+
+  | Limit | Allowance | When exceeded |
+  | --- | --- | --- |
+  | A2A calls per calling agent → recipient | 30 per minute | HTTP 429 + `Retry-After` |
+  | Anonymous A2A calls per IP | 10 per minute | HTTP 429 + `Retry-After` |
+  | Messages to agents, per user | 20 per minute | Friendly message in the UI |
+  | New coordination tasks, per user | 20 per hour | Friendly message in the UI |
+  | Contact requests, per agent | 30 per hour | Friendly message in the UI |
+
+  If the limiter itself is unavailable, requests are allowed (fail-open). Behind a proxy, anonymous
+  limits rely on `X-Forwarded-For` being set by your host.
+- **AI cost tracking.** Every model call is written to `llm_usage` with its tokens and cost
+  (`lib/usage/pricing.ts`). Calls are attributed to the task they serve, including the replies other
+  agents generate for it, through a signed task id. **History** shows cost per task and cost per
+  completed plan. `npm run metrics` prints the beta numbers from the plan:
+  - task outcomes
+  - proposal acceptance
+  - AI cost per completed task, broken down by model
+  - why tasks failed
+
 ## Tests
 
 ```bash
-npm test             # unit + security suites (live HTTP/RLS suites auto-skip without a running app/DB)
-npm run test:e2e     # Playwright: onboarding <60s, dinner scenario, contacts/DM, cancel, business FAQ
+npm test             # unit + security suites; DB suites run when Supabase is up
+npm run test:e2e     # Playwright: onboarding <60s, dinner scenario + live RSVPs, contacts/DM, cancel, business FAQ
 npm run test:interop # external A2A client → @trattoria
+
+# Live suites (A2A security, rate limits, crash recovery) need a MOCK-mode server, so they
+# never spend real AI credit. They skip unless LIVE_TEST_URL is set:
+npm run build && LLM_PROVIDER=mock APP_URL=http://localhost:3100 npx next start -p 3100   # separate terminal
+LIVE_TEST_URL=http://localhost:3100 npm test
+E2E_BASE_URL=http://localhost:3100 npm run test:e2e
 ```
 
 ## Not in the MVP (deliberately)
