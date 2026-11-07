@@ -239,32 +239,6 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"proposal_responses": {
-                  Row: {
-                    "agent_id": string,"created_at": string,"proposal_id": string,"response": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "agent_id": string,"created_at"?: string,"proposal_id": string,"response": string
-                  }
-                  Update: {
-                    "agent_id"?: string,"created_at"?: string,"proposal_id"?: string,"response"?: string
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "proposal_responses_agent_id_fkey"
-      columns: ["agent_id"]
-isOneToOne: false
-      referencedRelation: "agents"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "proposal_responses_proposal_id_fkey"
-      columns: ["proposal_id"]
-isOneToOne: false
-      referencedRelation: "proposals"
-      referencedColumns: ["id"]
-    }
-                  ]
                 },"proposals": {
                   Row: {
                     "content": NonNullable<Json>,"created_at": string,"group_conversation_id": string | null,"id": string,"status": Database["public"]['Enums']["proposal_status"],"task_id": string
@@ -305,6 +279,32 @@ isOneToOne: true
                   Relationships: [
                     
                   ]
+                },"step_responses": {
+                  Row: {
+                    "agent_id": string,"answered_by": string,"step_id": string,"updated_at": string,"value": NonNullable<Json>
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "agent_id": string,"answered_by"?: string,"step_id": string,"updated_at"?: string,"value": NonNullable<Json>
+                  }
+                  Update: {
+                    "agent_id"?: string,"answered_by"?: string,"step_id"?: string,"updated_at"?: string,"value"?: NonNullable<Json>
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "step_responses_agent_id_fkey"
+      columns: ["agent_id"]
+isOneToOne: false
+      referencedRelation: "agents"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "step_responses_step_id_fkey"
+      columns: ["step_id"]
+isOneToOne: false
+      referencedRelation: "plan_steps"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"task_exchanges": {
                   Row: {
                     "a2a_task_id": string | null,"answered_by": string | null,"created_at": string,"disclosed_categories": (string)[],"error": string | null,"from_agent": string | null,"id": string,"latency_ms": number | null,"request": NonNullable<Json>,"response": Json | null,"skill": string,"status": Database["public"]['Enums']["exchange_status"],"task_id": string | null,"to_agent": string | null
@@ -339,19 +339,25 @@ isOneToOne: false
                   ]
                 },"tasks": {
                   Row: {
-                    "attempts": number,"conversation_id": string,"created_at": string,"error": string | null,"goal": string,"id": string,"initiator_agent": string,"lease_token": string | null,"lease_until": string | null,"owner_id": string,"parsed": NonNullable<Json>,"status": Database["public"]['Enums']["task_status"],"updated_at": string
+                    "attempts": number,"conversation_id": string,"created_at": string,"error": string | null,"goal": string,"group_conversation_id": string | null,"id": string,"initiator_agent": string,"lease_token": string | null,"lease_until": string | null,"owner_id": string,"parsed": NonNullable<Json>,"status": Database["public"]['Enums']["task_status"],"updated_at": string,"wake_requested": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "attempts"?: number,"conversation_id": string,"created_at"?: string,"error"?: string | null,"goal": string,"id"?: string,"initiator_agent": string,"lease_token"?: string | null,"lease_until"?: string | null,"owner_id": string,"parsed"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["task_status"],"updated_at"?: string
+                    "attempts"?: number,"conversation_id": string,"created_at"?: string,"error"?: string | null,"goal": string,"group_conversation_id"?: string | null,"id"?: string,"initiator_agent": string,"lease_token"?: string | null,"lease_until"?: string | null,"owner_id": string,"parsed"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["task_status"],"updated_at"?: string,"wake_requested"?: boolean
                   }
                   Update: {
-                    "attempts"?: number,"conversation_id"?: string,"created_at"?: string,"error"?: string | null,"goal"?: string,"id"?: string,"initiator_agent"?: string,"lease_token"?: string | null,"lease_until"?: string | null,"owner_id"?: string,"parsed"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["task_status"],"updated_at"?: string
+                    "attempts"?: number,"conversation_id"?: string,"created_at"?: string,"error"?: string | null,"goal"?: string,"group_conversation_id"?: string | null,"id"?: string,"initiator_agent"?: string,"lease_token"?: string | null,"lease_until"?: string | null,"owner_id"?: string,"parsed"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["task_status"],"updated_at"?: string,"wake_requested"?: boolean
                   }
                   Relationships: [
                     {
       foreignKeyName: "tasks_conversation_id_fkey"
       columns: ["conversation_id"]
+isOneToOne: false
+      referencedRelation: "conversations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "tasks_group_conversation_id_fkey"
+      columns: ["group_conversation_id"]
 isOneToOne: false
       referencedRelation: "conversations"
       referencedColumns: ["id"]
@@ -369,8 +375,8 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "can_see_proposal":
-{ Args: { "p_proposal": string }; Returns: boolean
+            "can_see_task":
+{ Args: { "p_task": string }; Returns: boolean
                            },
 "claim_task":
 { Args: { "p_lease_seconds": number,"p_task": string }; Returns: {
@@ -379,6 +385,7 @@ isOneToOne: false
 "created_at": string,
 "error": string | null,
 "goal": string,
+"group_conversation_id": string | null,
 "id": string,
 "initiator_agent": string,
 "lease_token": string | null,
@@ -386,7 +393,8 @@ isOneToOne: false
 "owner_id": string,
 "parsed": NonNullable<Json>,
 "status": Database["public"]['Enums']["task_status"],
-"updated_at": string
+"updated_at": string,
+"wake_requested": boolean
             }[]
                           SetofOptions: {
         from: "*"
@@ -410,7 +418,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "agent_type": "personal"|"business","contact_policy": "contacts_only"|"anyone"|"nobody","contact_status": "pending"|"accepted"|"blocked","conversation_kind": "dm"|"group"|"my_agent"|"agent_chat","disclosure_level": "private"|"contacts","exchange_status": "pending"|"completed"|"refused"|"failed"|"waiting_human","proposal_status": "pending"|"accepted"|"rejected","task_status": "awaiting_approval"|"running"|"proposal_ready"|"accepted"|"rejected"|"cancelled"|"failed"|"waiting"
+            "agent_type": "personal"|"business","contact_policy": "contacts_only"|"anyone"|"nobody","contact_status": "pending"|"accepted"|"blocked","conversation_kind": "dm"|"group"|"my_agent"|"agent_chat","disclosure_level": "private"|"contacts","exchange_status": "pending"|"completed"|"refused"|"failed"|"waiting_human","proposal_status": "pending"|"accepted"|"rejected","task_status": "awaiting_approval"|"running"|"proposal_ready"|"accepted"|"rejected"|"cancelled"|"failed"|"waiting"|"completed"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -530,7 +538,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "agent_type": ["personal", "business"],"contact_policy": ["contacts_only", "anyone", "nobody"],"contact_status": ["pending", "accepted", "blocked"],"conversation_kind": ["dm", "group", "my_agent", "agent_chat"],"disclosure_level": ["private", "contacts"],"exchange_status": ["pending", "completed", "refused", "failed", "waiting_human"],"proposal_status": ["pending", "accepted", "rejected"],"task_status": ["awaiting_approval", "running", "proposal_ready", "accepted", "rejected", "cancelled", "failed", "waiting"]
+            "agent_type": ["personal", "business"],"contact_policy": ["contacts_only", "anyone", "nobody"],"contact_status": ["pending", "accepted", "blocked"],"conversation_kind": ["dm", "group", "my_agent", "agent_chat"],"disclosure_level": ["private", "contacts"],"exchange_status": ["pending", "completed", "refused", "failed", "waiting_human"],"proposal_status": ["pending", "accepted", "rejected"],"task_status": ["awaiting_approval", "running", "proposal_ready", "accepted", "rejected", "cancelled", "failed", "waiting", "completed"]
           }
         }
 } as const

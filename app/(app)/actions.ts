@@ -16,13 +16,13 @@ import {
   cancelTask,
   decideProposal,
   handleOwnerMessage,
-  respondToProposal,
   runTask,
 } from "@/lib/coordination/orchestrator";
 import { FACT_CATEGORIES } from "@/lib/policy/disclosure";
 import { describeRetry, hit } from "@/lib/limits";
 import { continueWithoutWaiting } from "@/lib/plans/engine";
 import { answerInboxItem, declineInboxItem } from "@/lib/plans/inbox";
+import { closePollStep, respondRsvp, votePoll } from "@/lib/plans/participation";
 import { MAX_PLAN_PEOPLE } from "@/lib/plans/types";
 import { withUsageContext } from "@/lib/usage/context";
 
@@ -105,14 +105,43 @@ export async function cancelTaskAction(taskId: string) {
 
 export async function decideProposalAction(proposalId: string, decision: "accept" | "reject") {
   const { user } = await requireAgent();
-  await decideProposal(proposalId, user.id, decision);
+  const { data } = await adminClient().from("proposals").select("task_id").eq("id", proposalId).maybeSingle();
+  if (await decideProposal(proposalId, user.id, decision)) {
+    const taskId = data?.task_id;
+    if (taskId) after(() => runTask(taskId));
+  }
 }
 
-export async function respondToProposalAction(proposalId: string, response: "accepted" | "declined") {
+// ------------------------------------------------------------- RSVP & polls (always the person's own action)
+
+export async function rsvpAction(stepId: string, response: "in" | "out"): Promise<{ error?: string }> {
   const { user, agent } = await requireAgent();
-  await respondToProposal(proposalId, user.id, agent, response);
+  const result = await respondRsvp(stepId, user.id, agent, response);
   // Show the responder their own answer immediately (others get it via Realtime).
   revalidatePath("/chats", "layout");
+  return result.ok ? {} : { error: result.error };
+}
+
+export async function voteAction(stepId: string, option: string): Promise<{ error?: string }> {
+  const { user, agent } = await requireAgent();
+  const result = await votePoll(stepId, user.id, agent, option);
+  if (result.ok && result.wake) {
+    const wake = result.wake;
+    after(() => runTask(wake));
+  }
+  revalidatePath("/chats", "layout");
+  return result.ok ? {} : { error: result.error };
+}
+
+export async function closePollAction(stepId: string): Promise<{ error?: string }> {
+  const { user } = await requireAgent();
+  const result = await closePollStep(stepId, user.id);
+  if (result.ok && result.wake) {
+    const wake = result.wake;
+    after(() => runTask(wake));
+  }
+  revalidatePath("/chats", "layout");
+  return result.ok ? {} : { error: result.error };
 }
 
 // ------------------------------------------------------------- contacts

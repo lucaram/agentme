@@ -81,13 +81,57 @@ export function heuristicIntent(text: string): Intent {
   const part = lower.match(/\b(morning|afternoon|evening|night|lunchtime)\b/)?.[1];
   const window = [day && capitalise(day), part].filter(Boolean).join(" ") || "this week";
   const verbs = /\b(arrange|organi[sz]e|plan|set up|schedule|meet|find a time|get together|catch up)\b/i;
-  return {
-    is_coordination: participants.length > 0 && (verbs.test(text) || event !== "meetup"),
+  const base = {
     event,
     window,
     participants,
-    categories: MEALS.includes(event) || event === "drinks" ? ["availability", "food"] : ["availability"],
+    categories: (MEALS.includes(event) || event === "drinks" ? ["availability", "food"] : ["availability"]) as Intent["categories"],
+    question: "",
+    options: [] as string[],
   };
+  if (!participants.length) return { ...base, kind: "chat" };
+
+  // Poll: "vote", "poll", "which ... X or Y", "choose between ..."
+  if (/\b(poll|vote|which|choose between|prefer)\b/i.test(text)) {
+    const options = pollOptions(text);
+    if (options.length >= 2) return { ...base, kind: "poll", question: pollQuestion(text), options };
+  }
+  // Question: "Ask @marco if/whether/to ..." (but "ask ... to arrange dinner" is coordination)
+  const ask = text.match(/\bask\b(?:\s+@[a-z0-9_]+(?:\s*(?:,|and)\s*@[a-z0-9_]+)*)\s*(?:if|whether|:|to)?\s*(.+)$/i);
+  if (ask && !verbs.test(ask[1])) return { ...base, kind: "question", question: toQuestion(ask[1]) };
+
+  if (verbs.test(text) || event !== "meetup") return { ...base, kind: "coordinate" };
+  return { ...base, kind: "chat" };
+}
+
+/** "...vote: Italian, Thai or Indian" / "which day works better, Saturday or Sunday?" */
+export function pollOptions(text: string): string[] {
+  const clean = text.replace(/@[a-z0-9_]+/gi, "").trim();
+  const segment =
+    clean.includes(":") ? clean.slice(clean.lastIndexOf(":") + 1)
+    : clean.match(/\bbetween\s+(.+)$/i)?.[1]
+    ?? clean.match(/\b(?:better|prefer)\s*[,:]?\s+(.+)$/i)?.[1]
+    ?? clean.match(/,\s*([^,]+(?:,[^,]+)*\s+or\s+.+)$/i)?.[1]
+    ?? "";
+  const options = segment
+    .split(/\s*,\s*|\s+or\s+|\s+and\s+/i)
+    .map((o) => o.replace(/[?.!]+$/, "").trim())
+    .filter((o) => o.length >= 1 && o.length <= 60);
+  return [...new Map(options.map((o) => [o.toLowerCase(), o])).values()].slice(0, 6);
+}
+
+function pollQuestion(text: string): string {
+  const which = text.replace(/@[a-z0-9_]+/gi, "").match(/\b(which[^?:,]*)/i)?.[1]?.trim();
+  return which ? `${capitalise(which).replace(/\s+/g, " ")}?` : "Which option do you prefer?";
+}
+
+/** "he can help me move on Sunday" -> "Can you help me move on Sunday?" */
+function toQuestion(raw: string): string {
+  let q = raw.trim().replace(/[.!]+$/, "");
+  q = q.replace(/^(he|she|they)\s+(can|could|will|would|is|are|has|have)\b/i, (_, __, verb: string) => `${verb} you`);
+  q = q.replace(/\b(his|her|their)\b/gi, "your");
+  q = capitalise(q);
+  return q.endsWith("?") ? q : `${q}?`;
 }
 
 function capitalise(s: string) {

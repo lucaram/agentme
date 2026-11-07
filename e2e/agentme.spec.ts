@@ -77,11 +77,12 @@ test("three agents coordinate a dinner and humans approve it", async ({ browser 
   await expect(shared).toContainText("7:30 PM");
   // Group members see the organiser's answer...
   await expect(shared.getByTestId("rsvps")).toContainText("@luca: ✅ in");
-  await shared.getByRole("button", { name: "I'm in" }).click();
-  await expect(marco.page.getByText("✅ I'm in.")).toBeVisible();
-  // ...and their own, immediately, with the buttons gone.
+  await shared.getByRole("radio", { name: "I'm in" }).click();
+  // A neutral event line, not a fake message from Marco.
+  await expect(marco.page.getByText("Marco is in ✅")).toBeVisible();
+  // ...and their own answer, immediately; it stays editable.
   await expect(shared.getByTestId("rsvps")).toContainText("@marco: ✅ in");
-  await expect(shared.getByRole("button", { name: "I'm in" })).toHaveCount(0);
+  await expect(shared.getByRole("radio", { name: /I'm in/ })).toHaveAttribute("aria-checked", "true");
 
   // Luca's page was opened with a full load (the Realtime auth race). It must update live.
   await luca.page.reload();
@@ -91,14 +92,24 @@ test("three agents coordinate a dinner and humans approve it", async ({ browser 
 
   // Paul sees who said what in his chat list, then declines.
   const paul = await as(browser, "paul");
-  await expect(paul.page.getByText("Marco: ✅ I'm in.")).toBeVisible();
+  await expect(paul.page.getByText("Marco is in ✅")).toBeVisible();
   await paul.page.getByRole("link", { name: /Dinner — Italian/ }).click();
-  await paul.page.getByTestId("proposal").getByRole("button", { name: "Can't make it" }).click();
-  await expect(paul.page.getByText("❌ I can't make it.")).toBeVisible();
+  await paul.page.getByTestId("proposal").getByRole("radio", { name: "Can't make it" }).click();
+  await expect(paul.page.getByText("Paul can't make it ❌")).toBeVisible();
 
   // ...and Luca sees it without refreshing.
   await expect(rsvps).toContainText("@paul: ❌ can't make it", { timeout: 10_000 });
+
+  // RSVP v2: Paul changes his mind; everyone sees the change.
+  await paul.page.getByTestId("proposal").getByRole("radio", { name: /I'm in/ }).click();
+  await expect(paul.page.getByText("Paul changed their answer: is in ✅")).toBeVisible();
+  await expect(rsvps).toContainText("@paul: ✅ in", { timeout: 10_000 });
   await paul.close();
+
+  // Recall: Luca's own agent answers from his plans.
+  await openMyAgent(luca.page);
+  await send(luca.page, "What time did we agree for dinner?");
+  await expect(luca.page.getByText(/Dinner — Italian: Saturday at 7:30 PM\. In: @luca, @marco, @paul/)).toBeVisible();
 
   // Luca can see what the coordination cost in AI calls (all agents' calls count).
   await luca.page.goto("/history");
@@ -202,4 +213,62 @@ test("an agent asks its human when it may not share, and the plan continues with
   } finally {
     await setPaul("contacts");
   }
+});
+
+test("a poll: the organiser approves fixed options, people vote, the app counts", async ({ browser }) => {
+  const luca = await as(browser, "luca");
+  await openMyAgent(luca.page);
+  await send(luca.page, "Ask @marco and @paul to vote: Italian, Thai or Indian");
+  const task = luca.page.getByRole("region", { name: "Agent task" }).last();
+  await expect(task.getByTestId("poll-options")).toHaveText("Italian · Thai · Indian");
+  await task.getByRole("button", { name: "Approve" }).click();
+  await expect(task.getByTestId("task-status")).toHaveText("Waiting for people to answer");
+
+  // Marco's own agent suggests from Marco's own food preferences; Marco decides.
+  const marco = await as(browser, "marco");
+  await marco.page.getByRole("link", { name: /Dinner — Italian/ }).click();
+  const poll = marco.page.getByTestId("poll").last();
+  await expect(poll.getByTestId("poll-suggestion")).toContainText("Your agent suggests Italian");
+  await poll.getByRole("button", { name: "Italian" }).click();
+  await expect(poll.getByTestId("poll-count-Italian")).toContainText("1 vote");
+
+  const paul = await as(browser, "paul");
+  await paul.page.getByRole("link", { name: /Dinner — Italian/ }).click();
+  const paulPoll = paul.page.getByTestId("poll").last();
+  await expect(paulPoll.getByTestId("poll-suggestion")).toHaveCount(0); // "Italian or Thai": ambiguous, no suggestion
+  await paulPoll.getByRole("button", { name: "Thai" }).click();
+
+  // Luca votes last: everyone has voted, so the app closes and announces the result.
+  await luca.page.getByRole("link", { name: "Chats" }).click();
+  await luca.page.getByRole("link", { name: /Dinner — Italian/ }).click();
+  await luca.page.getByTestId("poll").last().getByRole("button", { name: "Italian" }).click();
+  await expect(luca.page.getByText("Poll closed: “Which option do you prefer?” — Italian (2 of 3 votes).")).toBeVisible();
+  await expect(marco.page.getByTestId("poll").last()).toContainText("Result: Italian", { timeout: 10_000 });
+  await luca.close();
+  await marco.close();
+  await paul.close();
+});
+
+test("a question is answered personally and relayed to whoever asked", async ({ browser }) => {
+  const luca = await as(browser, "luca");
+  await openMyAgent(luca.page);
+  await send(luca.page, "Ask @marco if he can help me move on Sunday");
+  const task = luca.page.getByRole("region", { name: "Agent task" }).last();
+  await expect(task).toContainText("“Can you help me move on Sunday?”");
+  await task.getByRole("button", { name: "Approve" }).click();
+  await expect(task.getByTestId("task-status")).toHaveText("Waiting for people to answer");
+
+  const marco = await as(browser, "marco");
+  await expect(marco.page.getByTestId("inbox-badge")).toHaveText("1");
+  await marco.page.getByRole("link", { name: /Inbox/ }).click();
+  const item = marco.page.getByTestId("inbox-item");
+  await expect(item).toContainText("“Can you help me move on Sunday?”");
+  await item.getByLabel("Your answer").fill("Yes, from 10am!");
+  await item.getByRole("button", { name: "Reply" }).click();
+  await expect(marco.page.getByText("Nothing needs your answer right now.")).toBeVisible();
+
+  await expect(luca.page.getByText("💬 @marco answered personally: “Yes, from 10am!”")).toBeVisible();
+  await expect(task.getByTestId("task-status")).toHaveText("Done");
+  await luca.close();
+  await marco.close();
 });

@@ -2,8 +2,9 @@ import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { CATEGORY_LABELS, isRequestableCategory } from "@/lib/policy/disclosure";
-import type { InboxPayload } from "@/lib/plans/inbox";
+import { inboxPayloadOf } from "@/lib/plans/inbox";
 import { InboxItemForm, type InboxField } from "./InboxItemForm";
+import { QuestionForm } from "./QuestionForm";
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 
@@ -26,16 +27,33 @@ export default async function InboxPage() {
       <div>
         <h1 className="text-lg font-semibold">Inbox</h1>
         <p className="text-xs text-muted">
-          Requests your agent couldn&apos;t answer on its own because you haven&apos;t allowed it to share that information. Nothing is shared
-          unless you choose to.
+          Things only you can answer: questions from your contacts, and requests for information your agent isn&apos;t allowed to share by
+          itself. Nothing is shared unless you choose to.
         </p>
       </div>
 
       {!open.length && <p className="card text-sm text-muted">Nothing needs your answer right now.</p>}
       <ul className="space-y-3">
         {open.map((item) => {
-          const payload = item.payload as unknown as InboxPayload;
+          const payload = inboxPayloadOf(item);
           const from = item.from_agent ? byId.get(item.from_agent) : undefined;
+          const who = from ? `${from.avatar} @${from.handle}` : "Someone";
+
+          if (payload.kind === "question") {
+            return (
+              <li key={item.id} className="card space-y-3" data-testid="inbox-item">
+                <div>
+                  <p className="text-sm">
+                    <b>{who}</b> asks you:
+                  </p>
+                  <p className="mt-1 rounded-lg bg-accent-soft px-3 py-2 text-sm">“{payload.question}”</p>
+                  <p className="hint mt-1">{fmt(item.created_at)} · Only @{from?.handle ?? "they"} will see your answer.</p>
+                </div>
+                <QuestionForm itemId={item.id} />
+              </li>
+            );
+          }
+
           const fields: InboxField[] = payload.categories.filter(isRequestableCategory).map((category) => {
             const own = facts?.find((f) => f.category === category);
             return {
@@ -51,8 +69,8 @@ export default async function InboxPage() {
             <li key={item.id} className="card space-y-3" data-testid="inbox-item">
               <div>
                 <p className="text-sm">
-                  <b>{from ? `${from.avatar} @${from.handle}'s agent` : "An agent"}</b> is organising <b>{payload.event}</b> ({payload.window}) and asks
-                  for your {fields.map((f) => f.label.toLowerCase()).join(" and ")}.
+                  <b>{who}&apos;s agent</b> is organising <b>{payload.event}</b> ({payload.window}) and asks for your{" "}
+                  {fields.map((f) => f.label.toLowerCase()).join(" and ")}.
                 </p>
                 <p className="hint">{fmt(item.created_at)} · Your agent didn&apos;t answer because some of this isn&apos;t set to be shared.</p>
               </div>
@@ -67,13 +85,18 @@ export default async function InboxPage() {
           <h2 className="mb-2 text-sm font-semibold text-muted">Earlier</h2>
           <ul className="divide-y divide-border rounded-2xl border border-border bg-surface text-sm">
             {closed.map((item) => {
-              const payload = item.payload as unknown as InboxPayload;
+              const payload = inboxPayloadOf(item);
               const from = item.from_agent ? byId.get(item.from_agent) : undefined;
-              const label = { answered: "You answered", declined: "You declined", withdrawn: "No longer needed" }[item.status as "answered" | "declined" | "withdrawn"];
+              const label = { answered: "You answered", declined: "You declined", withdrawn: "No longer needed" }[
+                item.status as "answered" | "declined" | "withdrawn"
+              ];
+              const what = payload.kind === "question" ? `“${payload.question}”` : `${payload.event} (${payload.window})`;
               return (
                 <li key={item.id} className="flex justify-between gap-2 px-4 py-2">
-                  <span>{from ? `@${from.handle}` : "An agent"} · {payload.event} ({payload.window})</span>
-                  <span className="text-xs text-muted">{label}</span>
+                  <span className="min-w-0 truncate">
+                    {from ? `@${from.handle}` : "Someone"} · {what}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted">{label}</span>
                 </li>
               );
             })}

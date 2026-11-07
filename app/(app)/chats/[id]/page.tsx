@@ -5,6 +5,7 @@ import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { Composer } from "./Composer";
 import { TaskCard, type TaskView } from "./TaskCard";
 import { ProposalCard, type ProposalView } from "./ProposalCard";
+import { PollCard } from "./PollCard";
 import { leaveConversation } from "../../actions";
 
 export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
@@ -23,15 +24,26 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));
   const byOwner = new Map((agents ?? []).map((a) => [a.owner_id, a]));
 
-  const taskIds = (messages ?? []).map((m) => (m.metadata as { task_id?: string }).task_id).filter(Boolean) as string[];
-  const proposalIds = (messages ?? []).map((m) => (m.metadata as { proposal_id?: string }).proposal_id).filter(Boolean) as string[];
+  const metas = (messages ?? []).map((m) => m.metadata as { task_id?: string; proposal_id?: string; step_id?: string });
+  const taskIds = [...new Set(metas.map((m) => m.task_id).filter(Boolean) as string[])];
+  const proposalIds = [...new Set(metas.map((m) => m.proposal_id).filter(Boolean) as string[])];
 
-  const [{ data: tasks }, { data: exchanges }, { data: proposals }, { data: responses }] = await Promise.all([
+  const [{ data: tasks }, { data: exchanges }, { data: proposals }, { data: myFacts }] = await Promise.all([
+    // RLS: tasks are owner-only; exchanges the user sent or received.
     taskIds.length ? supabase.from("tasks").select("*").in("id", taskIds) : Promise.resolve({ data: [] }),
     taskIds.length ? supabase.from("task_exchanges").select("*").in("task_id", taskIds).order("created_at") : Promise.resolve({ data: [] }),
     proposalIds.length ? supabase.from("proposals").select("*").in("id", proposalIds) : Promise.resolve({ data: [] }),
-    proposalIds.length ? supabase.from("proposal_responses").select("*").in("proposal_id", proposalIds) : Promise.resolve({ data: [] }),
+    supabase.from("agent_facts").select("category, value"),
   ]);
+  // Steps & answers: visible to the plan owner and members of the plan's group (RLS can_see_task).
+  const planTaskIds = [...new Set([...taskIds, ...(proposals ?? []).map((p) => p.task_id)])];
+  const { data: steps } = planTaskIds.length
+    ? await supabase.from("plan_steps").select("*").in("task_id", planTaskIds)
+    : { data: [] };
+  const answerStepIds = (steps ?? []).filter((s) => s.type === "rsvp" || s.type === "poll").map((s) => s.id);
+  const { data: stepResponses } = answerStepIds.length
+    ? await supabase.from("step_responses").select("*").in("step_id", answerStepIds)
+    : { data: [] };
 
   const target = conv.target_agent ? byId.get(conv.target_agent) : undefined;
   const others = conv.conversation_members.filter((m) => m.user_id !== user.id).map((m) => byOwner.get(m.user_id));
@@ -54,7 +66,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
     <div className="flex flex-1 flex-col">
       <RealtimeRefresh
         channel={`conv-${id}`}
-        tables={["messages", "tasks", "task_exchanges", "proposals", "proposal_responses"]}
+        tables={["messages", "tasks", "task_exchanges", "proposals", "plan_steps", "step_responses"]}
         filter={`conversation_id=eq.${id}`}
       />
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -71,7 +83,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
 
       <ol className="flex flex-1 flex-col gap-3" aria-label="Messages">
         {(messages ?? []).map((m) => {
-          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string };
+          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string };
           const mine = m.sender_user_id === user.id;
           const senderAgent = m.sender_agent_id ? byId.get(m.sender_agent_id) : undefined;
           const senderUser = m.sender_user_id ? byOwner.get(m.sender_user_id) : undefined;
@@ -84,6 +96,8 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
           }
           const task = meta.kind === "task_card" ? tasks?.find((t) => t.id === meta.task_id) : undefined;
           const proposal = meta.kind === "proposal" ? proposals?.find((p) => p.id === meta.proposal_id) : undefined;
+          const rsvpStep = proposal ? steps?.find((s) => s.task_id === proposal.task_id && s.type === "rsvp") : undefined;
+          const pollStep = meta.kind === "poll" ? steps?.find((s) => s.id === meta.step_id) : undefined;
 
           return (
             <li key={m.id} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
@@ -117,11 +131,23 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
               {proposal && (
                 <ProposalCard
                   proposal={proposal as ProposalView}
-                  responses={(responses ?? []).filter((r) => r.proposal_id === proposal.id)}
+                  rsvpStepId={rsvpStep?.id ?? null}
+                  responses={(stepResponses ?? []).filter((r) => r.step_id === rsvpStep?.id)}
                   agents={byId}
                   myAgentId={agent.id}
                   myHandle={agent.handle}
                   inGroup={conv.kind === "group"}
+                />
+              )}
+              {pollStep && (
+                <PollCard
+                  step={pollStep}
+                  votes={(stepResponses ?? []).filter((r) => r.step_id === pollStep.id)}
+                  agents={byId}
+                  myAgentId={agent.id}
+                  myHandle={agent.handle}
+                  myFacts={myFacts ?? []}
+                  isOrganiser={pollStep.task_id ? (tasks ?? []).some((t) => t.id === pollStep.task_id && t.owner_id === user.id) : false}
                 />
               )}
             </li>

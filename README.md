@@ -88,6 +88,15 @@ official A2A client, so the protocol path is always exercised, and external A2A 
 - The organiser can **Continue without waiting**, or **Stop**. Either way, open requests are withdrawn.
 - **Beta limit:** at most 20 people per plan or group, including the organiser.
 
+Milestone 2 blocks, all started from **My Agent** and approved before anything is sent:
+
+| Block | Try | How it works |
+| --- | --- | --- |
+| **RSVP v2** | (after sharing a plan) | Three states (waiting, in, can't make it), changeable any time. Each change is a neutral event line in the group. |
+| **Poll** | `Ask @marco and @paul to vote: Italian, Thai or Indian` | Options are fixed once the organiser approves. Everyone votes themselves. A voter's own agent may *suggest* an option, from that voter's own preferences only, and the human decides. Votes are counted by code. The poll closes when everyone has voted, or when the organiser closes it. |
+| **Question** | `Ask @marco if he can help me move on Sunday` | Only contacts can ask. The question goes to the person's Inbox, and their agent never answers on their behalf. The answer is relayed as "answered personally". |
+| **Recall** | `What time did we agree for dinner?` | My Agent answers only from plans you can already see: times agreed, who's in, who hasn't replied, poll results, and answers. |
+
 ## Reliability, limits and cost
 
 - **Coordination survives restarts.** A running task is advanced only by the worker that holds its

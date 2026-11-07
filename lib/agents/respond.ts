@@ -4,8 +4,8 @@ import { isRequestableCategory, selectDisclosableFacts, type Fact, type Requesta
 import {
   CoordinationReplySchema,
   CoordinationRequestSchema,
+  QuestionRequestSchema,
   type CoordinationReply,
-  type CoordinationRequest,
 } from "@/lib/coordination/schemas";
 import { BUSINESS_FAQ_SYSTEM, COORDINATION_REPLY_SYSTEM, wrapUntrusted } from "./prompts";
 
@@ -35,12 +35,22 @@ export type AgentResponse =
       text: string;
       skill: string;
       disclosed: [];
-      request: CoordinationRequest;
+      inbox: InboxRequest;
+    };
+
+/** What lands in the owner's inbox. */
+export type InboxRequest =
+  | {
+      kind: "info_request";
+      event: string;
+      window: string;
+      categories: string[];
       /** Requested categories the agent has no permission (or no data) to share. */
       missing: RequestableCategory[];
       /** Requested categories it could share automatically, for the owner to review. */
       shareable: Partial<Record<RequestableCategory, string>>;
-    };
+    }
+  | { kind: "question"; question: string };
 
 /** Categories without which a coordination reply is useless; if not shareable, ask the human. */
 const ESSENTIAL: readonly RequestableCategory[] = ["availability"];
@@ -66,7 +76,12 @@ export async function respondAsAgent(
   facts: readonly Fact[],
 ): Promise<AgentResponse> {
   const isCoordination = CoordinationRequestSchema.safeParse(incoming.data);
-  const skill = isCoordination.success ? "coordination.availability" : recipient.type === "business" ? "business.faq" : "unknown";
+  const isQuestion = QuestionRequestSchema.safeParse(incoming.data);
+  const skill = isCoordination.success
+    ? "coordination.availability"
+    : isQuestion.success
+      ? recipient.type === "business" ? "business.faq" : "coordination.question"
+      : recipient.type === "business" ? "business.faq" : "unknown";
 
   // Anonymous callers may only reach public business info on agents that accept anyone.
   if (incoming.callerHandle === null && !(recipient.type === "business" && skill === "business.faq")) {
@@ -79,7 +94,22 @@ export async function respondAsAgent(
   }
 
   if (recipient.type === "business") {
-    return answerBusinessQuestion(recipient, incoming.text);
+    return answerBusinessQuestion(recipient, isQuestion.success ? isQuestion.data.question : incoming.text);
+  }
+
+  // Free questions are always answered by the person, never guessed by their
+  // agent, and only contacts may ask (so nobody's inbox can be spammed).
+  if (isQuestion.success) {
+    if (incoming.relationship !== "accepted") {
+      return refuse(skill, "not_a_contact", "Only contacts can ask questions.");
+    }
+    return {
+      status: "needs_human",
+      skill,
+      text: "I've passed your question on; they'll answer personally.",
+      disclosed: [],
+      inbox: { kind: "question", question: isQuestion.data.question },
+    };
   }
 
   if (!isCoordination.success) {
@@ -105,9 +135,14 @@ export async function respondAsAgent(
       skill,
       text: `I've asked my owner directly; I'll reply once they answer.`,
       disclosed: [],
-      request,
-      missing: requested.filter((c) => !allowed[c]),
-      shareable: allowed,
+      inbox: {
+        kind: "info_request",
+        event: request.event,
+        window: request.window,
+        categories: request.categories,
+        missing: requested.filter((c) => !allowed[c]),
+        shareable: allowed,
+      },
     };
   }
 

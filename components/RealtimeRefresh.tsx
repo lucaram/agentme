@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { browserClient } from "@/lib/supabase/client";
 
-type Table = "messages" | "tasks" | "task_exchanges" | "proposals" | "proposal_responses" | "inbox_items" | "plan_steps";
+type Table = "messages" | "tasks" | "task_exchanges" | "proposals" | "proposal_responses" | "inbox_items" | "plan_steps" | "step_responses";
 
 /**
  * Re-renders the current server page when rows the user can see change.
