@@ -15,7 +15,7 @@ export const runPoll: StepHandler = async ({ task, step, organiser }) => {
   if ((step.result as { closed?: boolean } | null)?.closed) return { kind: "done", result: step.result };
 
   const config = step.config as unknown as PollConfig;
-  const group = await ensurePlanGroup(task, config.voters.filter((h) => h !== organiser.handle), config.question);
+  const group = await ensurePlanGroup(task, config.voters.filter((h) => h !== organiser.handle), `📊 ${config.question}`);
 
   const { data: posted } = await adminClient()
     .from("messages")
@@ -35,7 +35,7 @@ export const runPoll: StepHandler = async ({ task, step, organiser }) => {
       conversationId: task.conversation_id,
       from: "agent",
       agentId: organiser.id,
-      content: `I've shared the poll in the “${group.title ?? config.question}” group. I'll tell you the result when everyone has voted, or you can close it early from the group.`,
+      content: `I've created a new group for the poll, “${group.title ?? config.question}”. I'll tell you the result when everyone has voted, or you can close it early from the group.`,
       metadata: { kind: "info", task_id: task.id },
     });
   }
