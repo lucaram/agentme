@@ -40,6 +40,11 @@ describe("intent", () => {
       categories: ["availability", "food"],
       question: "",
       options: [],
+      time: "",
+      min: 0,
+      max: 0,
+      items: [],
+      message: "",
     });
   });
   it("is just chat without mentions", () => {

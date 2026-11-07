@@ -22,7 +22,8 @@ import { FACT_CATEGORIES } from "@/lib/policy/disclosure";
 import { describeRetry, hit } from "@/lib/limits";
 import { continueWithoutWaiting } from "@/lib/plans/engine";
 import { answerInboxItem, declineInboxItem } from "@/lib/plans/inbox";
-import { closePollStep, respondRsvp, votePoll } from "@/lib/plans/participation";
+import { claimItem, closePollStep, respondRsvp, unclaimItem, votePoll } from "@/lib/plans/participation";
+import { changePlan, type ChangeInputT } from "@/lib/plans/change";
 import { MAX_PLAN_PEOPLE } from "@/lib/plans/types";
 import { withUsageContext } from "@/lib/usage/context";
 
@@ -131,6 +132,32 @@ export async function voteAction(stepId: string, option: string): Promise<{ erro
   }
   revalidatePath("/chats", "layout");
   return result.ok ? {} : { error: result.error };
+}
+
+export async function claimItemAction(stepId: string, item: string): Promise<{ error?: string }> {
+  const { user, agent } = await requireAgent();
+  const result = await claimItem(stepId, user.id, agent, item);
+  if (result.ok && result.wake) {
+    const wake = result.wake;
+    after(() => runTask(wake));
+  }
+  revalidatePath("/chats", "layout");
+  return result.ok ? {} : { error: result.error };
+}
+
+export async function unclaimItemAction(stepId: string, item: string): Promise<{ error?: string }> {
+  const { user, agent } = await requireAgent();
+  const result = await unclaimItem(stepId, user.id, agent, item);
+  revalidatePath("/chats", "layout");
+  return result.ok ? {} : { error: result.error };
+}
+
+/** Organiser edits a shared plan (Change block). */
+export async function changePlanAction(proposalId: string, input: ChangeInputT): Promise<{ error?: string; warnings?: string[] }> {
+  const { user } = await requireAgent();
+  const result = await changePlan(proposalId, user.id, input);
+  revalidatePath("/chats", "layout");
+  return result.ok ? { warnings: result.warnings } : { error: result.error };
 }
 
 export async function closePollAction(stepId: string): Promise<{ error?: string }> {

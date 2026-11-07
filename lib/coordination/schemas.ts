@@ -1,13 +1,13 @@
 import { z } from "zod";
 
-export const INTENT_KINDS = ["coordinate", "poll", "question", "chat"] as const;
+export const INTENT_KINDS = ["coordinate", "rsvp", "poll", "question", "assign", "announce", "chat"] as const;
 export type IntentKind = (typeof INTENT_KINDS)[number];
 
 export const IntentSchema = z.object({
   kind: z
     .enum(INTENT_KINDS)
     .describe(
-      "coordinate = organise a meeting/event with the mentioned people; poll = ask them to choose between options; question = ask them something and collect their answers; chat = anything else.",
+      "coordinate = organise a meeting/event and find a time that suits everyone; rsvp = invite them to an event whose day AND time the owner already fixed, and ask who's in; poll = ask them to choose between options; question = ask them something and collect their answers; assign = a sign-up list of items/roles people claim (who brings what); announce = just tell them something, no reply needed; chat = anything else.",
     ),
   event: z.string().max(60).describe('Short event name, e.g. "dinner", "coffee", "call". Empty if not an event.'),
   window: z.string().max(80).describe('When, in the owner\'s words, e.g. "Saturday evening". Empty if not stated.'),
@@ -20,6 +20,11 @@ export const IntentSchema = z.object({
     .max(500)
     .describe("poll: the question to vote on. question: what to ask, addressed to the recipient (e.g. 'Can you help me move on Sunday?'). Otherwise empty."),
   options: z.array(z.string().max(60)).max(6).describe("poll only: the 2-6 options exactly as the owner gave them. Otherwise empty."),
+  time: z.string().max(5).describe("rsvp only: the fixed start time as 24h HH:MM. Otherwise empty."),
+  min: z.number().int().min(0).max(20).describe("rsvp only: minimum people needed for it to happen ('need 10'), including the owner. 0 if none."),
+  max: z.number().int().min(0).max(20).describe("rsvp only: maximum places ('max 6', 'up to 6'), including the owner. 0 if none."),
+  items: z.array(z.string().max(80)).max(20).describe("assign only: the items or roles to claim, exactly as given. Otherwise empty."),
+  message: z.string().max(1000).describe("announce only: the message to send, exactly as the owner wrote it. Otherwise empty."),
 });
 export type Intent = z.infer<typeof IntentSchema>;
 

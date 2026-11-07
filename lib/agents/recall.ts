@@ -2,6 +2,7 @@ import "server-only";
 import { adminClient } from "@/lib/supabase/admin";
 import { displayClock } from "@/lib/coordination/heuristics";
 import type { RecallPlan } from "./recall-format";
+import { evaluate, type ThresholdConfig } from "@/lib/plans/threshold";
 
 export type { RecallPlan } from "./recall-format";
 
@@ -30,7 +31,11 @@ export async function buildRecall(userId: string): Promise<RecallPlan[]> {
     db.from("plan_steps").select("id, task_id, type, config, result, status").in("task_id", taskIds),
   ]);
   const stepIds = (steps ?? []).filter((s) => s.type === "rsvp" || s.type === "poll").map((s) => s.id);
-  const { data: responses } = stepIds.length ? await db.from("step_responses").select("step_id, agent_id, value").in("step_id", stepIds) : { data: [] };
+  const assignIds = (steps ?? []).filter((s) => s.type === "assign").map((s) => s.id);
+  const [{ data: responses }, { data: claims }] = await Promise.all([
+    stepIds.length ? db.from("step_responses").select("step_id, agent_id, value, updated_at").in("step_id", stepIds) : Promise.resolve({ data: [] }),
+    assignIds.length ? db.from("item_claims").select("step_id, item, agent_id").in("step_id", assignIds) : Promise.resolve({ data: [] }),
+  ]);
   const handleOf = new Map((agents ?? []).map((a) => [a.id, a.handle]));
 
   return tasks.map((t): RecallPlan => {
@@ -54,11 +59,26 @@ export async function buildRecall(userId: string): Promise<RecallPlan[]> {
       const answers = (responses ?? []).filter((r) => r.step_id === step.id);
       const byHandle = new Map(answers.map((r) => [handleOf.get(r.agent_id) ?? "", r.value as Record<string, string>]));
       if (step.type === "rsvp") {
+        const cfg = (step.config ?? {}) as ThresholdConfig;
+        const state = evaluate(
+          answers.map((r) => ({ handle: handleOf.get(r.agent_id) ?? "", response: (r.value as { response: "in" | "out" }).response, at: r.updated_at })),
+          cfg,
+        );
         plan.rsvp = {
-          in: everyone.filter((h) => byHandle.get(h)?.response === "in"),
-          out: everyone.filter((h) => byHandle.get(h)?.response === "out"),
+          in: state.going,
+          out: state.out,
           waiting: everyone.filter((h) => !byHandle.has(h)),
+          waitlist: state.waitlist,
+          min: cfg.min ?? null,
         };
+      }
+      if (step.type === "assign") {
+        const config = step.config as { title: string; items: string[] };
+        plan.title = config.title;
+        plan.assign = config.items.map((item) => {
+          const claim = (claims ?? []).find((c) => c.step_id === step.id && c.item === item);
+          return { item, by: claim ? handleOf.get(claim.agent_id) ?? null : null };
+        });
       }
       if (step.type === "poll") {
         const config = step.config as { question: string; options: string[]; voters: string[] };

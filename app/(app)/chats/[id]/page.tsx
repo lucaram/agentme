@@ -6,6 +6,7 @@ import { Composer } from "./Composer";
 import { TaskCard, type TaskView } from "./TaskCard";
 import { ProposalCard, type ProposalView } from "./ProposalCard";
 import { PollCard } from "./PollCard";
+import { AssignCard } from "./AssignCard";
 import { leaveConversation } from "../../actions";
 
 export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
@@ -41,9 +42,11 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
     ? await supabase.from("plan_steps").select("*").in("task_id", planTaskIds)
     : { data: [] };
   const answerStepIds = (steps ?? []).filter((s) => s.type === "rsvp" || s.type === "poll").map((s) => s.id);
-  const { data: stepResponses } = answerStepIds.length
-    ? await supabase.from("step_responses").select("*").in("step_id", answerStepIds)
-    : { data: [] };
+  const assignStepIds = (steps ?? []).filter((s) => s.type === "assign").map((s) => s.id);
+  const [{ data: stepResponses }, { data: claims }] = await Promise.all([
+    answerStepIds.length ? supabase.from("step_responses").select("*").in("step_id", answerStepIds) : Promise.resolve({ data: [] }),
+    assignStepIds.length ? supabase.from("item_claims").select("*").in("step_id", assignStepIds) : Promise.resolve({ data: [] }),
+  ]);
 
   const target = conv.target_agent ? byId.get(conv.target_agent) : undefined;
   const others = conv.conversation_members.filter((m) => m.user_id !== user.id).map((m) => byOwner.get(m.user_id));
@@ -66,7 +69,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
     <div className="flex flex-1 flex-col">
       <RealtimeRefresh
         channel={`conv-${id}`}
-        tables={["messages", "tasks", "task_exchanges", "proposals", "plan_steps", "step_responses"]}
+        tables={["messages", "tasks", "task_exchanges", "proposals", "plan_steps", "step_responses", "item_claims"]}
         filter={`conversation_id=eq.${id}`}
       />
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -98,6 +101,8 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
           const proposal = meta.kind === "proposal" ? proposals?.find((p) => p.id === meta.proposal_id) : undefined;
           const rsvpStep = proposal ? steps?.find((s) => s.task_id === proposal.task_id && s.type === "rsvp") : undefined;
           const pollStep = meta.kind === "poll" ? steps?.find((s) => s.id === meta.step_id) : undefined;
+          const assignStep = meta.kind === "assign" ? steps?.find((s) => s.id === meta.step_id) : undefined;
+          const isPlanOwner = (taskId?: string) => Boolean(taskId && (tasks ?? []).some((t) => t.id === taskId && t.owner_id === user.id));
 
           return (
             <li key={m.id} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
@@ -132,11 +137,22 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
                 <ProposalCard
                   proposal={proposal as ProposalView}
                   rsvpStepId={rsvpStep?.id ?? null}
+                  rsvpConfig={(rsvpStep?.config ?? {}) as { min?: number | null; max?: number | null }}
+                  canChange={proposal.status === "accepted" && isPlanOwner(proposal.task_id)}
                   responses={(stepResponses ?? []).filter((r) => r.step_id === rsvpStep?.id)}
                   agents={byId}
                   myAgentId={agent.id}
                   myHandle={agent.handle}
                   inGroup={conv.kind === "group"}
+                />
+              )}
+              {assignStep && (
+                <AssignCard
+                  step={assignStep}
+                  claims={(claims ?? []).filter((c) => c.step_id === assignStep.id)}
+                  agents={byId}
+                  myAgentId={agent.id}
+                  myHandle={agent.handle}
                 />
               )}
               {pollStep && (

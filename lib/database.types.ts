@@ -167,6 +167,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"item_claims": {
+                  Row: {
+                    "agent_id": string,"created_at": string,"item": string,"step_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "agent_id": string,"created_at"?: string,"item": string,"step_id": string
+                  }
+                  Update: {
+                    "agent_id"?: string,"created_at"?: string,"item"?: string,"step_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "item_claims_agent_id_fkey"
+      columns: ["agent_id"]
+isOneToOne: false
+      referencedRelation: "agents"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "item_claims_step_id_fkey"
+      columns: ["step_id"]
+isOneToOne: false
+      referencedRelation: "plan_steps"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"llm_usage": {
                   Row: {
                     "agent_id": string | null,"cache_read_tokens": number,"cost_usd": number,"created_at": string,"id": string,"input_tokens": number,"model": string,"ok": boolean,"output_tokens": number,"provider": string,"purpose": string,"task_id": string | null,"user_id": string | null
@@ -216,6 +242,32 @@ isOneToOne: false
       columns: ["sender_agent_id"]
 isOneToOne: false
       referencedRelation: "agents"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"plan_changes": {
+                  Row: {
+                    "after": NonNullable<Json>,"before": NonNullable<Json>,"changed_by": string | null,"created_at": string,"id": string,"reset_rsvps": boolean,"task_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "after": NonNullable<Json>,"before": NonNullable<Json>,"changed_by"?: string | null,"created_at"?: string,"id"?: string,"reset_rsvps": boolean,"task_id": string
+                  }
+                  Update: {
+                    "after"?: NonNullable<Json>,"before"?: NonNullable<Json>,"changed_by"?: string | null,"created_at"?: string,"id"?: string,"reset_rsvps"?: boolean,"task_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "plan_changes_changed_by_fkey"
+      columns: ["changed_by"]
+isOneToOne: false
+      referencedRelation: "agents"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "plan_changes_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
       referencedColumns: ["id"]
     }
                   ]
