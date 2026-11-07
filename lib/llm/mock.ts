@@ -25,7 +25,7 @@ export class MockProvider implements LLMProvider {
     switch (req.purpose) {
       case "owner_chat": {
         const recall = (ctx.recall ?? []) as RecallPlan[];
-        const asksAboutPlans = /(what time|when|who|replied|answer|agree|poll|vote|result|plan|coming)/i.test(String(ctx.text ?? ""));
+        const asksAboutPlans = /\b(what time|when|who|replied|answer|agree|poll|vote|result|plan|coming)\b/i.test(String(ctx.text ?? ""));
         text =
           asksAboutPlans && recall.length
             ? describeRecall(String(ctx.text ?? ""), recall)

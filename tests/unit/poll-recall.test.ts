@@ -56,3 +56,17 @@ describe("recall", () => {
     expect(describeRecall("anything?", [])).toBe("You don't have any plans yet.");
   });
 });
+
+describe("recall through My Agent (mock model)", () => {
+  it("answers questions about plans from the recall data, and chats otherwise", async () => {
+    const { MockProvider } = await import("@/lib/llm/mock");
+    const plans: RecallPlan[] = [
+      { kind: "coordinate", title: "Dinner — Italian", organiser: "luca", status: "accepted", createdAt: "", when: "Saturday at 7:30 PM", rsvp: { in: ["luca"], out: [], waiting: [] } },
+    ];
+    const ask = (text: string) =>
+      new MockProvider().generateText({ purpose: "owner_chat", system: "", messages: [{ role: "user", content: text }], mockContext: { text, recall: plans } });
+    expect(await ask("What time did we agree for dinner?")).toMatch(/^Dinner — Italian: Saturday at 7:30 PM\./);
+    expect(await ask("Who hasn't replied?")).toMatch(/Waiting: nobody/);
+    expect(await ask("Hello there")).toMatch(/^I can coordinate plans/);
+  });
+});
