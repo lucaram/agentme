@@ -129,6 +129,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"llm_usage": {
+                  Row: {
+                    "agent_id": string | null,"cache_read_tokens": number,"cost_usd": number,"created_at": string,"id": string,"input_tokens": number,"model": string,"ok": boolean,"output_tokens": number,"provider": string,"purpose": string,"task_id": string | null,"user_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "agent_id"?: string | null,"cache_read_tokens"?: number,"cost_usd"?: number,"created_at"?: string,"id"?: string,"input_tokens"?: number,"model": string,"ok"?: boolean,"output_tokens"?: number,"provider": string,"purpose": string,"task_id"?: string | null,"user_id"?: string | null
+                  }
+                  Update: {
+                    "agent_id"?: string | null,"cache_read_tokens"?: number,"cost_usd"?: number,"created_at"?: string,"id"?: string,"input_tokens"?: number,"model"?: string,"ok"?: boolean,"output_tokens"?: number,"provider"?: string,"purpose"?: string,"task_id"?: string | null,"user_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "llm_usage_agent_id_fkey"
+      columns: ["agent_id"]
+isOneToOne: false
+      referencedRelation: "agents"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "llm_usage_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"messages": {
                   Row: {
                     "content": string,"conversation_id": string,"created_at": string,"id": string,"is_ai_generated": boolean,"metadata": NonNullable<Json>,"sender_agent_id": string | null,"sender_user_id": string | null
@@ -207,6 +233,20 @@ isOneToOne: true
       referencedColumns: ["id"]
     }
                   ]
+                },"rate_limits": {
+                  Row: {
+                    "count": number,"key": string,"window_start": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "count"?: number,"key": string,"window_start": string
+                  }
+                  Update: {
+                    "count"?: number,"key"?: string,"window_start"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"task_exchanges": {
                   Row: {
                     "a2a_task_id": string | null,"created_at": string,"disclosed_categories": (string)[],"error": string | null,"from_agent": string | null,"id": string,"latency_ms": number | null,"request": NonNullable<Json>,"response": Json | null,"skill": string,"status": Database["public"]['Enums']["exchange_status"],"task_id": string | null,"to_agent": string | null
@@ -241,14 +281,14 @@ isOneToOne: false
                   ]
                 },"tasks": {
                   Row: {
-                    "conversation_id": string,"created_at": string,"error": string | null,"goal": string,"id": string,"initiator_agent": string,"owner_id": string,"parsed": NonNullable<Json>,"status": Database["public"]['Enums']["task_status"],"updated_at": string
+                    "attempts": number,"conversation_id": string,"created_at": string,"error": string | null,"goal": string,"id": string,"initiator_agent": string,"lease_token": string | null,"lease_until": string | null,"owner_id": string,"parsed": NonNullable<Json>,"status": Database["public"]['Enums']["task_status"],"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "conversation_id": string,"created_at"?: string,"error"?: string | null,"goal": string,"id"?: string,"initiator_agent": string,"owner_id": string,"parsed"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["task_status"],"updated_at"?: string
+                    "attempts"?: number,"conversation_id": string,"created_at"?: string,"error"?: string | null,"goal": string,"id"?: string,"initiator_agent": string,"lease_token"?: string | null,"lease_until"?: string | null,"owner_id": string,"parsed"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["task_status"],"updated_at"?: string
                   }
                   Update: {
-                    "conversation_id"?: string,"created_at"?: string,"error"?: string | null,"goal"?: string,"id"?: string,"initiator_agent"?: string,"owner_id"?: string,"parsed"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["task_status"],"updated_at"?: string
+                    "attempts"?: number,"conversation_id"?: string,"created_at"?: string,"error"?: string | null,"goal"?: string,"id"?: string,"initiator_agent"?: string,"lease_token"?: string | null,"lease_until"?: string | null,"owner_id"?: string,"parsed"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["task_status"],"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -271,11 +311,41 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "is_conversation_member":
+            "claim_task":
+{ Args: { "p_lease_seconds": number,"p_task": string }; Returns: {
+              "attempts": number,
+"conversation_id": string,
+"created_at": string,
+"error": string | null,
+"goal": string,
+"id": string,
+"initiator_agent": string,
+"lease_token": string | null,
+"lease_until": string | null,
+"owner_id": string,
+"parsed": NonNullable<Json>,
+"status": Database["public"]['Enums']["task_status"],
+"updated_at": string
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "tasks"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
+"is_conversation_member":
 { Args: { "conv": string }; Returns: boolean
                            },
 "my_agent_id":
 { Args: Record<PropertyKey, never>; Returns: string
+                           },
+"rate_limit_hit":
+{ Args: { "p_key": string,"p_max": number,"p_window_seconds": number }; Returns: {
+              "allowed": boolean,"retry_after_seconds": number
+            }[]
+                           },
+"renew_task_lease":
+{ Args: { "p_lease_seconds": number,"p_task": string,"p_token": string }; Returns: boolean
                            }
           }
           Enums: {

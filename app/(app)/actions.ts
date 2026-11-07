@@ -20,27 +20,41 @@ import {
   runTask,
 } from "@/lib/coordination/orchestrator";
 import { FACT_CATEGORIES } from "@/lib/policy/disclosure";
+import { describeRetry, hit } from "@/lib/limits";
+import { withUsageContext } from "@/lib/usage/context";
 
 const Id = z.uuid();
 
 // ------------------------------------------------------------- messages
 
-export async function sendMessage(conversationId: string, text: string) {
+export async function sendMessage(conversationId: string, text: string): Promise<{ error?: string }> {
   const { user, agent } = await requireAgent();
   const content = text.trim().slice(0, 4000);
-  if (!content || !Id.safeParse(conversationId).success) return;
+  if (!content || !Id.safeParse(conversationId).success) return {};
   if (!(await isMember(conversationId, user.id))) throw new Error("Not found");
   const conv = await getConversation(conversationId);
   if (!conv) throw new Error("Not found");
 
-  if (conv.kind === "my_agent") {
-    await handleOwnerMessage({ userId: user.id, agent, conversationId, text: content });
-  } else if (conv.kind === "agent_chat") {
-    await askAgent({ userId: user.id, agent, conversationId, text: content });
-  } else {
-    await postMessage({ conversationId, from: "human", userId: user.id, content });
+  const talksToAgent = conv.kind === "my_agent" || conv.kind === "agent_chat";
+  if (talksToAgent) {
+    // Every message to an agent costs AI time: cap the rate per user.
+    const limit = await hit("agentMessagesPerUser", user.id);
+    if (!limit.allowed) {
+      return { error: `You're sending messages to agents too quickly. Try again in ${describeRetry(limit.retryAfterSeconds)}.` };
+    }
   }
+
+  await withUsageContext({ userId: user.id, agentId: agent.id }, async () => {
+    if (conv.kind === "my_agent") {
+      await handleOwnerMessage({ userId: user.id, agent, conversationId, text: content });
+    } else if (conv.kind === "agent_chat") {
+      await askAgent({ userId: user.id, agent, conversationId, text: content });
+    } else {
+      await postMessage({ conversationId, from: "human", userId: user.id, content });
+    }
+  });
   revalidatePath(`/chats/${conversationId}`);
+  return {};
 }
 
 // ------------------------------------------------------------- tasks & proposals
@@ -84,6 +98,8 @@ export async function requestContact(handle: string) {
     return { ok: true };
   }
   if (other.contact_policy === "nobody") return { error: `@${other.handle} isn't accepting contact requests.` };
+  const limit = await hit("contactRequestsPerAgent", agent.id);
+  if (!limit.allowed) return { error: `Too many contact requests. Try again in ${describeRetry(limit.retryAfterSeconds)}.` };
   await adminClient().from("contacts").insert({ requester_agent: agent.id, addressee_agent: other.id });
   revalidatePath("/contacts");
   revalidatePath("/discover");

@@ -4,6 +4,7 @@ import {
   heuristicReply,
   type ParticipantReply,
 } from "@/lib/coordination/heuristics";
+import { recordUsage } from "@/lib/usage/meter";
 import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest } from "./types";
 
 type Faq = { q: string; a: string };
@@ -19,14 +20,19 @@ export class MockProvider implements LLMProvider {
 
   async generateText(req: LLMRequest): Promise<string> {
     const ctx = (req.mockContext ?? {}) as Record<string, unknown>;
+    let text: string;
     switch (req.purpose) {
       case "owner_chat":
-        return "I can coordinate plans with your contacts' agents. Try: \"Arrange dinner with @marco and @paul on Saturday evening.\"";
+        text = "I can coordinate plans with your contacts' agents. Try: \"Arrange dinner with @marco and @paul on Saturday evening.\"";
+        break;
       case "business_faq":
-        return answerFaq(String(ctx.question ?? ""), (ctx.businessInfo ?? {}) as BusinessInfo);
+        text = answerFaq(String(ctx.question ?? ""), (ctx.businessInfo ?? {}) as BusinessInfo);
+        break;
       default:
         throw new LLMError(`Mock has no text output for ${req.purpose}`, "invalid_output");
     }
+    await meterMock(req, text);
+    return text;
   }
 
   async generateObject<T>(req: LLMObjectRequest<T>): Promise<T> {
@@ -55,8 +61,22 @@ export class MockProvider implements LLMProvider {
     }
     const parsed = req.schema.safeParse(value);
     if (!parsed.success) throw new LLMError("Mock output did not match schema.", "invalid_output");
+    await meterMock(req, JSON.stringify(parsed.data));
     return parsed.data;
   }
+}
+
+/** Mock calls are free but still metered (≈4 chars/token) so usage tracking is testable. */
+async function meterMock(req: LLMRequest, output: string) {
+  const input = req.system.length + req.messages.reduce((n, m) => n + m.content.length, 0);
+  await recordUsage({
+    purpose: req.purpose,
+    provider: "mock",
+    model: "mock",
+    inputTokens: Math.ceil(input / 4),
+    outputTokens: Math.ceil(output.length / 4),
+    ok: true,
+  });
 }
 
 const STOPWORDS = new Set(["the", "you", "your", "can", "are", "have", "has", "for", "and", "any", "there", "what", "with", "does", "how", "our"]);

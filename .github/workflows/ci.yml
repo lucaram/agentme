@@ -57,11 +57,11 @@ jobs:
       - name: End-to-end tests (seeds the database, starts the app)
         run: npm run test:e2e
 
-      - name: Live A2A security, RLS and interop tests
+      - name: "Live tests: A2A security, rate limits, task recovery, interop"
         run: |
           npm run dev &
           for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3000/login && break; sleep 2; done
-          npm test
+          LIVE_TEST_URL=http://localhost:3000 npm test
           npm run test:interop
 
       - uses: actions/upload-artifact@v4

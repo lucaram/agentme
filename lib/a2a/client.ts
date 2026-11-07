@@ -42,6 +42,8 @@ export async function sendAgentMessage(opts: {
     return { ok: true, ...extractResult(result) };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, error: /abort|timeout/i.test(message) ? "Timed out waiting for the agent." : message };
+    if (/abort|timeout/i.test(message)) return { ok: false, error: "Timed out waiting for the agent." };
+    if (/429|rate limit/i.test(message)) return { ok: false, error: "That agent is receiving too many requests right now. Try again shortly." };
+    return { ok: false, error: message };
   }
 }

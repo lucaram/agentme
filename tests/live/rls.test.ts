@@ -3,14 +3,9 @@
  * the app) can't read other people's private data or write anything.
  * Requires the local Supabase stack + seed; skipped otherwise.
  */
-import { config } from "dotenv";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-
-config({ path: ".env.local", quiet: true });
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const up = URL ? await fetch(`${URL}/auth/v1/health`, { headers: { apikey: ANON ?? "" } }).then((r) => r.ok).catch(() => false) : false;
+import { ANON_KEY as ANON, SUPABASE_URL as URL, dbUp as up } from "./env";
 
 describe.skipIf(!up)("RLS isolation (live)", () => {
   let eve: SupabaseClient;

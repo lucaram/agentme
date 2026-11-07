@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
+import { recordUsage } from "@/lib/usage/meter";
 import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest, type LLMTier } from "./types";
 
 // Main reasoning model, plus a cheaper worker for simple parsing.
@@ -36,6 +37,7 @@ export class AnthropicProvider implements LLMProvider {
   async generateText(req: LLMRequest): Promise<string> {
     try {
       const response = await this.client.beta.messages.create(this.base(req));
+      await meter(req, response);
       if (response.stop_reason === "refusal") {
         throw new LLMError("The model declined this request.", "refusal");
       }
@@ -56,6 +58,7 @@ export class AnthropicProvider implements LLMProvider {
         ...base,
         output_config: { ...base.output_config, format: betaZodOutputFormat(req.schema) },
       });
+      await meter(req, response);
       if (response.stop_reason === "refusal") {
         throw new LLMError("The model declined this request.", "refusal");
       }
@@ -65,6 +68,53 @@ export class AnthropicProvider implements LLMProvider {
     } catch (error) {
       throw wrap(error);
     }
+  }
+}
+
+/**
+ * Records what a call cost. With a server-side fallback, one call can be served
+ * by more than one model; usage.iterations then breaks tokens down per model.
+ */
+async function meter(
+  req: LLMRequest,
+  response: { model: string; usage: Anthropic.Beta.BetaUsage; stop_reason: string | null },
+) {
+  const ok = response.stop_reason !== "refusal";
+  type Entry = { model: string; input: number; output: number; cacheRead: number; cacheWrite: number };
+  const parts: Entry[] = [];
+  for (const raw of response.usage.iterations ?? []) {
+    const i = raw as unknown as Partial<Record<string, unknown>>;
+    if (typeof i.input_tokens !== "number" || typeof i.output_tokens !== "number") continue;
+    parts.push({
+      model: typeof i.model === "string" && i.model ? i.model : response.model,
+      input: i.input_tokens,
+      output: i.output_tokens,
+      cacheRead: typeof i.cache_read_input_tokens === "number" ? i.cache_read_input_tokens : 0,
+      cacheWrite: typeof i.cache_creation_input_tokens === "number" ? i.cache_creation_input_tokens : 0,
+    });
+  }
+  const entries: Entry[] = parts.length
+    ? parts
+    : [
+        {
+          model: response.model,
+          input: response.usage.input_tokens,
+          output: response.usage.output_tokens,
+          cacheRead: response.usage.cache_read_input_tokens ?? 0,
+          cacheWrite: response.usage.cache_creation_input_tokens ?? 0,
+        },
+      ];
+  for (const e of entries) {
+    await recordUsage({
+      purpose: req.purpose,
+      provider: "anthropic",
+      model: e.model,
+      inputTokens: e.input,
+      outputTokens: e.output,
+      cacheReadTokens: e.cacheRead,
+      cacheWriteTokens: e.cacheWrite,
+      ok,
+    });
   }
 }
 

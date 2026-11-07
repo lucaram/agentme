@@ -91,6 +91,11 @@ test("three agents coordinate a dinner and humans approve it", async ({ browser 
   await expect(rsvps).toContainText("@paul: ❌ can't make it", { timeout: 10_000 });
   await paul.close();
 
+  // Luca can see what the coordination cost in AI calls (all agents' calls count).
+  await luca.page.goto("/history");
+  await expect(luca.page.getByTestId("task-history").first()).toContainText(/AI: \d+ calls/);
+  await expect(luca.page.getByTestId("usage-total")).toBeVisible();
+
   // Marco can audit exactly what his agent shared, and with whom.
   await marco.page.goto("/history");
   const disclosure = marco.page.getByTestId("disclosure").first();
