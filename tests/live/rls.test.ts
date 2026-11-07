@@ -138,7 +138,11 @@ describe.skipIf(!up)("unread counters (live)", () => {
       expect(await countFor("marco")).toBe(2); // Luca's message + Luca's agent; never his own
       expect(await countFor("paul")).toBe(0); // not a member: nothing visible
 
-      await db.from("conversation_members").update({ last_read_at: new Date().toISOString() }).eq("conversation_id", conv!.id).eq("user_id", ids.luca.owner_id);
+      // Marking read uses the database clock and only ever touches the caller's own row.
+      await (await signIn("marco")).rpc("mark_conversation_read", { p_conversation: conv!.id });
+      expect(await countFor("luca")).toBe(3);
+      expect(await countFor("marco")).toBe(0);
+      await (await signIn("luca")).rpc("mark_conversation_read", { p_conversation: conv!.id });
       expect(await countFor("luca")).toBe(0);
     } finally {
       await db.from("conversations").delete().eq("id", conv!.id);

@@ -8,7 +8,7 @@ import { requireAgent } from "@/lib/auth";
 import { adminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentByHandle, getAgentById, getContactRow } from "@/lib/data/agents";
-import { createConversation, findConversation, getConversation, getOrCreateMyAgentConversation, isMember, markRead, postMessage } from "@/lib/data/chat";
+import { createConversation, findConversation, getConversation, getOrCreateMyAgentConversation, isMember, postMessage } from "@/lib/data/chat";
 import { asJson } from "@/lib/data/json";
 import {
   approveTask,
@@ -65,9 +65,11 @@ export async function sendMessage(conversationId: string, text: string): Promise
 
 /** The user has seen this conversation up to now (clears its unread counter). */
 export async function markReadAction(conversationId: string) {
-  const { user } = await requireAgent();
+  await requireAgent();
   if (!Id.safeParse(conversationId).success) return;
-  await markRead(conversationId, user.id); // only updates the user's own membership row
+  // Database clock + the caller's own row only (see mark_conversation_read).
+  const supabase = await createClient();
+  await supabase.rpc("mark_conversation_read", { p_conversation: conversationId });
 }
 
 // ------------------------------------------------------------- tasks & proposals

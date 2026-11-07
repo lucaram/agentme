@@ -20,3 +20,16 @@ language sql stable security invoker set search_path = public as $$
     and (m.sender_user_id is not null or m.sender_agent_id is not null)
   group by m.conversation_id
 $$;
+
+-- Mark a conversation read for the signed-in user, using the DATABASE clock
+-- (the same clock that stamps messages), so app/database clock skew can never
+-- leave a just-read message counted as unread. Only the caller's own row.
+create function public.mark_conversation_read(p_conversation uuid)
+returns void
+language sql security definer set search_path = public as $$
+  update public.conversation_members
+     set last_read_at = now()
+   where conversation_id = p_conversation and user_id = auth.uid();
+$$;
+revoke execute on function public.mark_conversation_read(uuid) from public, anon;
+grant execute on function public.mark_conversation_read(uuid) to authenticated;

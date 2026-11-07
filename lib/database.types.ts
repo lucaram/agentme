@@ -457,6 +457,9 @@ isOneToOne: false
 "is_conversation_member":
 { Args: { "conv": string }; Returns: boolean
                            },
+"mark_conversation_read":
+{ Args: { "p_conversation": string }; Returns: undefined
+                           },
 "my_agent_id":
 { Args: Record<PropertyKey, never>; Returns: string
                            },

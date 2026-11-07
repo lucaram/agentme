@@ -96,11 +96,3 @@ export async function postMessage(msg: NewMessage): Promise<MessageRow> {
   return data;
 }
 
-/** The member has seen the conversation up to now (clears its unread counter). */
-export async function markRead(conversationId: string, userId: string) {
-  await adminClient()
-    .from("conversation_members")
-    .update({ last_read_at: new Date().toISOString() })
-    .eq("conversation_id", conversationId)
-    .eq("user_id", userId);
-}

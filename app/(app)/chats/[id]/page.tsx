@@ -18,6 +18,8 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
   // All reads use the user's session: RLS decides what is visible.
   const { data: conv } = await supabase.from("conversations").select("*, conversation_members(user_id)").eq("id", id).maybeSingle();
   if (!conv) notFound();
+  // Seen now (database clock). The client also re-marks when new messages arrive while open.
+  await supabase.rpc("mark_conversation_read", { p_conversation: id });
 
   const [{ data: messages }, { data: agents }] = await Promise.all([
     supabase.from("messages").select("*").eq("conversation_id", id).order("created_at").limit(200),
