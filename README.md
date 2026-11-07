@@ -106,6 +106,27 @@ Milestone 3 blocks. Each plan gets its own group, named after it:
 | **Change** | **Change plan** on a shared plan (organiser only) | Edit the name, day or time. A day or time change asks everyone else to confirm again. Every change is kept in the history, and the organiser gets a heads-up if the new time clashes with what agents said. |
 | **Announce** | `Tell @marco and @paul: the trip is tomorrow, bring lunch` | You approve the exact words, and they're sent as **your own message** (not AI) in a new group. No reply is needed. |
 
+### The AI composer (Milestone 4)
+
+Any request that mentions contacts becomes a **plan made of the blocks above** (`lib/plans/compose.ts`).
+
+**How a plan is built**
+- The model only *proposes* a composition.
+- **Code validates it:**
+  - People come only from your @mentions.
+  - The order has to make sense: a proposal needs availability collected first, and an invitation needs a fixed day and time.
+  - Each block can appear once, with at most 5 blocks and 20 people.
+- You get a **step-by-step preview**, which you can edit with **Edit plan** before you approve.
+
+**Examples**
+- **Dinner:** find a time → proposal → who's in.
+- **Five-a-side** ("…at 7pm, need 10, someone bring a ball"): invitation with a minimum, plus a sign-up list, in one group.
+- **Meeting with an agenda:** find a time → ask for agenda items → proposal → who's in.
+- **Gift:** poll → sign-up list.
+- **Carpool:** sign-up list, one item per day.
+
+My Agent shows **template chips** filled in with your own contacts. It also answers **general questions**, but coordination comes first.
+
 ## Reliability, limits and cost
 
 - **Coordination survives restarts.** A running task is advanced only by the worker that holds its

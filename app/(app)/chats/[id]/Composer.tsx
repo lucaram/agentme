@@ -3,7 +3,18 @@
 import { useRef, useState, useTransition } from "react";
 import { sendMessage } from "../../actions";
 
-export function Composer({ conversationId, placeholder, thinkingLabel }: { conversationId: string; placeholder: string; thinkingLabel?: string }) {
+export function Composer({
+  conversationId,
+  placeholder,
+  thinkingLabel,
+  examples,
+}: {
+  conversationId: string;
+  placeholder: string;
+  thinkingLabel?: string;
+  /** Template chips: clicking one fills the box so the owner can adjust it before sending. */
+  examples?: { label: string; text: string }[];
+}) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -25,6 +36,24 @@ export function Composer({ conversationId, placeholder, thinkingLabel }: { conve
 
   return (
     <div className="sticky bottom-0 mt-4 bg-background pb-3 pt-2">
+      {examples && (
+        <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="Templates">
+          {examples.map((ex) => (
+            <button
+              key={ex.label}
+              type="button"
+              className="shrink-0 rounded-full border border-border bg-surface px-3 py-1 text-xs hover:bg-accent-soft"
+              onClick={() => {
+                if (!ref.current) return;
+                ref.current.value = ex.text;
+                ref.current.focus();
+              }}
+            >
+              {ex.label}
+            </button>
+          ))}
+        </div>
+      )}
       {pending && thinkingLabel && <p className="mb-1 text-xs text-muted" aria-live="polite">{thinkingLabel}</p>}
       {error && <p className="mb-1 text-xs text-danger" role="alert">{error}</p>}
       <form
