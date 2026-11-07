@@ -33,15 +33,39 @@ describe("clock & availability parsing", () => {
 describe("intent", () => {
   it("parses the canonical dinner request", () => {
     expect(heuristicIntent("Arrange dinner with @marco and @paul on Saturday evening.")).toEqual({
-      is_coordination: true,
+      kind: "coordinate",
       event: "dinner",
       window: "Saturday evening",
       participants: ["marco", "paul"],
       categories: ["availability", "food"],
+      question: "",
+      options: [],
     });
   });
-  it("is not coordination without mentions", () => {
-    expect(heuristicIntent("What can you do?").is_coordination).toBe(false);
+  it("is just chat without mentions", () => {
+    expect(heuristicIntent("What can you do?").kind).toBe("chat");
+  });
+  it("recognises polls and keeps the options exactly", () => {
+    expect(heuristicIntent("Ask @marco and @paul to vote: Italian, Thai or Indian")).toMatchObject({
+      kind: "poll",
+      participants: ["marco", "paul"],
+      options: ["Italian", "Thai", "Indian"],
+    });
+    expect(heuristicIntent("Ask @marco and @paul which day works better, Saturday or Sunday?")).toMatchObject({
+      kind: "poll",
+      question: "Which day works better?",
+      options: ["Saturday", "Sunday"],
+    });
+  });
+  it("recognises questions and addresses them to the recipient", () => {
+    expect(heuristicIntent("Ask @marco if he can help me move on Sunday")).toMatchObject({
+      kind: "question",
+      participants: ["marco"],
+      question: "Can you help me move on Sunday?",
+    });
+    expect(heuristicIntent("Ask @paul: do you still have my drill?").question).toBe("Do you still have my drill?");
+    // "ask ... to arrange" is coordination, not a question
+    expect(heuristicIntent("Ask @marco to arrange dinner on Friday").kind).toBe("coordinate");
   });
 });
 

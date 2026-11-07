@@ -34,6 +34,14 @@ export function buildAgentCard(agent: CardAgent, appUrl: string): AgentCard {
             examples: ['{"type":"agentme.coordination.request","event":"dinner","window":"Saturday evening","categories":["availability","food"]}'],
             tags: ["coordination", "scheduling"],
           }),
+          skill({
+            id: "coordination.question",
+            name: "Ask the owner a question",
+            description:
+              "Relays a question to the owner, who answers personally (the agent never answers on their behalf). Contacts only.",
+            examples: ['{"type":"agentme.question","question":"Can you help me move on Sunday?"}'],
+            tags: ["question", "human-in-the-loop"],
+          }),
         ];
 
   return {

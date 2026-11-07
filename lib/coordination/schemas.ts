@@ -1,15 +1,34 @@
 import { z } from "zod";
 
+export const INTENT_KINDS = ["coordinate", "poll", "question", "chat"] as const;
+export type IntentKind = (typeof INTENT_KINDS)[number];
+
 export const IntentSchema = z.object({
-  is_coordination: z.boolean().describe("True if the owner wants their agent to organise something with other people."),
-  event: z.string().max(60).describe('Short event name, e.g. "dinner", "coffee", "call".'),
-  window: z.string().max(80).describe('When, in the owner\'s words, e.g. "Saturday evening".'),
+  kind: z
+    .enum(INTENT_KINDS)
+    .describe(
+      "coordinate = organise a meeting/event with the mentioned people; poll = ask them to choose between options; question = ask them something and collect their answers; chat = anything else.",
+    ),
+  event: z.string().max(60).describe('Short event name, e.g. "dinner", "coffee", "call". Empty if not an event.'),
+  window: z.string().max(80).describe('When, in the owner\'s words, e.g. "Saturday evening". Empty if not stated.'),
   participants: z.array(z.string()).describe("Handles mentioned with @, without the @."),
   categories: z
     .array(z.enum(["availability", "food", "location"]))
-    .describe("Which kinds of information the agent needs from the other agents."),
+    .describe("coordinate only: which kinds of information the agent needs from the other agents."),
+  question: z
+    .string()
+    .max(500)
+    .describe("poll: the question to vote on. question: what to ask, addressed to the recipient (e.g. 'Can you help me move on Sunday?'). Otherwise empty."),
+  options: z.array(z.string().max(60)).max(6).describe("poll only: the 2-6 options exactly as the owner gave them. Otherwise empty."),
 });
 export type Intent = z.infer<typeof IntentSchema>;
+
+/** A free question for a person, relayed by their agent. Sent as an A2A DataPart. */
+export const QuestionRequestSchema = z.object({
+  type: z.literal("agentme.question"),
+  question: z.string().min(1).max(500),
+});
+export type QuestionRequest = z.infer<typeof QuestionRequestSchema>;
 
 /** What a coordination request asks another agent for. Sent as an A2A DataPart. */
 export const CoordinationRequestSchema = z.object({

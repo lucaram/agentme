@@ -45,7 +45,7 @@ describe("metering", () => {
           purpose: "intent",
           system: "sys",
           messages: [{ role: "user", content: "Arrange dinner with @marco" }],
-          schema: z.object({ is_coordination: z.boolean() }).passthrough(),
+          schema: z.object({ kind: z.string() }).passthrough(),
           mockContext: { text: "Arrange dinner with @marco" },
         }),
       );

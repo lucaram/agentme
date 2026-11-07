@@ -3,12 +3,23 @@ import { adminClient } from "@/lib/supabase/admin";
 import { asJson } from "@/lib/data/json";
 import type { NewStep, StepRow, TaskParsed, TaskRow } from "./types";
 
-/** The dinner-style plan: gather availability & preferences, then propose. */
+/** The dinner-style plan: gather availability & preferences, propose, then RSVP. */
 export function coordinationSteps(parsed: TaskParsed): NewStep[] {
   return [
     { type: "collect", config: { categories: parsed.categories, participants: parsed.participants } },
     { type: "proposal" },
+    { type: "rsvp" },
   ];
+}
+
+/** A poll: everyone (including the organiser) votes on fixed options. */
+export function pollSteps(organiser: string, participants: string[], question: string, options: string[]): NewStep[] {
+  return [{ type: "poll", config: { question, options, voters: [organiser, ...participants] } }];
+}
+
+/** A question: each person answers personally. */
+export function questionSteps(participants: string[], question: string): NewStep[] {
+  return [{ type: "question", config: { question, participants } }];
 }
 
 export async function createSteps(taskId: string, steps: NewStep[]): Promise<void> {

@@ -245,13 +245,8 @@ async function recordExchange(
         from_agent: caller.agent?.id ?? null,
         task_id: caller.taskId ?? null,
         exchange_id: exchangeId,
-        payload: asJson({
-          event: response.request.event,
-          window: response.request.window,
-          categories: response.request.categories,
-          missing: response.missing,
-          shareable: response.shareable,
-        }),
+        kind: response.inbox.kind,
+        payload: asJson(response.inbox),
       },
       { onConflict: "exchange_id", ignoreDuplicates: true },
     );

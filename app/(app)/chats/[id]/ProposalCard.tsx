@@ -1,16 +1,18 @@
 import { ActionButton } from "@/components/ActionButton";
 import { displayClock } from "@/lib/coordination/heuristics";
 import type { Database } from "@/lib/database.types";
-import { decideProposalAction, respondToProposalAction } from "../../actions";
+import { decideProposalAction } from "../../actions";
+import { RsvpControl } from "./RsvpControl";
 
 export type ProposalView = Database["public"]["Tables"]["proposals"]["Row"] & {
   content: { title: string; day: string; time: string; cuisine: string | null; participants: string[]; rationale: string; disclaimer: string };
 };
-type Response = Database["public"]["Tables"]["proposal_responses"]["Row"];
+type StepResponse = Database["public"]["Tables"]["step_responses"]["Row"];
 type AgentLite = { handle: string; avatar: string };
 
 export function ProposalCard({
   proposal,
+  rsvpStepId,
   responses,
   agents,
   myAgentId,
@@ -18,15 +20,22 @@ export function ProposalCard({
   inGroup,
 }: {
   proposal: ProposalView;
-  responses: Response[];
+  rsvpStepId: string | null;
+  responses: StepResponse[];
   agents: Map<string, AgentLite>;
   myAgentId: string;
   myHandle: string;
   inGroup: boolean;
 }) {
   const c = proposal.content;
-  const mine = responses.find((r) => r.agent_id === myAgentId);
   const isOrganiserView = !inGroup;
+  const answerOf = (handle: string) => {
+    const entry = [...agents.entries()].find(([, a]) => a.handle === handle);
+    const r = entry ? responses.find((x) => x.agent_id === entry[0]) : undefined;
+    return { avatar: entry?.[1].avatar, response: (r?.value as { response?: "in" | "out" } | undefined)?.response };
+  };
+  const mine = responses.find((r) => r.agent_id === myAgentId);
+  const myResponse = (mine?.value as { response?: "in" | "out" } | undefined)?.response ?? null;
 
   return (
     <section className="mt-2 w-full max-w-[85%] rounded-2xl border-2 border-accent bg-surface p-4 text-sm" aria-label="Proposal" data-testid="proposal">
@@ -43,19 +52,18 @@ export function ProposalCard({
       {proposal.status === "accepted" && (
         <ul className="mt-2 space-y-0.5 text-xs" aria-label="Who's in" data-testid="rsvps">
           {c.participants.map((handle) => {
-            const entry = [...agents.entries()].find(([, a]) => a.handle === handle);
-            const response = entry ? responses.find((r) => r.agent_id === entry[0]) : undefined;
+            const { avatar, response } = answerOf(handle);
             return (
               <li key={handle}>
-                {entry?.[1].avatar} @{handle}:{" "}
-                {response?.response === "accepted" ? "✅ in" : response?.response === "declined" ? "❌ can't make it" : <span className="text-muted">⏳ waiting</span>}
+                {avatar} @{handle}:{" "}
+                {response === "in" ? "✅ in" : response === "out" ? "❌ can't make it" : <span className="text-muted">⏳ waiting</span>}
               </li>
             );
           })}
         </ul>
       )}
 
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         {isOrganiserView && proposal.status === "pending" && (
           <>
             <ActionButton action={decideProposalAction.bind(null, proposal.id, "accept")} label="Share with everyone" pendingLabel="Sharing…" variant="btn-primary" />
@@ -65,11 +73,8 @@ export function ProposalCard({
         {isOrganiserView && proposal.status !== "pending" && (
           <span className="text-xs text-muted">{proposal.status === "accepted" ? "Shared in a group chat." : "Rejected."}</span>
         )}
-        {inGroup && !mine && c.participants.includes(myHandle) && proposal.status === "accepted" && (
-          <>
-            <ActionButton action={respondToProposalAction.bind(null, proposal.id, "accepted")} label="I'm in" variant="btn-primary" />
-            <ActionButton action={respondToProposalAction.bind(null, proposal.id, "declined")} label="Can't make it" />
-          </>
+        {inGroup && rsvpStepId && proposal.status === "accepted" && c.participants.includes(myHandle) && (
+          <RsvpControl stepId={rsvpStepId} current={myResponse} />
         )}
       </div>
     </section>

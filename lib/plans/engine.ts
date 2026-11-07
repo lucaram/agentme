@@ -7,6 +7,9 @@ import { withUsageContext } from "@/lib/usage/context";
 import { ensureSteps, updateStep } from "./steps";
 import { runCollect, type CollectConfig } from "./blocks/collect";
 import { runProposal } from "./blocks/proposal";
+import { runRsvp } from "./blocks/rsvp";
+import { runPoll } from "./blocks/poll";
+import { runQuestion } from "./blocks/question";
 import type { StepHandler, StepType, TaskParsed, TaskRow } from "./types";
 
 // ------------------------------------------------------------- the plan engine
@@ -27,6 +30,9 @@ const UNCLAIMED_GRACE_MS = 30_000;
 const HANDLERS: Partial<Record<StepType, StepHandler>> = {
   collect: runCollect,
   proposal: runProposal,
+  rsvp: runRsvp,
+  poll: runPoll,
+  question: runQuestion,
 };
 
 class LeaseLost extends Error {}
@@ -65,13 +71,17 @@ export async function recoverStuckTasks(): Promise<number> {
  * if nobody does, the sweeper picks it up within a minute.
  */
 export async function wakeTask(taskId: string): Promise<boolean> {
-  const { data } = await adminClient()
+  const db = adminClient();
+  const { data } = await db
     .from("tasks")
-    .update({ status: "running", lease_until: null })
+    .update({ status: "running", lease_until: null, wake_requested: false })
     .eq("id", taskId)
     .eq("status", "waiting")
     .select("id");
-  return Boolean(data?.length);
+  if (data?.length) return true;
+  // A worker is running it right now: ask it to take another pass before parking.
+  await db.from("tasks").update({ wake_requested: true }).eq("id", taskId).eq("status", "running");
+  return false;
 }
 
 /** Organiser: stop waiting for people who haven't answered and continue with those who did. */
@@ -79,7 +89,12 @@ export async function continueWithoutWaiting(taskId: string, userId: string): Pr
   const db = adminClient();
   const { data: task } = await db.from("tasks").select("owner_id, status").eq("id", taskId).maybeSingle();
   if (!task || task.owner_id !== userId || task.status !== "waiting") return false;
-  const { data: steps } = await db.from("plan_steps").select("id, config").eq("task_id", taskId).eq("type", "collect").eq("status", "waiting");
+  const { data: steps } = await db
+    .from("plan_steps")
+    .select("id, config")
+    .eq("task_id", taskId)
+    .in("type", ["collect", "question"])
+    .eq("status", "waiting");
   for (const step of steps ?? []) {
     await updateStep(step.id, { config: { ...(step.config as CollectConfig), proceedWithoutWaiting: true } });
   }
@@ -93,7 +108,7 @@ async function executeTask(task: TaskRow) {
   const parsed = task.parsed as unknown as TaskParsed;
 
   /** Status change that only succeeds while we still hold the lease. */
-  const release = async (status: "waiting" | "proposal_ready" | "accepted" | "failed", error?: string) => {
+  const release = async (status: "waiting" | "proposal_ready" | "accepted" | "completed" | "failed", error?: string) => {
     const { data } = await db
       .from("tasks")
       .update({ status, error: error ?? null, lease_until: null })
@@ -127,32 +142,62 @@ async function executeTask(task: TaskRow) {
     const organiser = await getAgentById(task.initiator_agent);
     if (!organiser) return fail("your agent no longer exists.");
 
-    const steps = await ensureSteps(task);
-    const results: Partial<Record<StepType, unknown>> = {};
-    for (const step of steps) {
-      if (step.status === "done" || step.status === "skipped") {
-        results[step.type as StepType] = step.result;
-        continue;
-      }
-      const handler = HANDLERS[step.type as StepType];
-      if (!handler) return fail(`this plan uses a step I can't run yet (${step.type}).`);
+    /**
+     * One pass over the steps. Returns "parked" when waiting on people, "again" if
+     * someone answered while we were running (take another pass), or "finished".
+     */
+    const runPass = async (): Promise<"parked" | "again" | "finished" | "failed"> => {
+      // Cleared before reading any state: a wake after this point is never missed.
+      await db.from("tasks").update({ wake_requested: false }).eq("id", taskId).eq("lease_token", token);
+      const steps = await ensureSteps(task);
+      const results: Partial<Record<StepType, unknown>> = {};
+      for (const step of steps) {
+        if (step.status === "done" || step.status === "skipped") {
+          results[step.type as StepType] = step.result;
+          continue;
+        }
+        const handler = HANDLERS[step.type as StepType];
+        if (!handler) {
+          await fail(`this plan uses a step I can't run yet (${step.type}).`);
+          return "failed";
+        }
 
+        await renew();
+        const outcome = await handler({ task, step, organiser, parsed, results, renew });
+        if (outcome.kind === "done") {
+          await updateStep(step.id, { status: "done", result: outcome.result ?? null });
+          results[step.type as StepType] = outcome.result;
+          continue;
+        }
+        if (outcome.kind === "failed") {
+          await updateStep(step.id, { status: "failed" });
+          await fail(outcome.error);
+          return "failed";
+        }
+        // Waiting on people. Don't overwrite a step someone finished meanwhile (e.g. a poll just closed).
+        await db.from("plan_steps").update({ status: "waiting" }).eq("id", step.id).neq("status", "done");
+        // Park only if nobody answered while we were running.
+        const { data: parked } = await db
+          .from("tasks")
+          .update({ status: outcome.taskStatus, error: null, lease_until: null })
+          .eq("id", taskId)
+          .eq("status", "running")
+          .eq("lease_token", token)
+          .eq("wake_requested", false)
+          .select("id");
+        return parked?.length ? "parked" : "again";
+      }
+      // A plan built around a proposal ends "accepted" (shared); others simply complete.
+      await release(steps.some((s) => s.type === "proposal") ? "accepted" : "completed");
+      return "finished";
+    };
+
+    for (let pass = 0; pass < 5; pass++) {
+      if ((await runPass()) !== "again") return;
       await renew();
-      const outcome = await handler({ task, step, organiser, parsed, results, renew });
-      if (outcome.kind === "done") {
-        await updateStep(step.id, { status: "done", result: outcome.result ?? null });
-        results[step.type as StepType] = outcome.result;
-        continue;
-      }
-      if (outcome.kind === "waiting") {
-        await updateStep(step.id, { status: "waiting" });
-        await release(outcome.taskStatus);
-        return;
-      }
-      await updateStep(step.id, { status: "failed" });
-      return fail(outcome.error);
     }
-    await release("accepted");
+    // Still being woken after several passes: park and let the next wake or the sweeper continue.
+    await release("waiting");
   } catch (error) {
     if (error instanceof LeaseLost) return; // cancelled or taken over: stop quietly
     await fail(errorText(error));

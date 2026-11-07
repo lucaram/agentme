@@ -5,11 +5,13 @@ import { sendAgentMessage } from "@/lib/a2a/client";
 import { extractMentions } from "@/lib/policy/handles";
 import { CATEGORY_LABELS, isRequestableCategory } from "@/lib/policy/disclosure";
 import { getAgentByHandle, getAgentById, getRelationship, type AgentRow } from "@/lib/data/agents";
-import { createConversation, findConversation, getConversation, isMember, postMessage } from "@/lib/data/chat";
-import { INTENT_SYSTEM, OWNER_CHAT_SYSTEM } from "@/lib/agents/prompts";
+import { getConversation, postMessage } from "@/lib/data/chat";
+import { INTENT_SYSTEM, OWNER_CHAT_SYSTEM, wrapUntrusted } from "@/lib/agents/prompts";
+import { buildRecall } from "@/lib/agents/recall";
 import { asJson } from "@/lib/data/json";
-import { MAX_PLAN_PEOPLE, type TaskParsed } from "@/lib/plans/types";
-import { coordinationSteps, createSteps } from "@/lib/plans/steps";
+import { MAX_PLAN_PEOPLE, type NewStep, type TaskParsed } from "@/lib/plans/types";
+import { coordinationSteps, createSteps, pollSteps, questionSteps } from "@/lib/plans/steps";
+import { ensurePlanGroup } from "@/lib/plans/group";
 import { withdrawInboxForTask } from "@/lib/plans/inbox";
 import { describeRetry, hit } from "@/lib/limits";
 import { displayClock, heuristicIntent } from "./heuristics";
@@ -28,79 +30,82 @@ function errorText(error: unknown) {
 // ------------------------------------------------------------- My Agent chat
 
 /**
- * The owner wrote to their own agent. Either start a coordination task (which
- * needs explicit approval before anything is sent) or just reply.
+ * The owner wrote to their own agent. Either prepare a plan (coordinate, poll,
+ * question) that needs explicit approval before anything is sent, or reply
+ * directly (general chat, or recall of their own plans).
  */
 export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow; conversationId: string; text: string }) {
   const { userId, agent, conversationId, text } = opts;
   await postMessage({ conversationId, from: "human", userId, content: text });
 
   const mentions = extractMentions(text).filter((h) => h !== agent.handle);
+  if (mentions.length === 0) return replyToOwner(agent, userId, conversationId, text);
+
   let intent: Intent;
-  if (mentions.length === 0) {
-    intent = { ...heuristicIntent(text), is_coordination: false };
-  } else {
-    try {
-      intent = await llm().generateObject({
-        purpose: "intent",
-        tier: "fast",
-        system: INTENT_SYSTEM,
-        messages: [{ role: "user", content: text }],
-        schema: IntentSchema,
-        maxTokens: 1000,
-        mockContext: { text },
-      });
-    } catch {
-      // Intent parsing is low risk; fall back to deterministic parsing.
-      intent = heuristicIntent(text);
-    }
+  try {
+    intent = await llm().generateObject({
+      purpose: "intent",
+      tier: "fast",
+      system: INTENT_SYSTEM,
+      messages: [{ role: "user", content: text }],
+      schema: IntentSchema,
+      maxTokens: 1000,
+      mockContext: { text },
+    });
+  } catch {
+    // Intent parsing is low risk; fall back to deterministic parsing.
+    intent = heuristicIntent(text);
   }
+  if (intent.kind === "chat") return replyToOwner(agent, userId, conversationId, text);
 
   // Participants come from the @mentions the OWNER typed, never from the model alone.
-  const participants = mentions;
-  if (!intent.is_coordination || participants.length === 0) {
-    return replyToOwner(agent, conversationId, text);
-  }
-
+  const say = (content: string) => postMessage({ conversationId, from: "agent", agentId: agent.id, content });
   const valid: string[] = [];
   const rejected: string[] = [];
-  for (const handle of participants) {
+  for (const handle of mentions) {
     const other = await getAgentByHandle(handle);
     if (other && other.type === "personal" && (await getRelationship(agent.id, other.id)) === "accepted") valid.push(handle);
     else rejected.push(handle);
   }
   if (rejected.length) {
-    await postMessage({
-      conversationId,
-      from: "agent",
-      agentId: agent.id,
-      content: `I can only coordinate with people in your contacts. ${listHandles(rejected)} ${rejected.length > 1 ? "aren't contacts" : "isn't a contact"} yet.`,
-    });
+    await say(`I can only involve people in your contacts. ${listHandles(rejected)} ${rejected.length > 1 ? "aren't contacts" : "isn't a contact"} yet.`);
   }
   if (!valid.length) return;
   if (valid.length + 1 > MAX_PLAN_PEOPLE) {
-    await postMessage({
-      conversationId,
-      from: "agent",
-      agentId: agent.id,
-      content: `A plan can include up to ${MAX_PLAN_PEOPLE} people, including you. Please mention fewer people.`,
-    });
-    return;
+    return say(`A plan can include up to ${MAX_PLAN_PEOPLE} people, including you. Please mention fewer people.`);
+  }
+
+  // Code-side checks on what the model extracted.
+  const options = [...new Set(intent.options.map((o) => o.trim()).filter((o) => o && o.length <= 60))].slice(0, 6);
+  const question = intent.question.trim().slice(0, 500);
+  if (intent.kind === "poll" && options.length < 2) {
+    return say("For a poll I need at least two options, e.g. “Ask @marco and @paul to vote: Saturday or Sunday”.");
+  }
+  if ((intent.kind === "poll" || intent.kind === "question") && !question) {
+    return say("What should I ask? For example: “Ask @marco if he can help me move on Sunday”.");
   }
 
   const limit = await hit("tasksPerUser", userId);
-  if (!limit.allowed) {
-    await postMessage({
-      conversationId,
-      from: "agent",
-      agentId: agent.id,
-      content: `You've started a lot of plans recently. Please try again in ${describeRetry(limit.retryAfterSeconds)}.`,
-    });
-    return;
-  }
+  if (!limit.allowed) return say(`You've started a lot of plans recently. Please try again in ${describeRetry(limit.retryAfterSeconds)}.`);
 
-  const categories = [...new Set(["availability", ...intent.categories])].filter(isRequestableCategory);
-  const parsed: TaskParsed = { event: intent.event || "meetup", window: intent.window || "this week", participants: valid, categories };
+  let parsed: TaskParsed;
+  let steps: NewStep[];
+  let summary: string;
+  if (intent.kind === "poll") {
+    parsed = { kind: "poll", event: intent.event, window: intent.window, participants: valid, categories: [], question, options };
+    steps = pollSteps(agent.handle, valid, question, options);
+    summary = `I'll ask ${listHandles(valid)} to vote: “${question}” Options: ${options.join(" · ")}. You vote too. Options can't change once sent. Approve?`;
+  } else if (intent.kind === "question") {
+    parsed = { kind: "question", event: intent.event, window: intent.window, participants: valid, categories: [], question };
+    steps = questionSteps(valid, question);
+    summary = `I'll ask ${listHandles(valid)}: “${question}” Only they will see it, and they'll answer personally. Approve?`;
+  } else {
+    const categories = [...new Set(["availability", ...intent.categories])].filter(isRequestableCategory);
+    parsed = { kind: "coordinate", event: intent.event || "meetup", window: intent.window || "this week", participants: valid, categories };
+    steps = coordinationSteps(parsed);
+    const asks = categories.map((c) => CATEGORY_LABELS[c].toLowerCase()).join(" and ");
+    summary = `I'll ask ${listHandles(valid)}'s agents for their ${asks} for ${parsed.event} (${parsed.window}). Nothing else will be shared. Approve?`;
+  }
 
   const { data: task, error } = await adminClient()
     .from("tasks")
@@ -108,26 +113,18 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
     .select("id")
     .single();
   if (error) throw error;
-  await createSteps(task.id, coordinationSteps(parsed));
-
-  const asks = categories.map((c) => CATEGORY_LABELS[c].toLowerCase()).join(" and ");
-  await postMessage({
-    conversationId,
-    from: "agent",
-    agentId: agent.id,
-    content: `I'll ask ${listHandles(valid)}'s agents for their ${asks} for ${parsed.event} (${parsed.window}). Nothing else will be shared. Approve?`,
-    metadata: { kind: "task_card", task_id: task.id },
-  });
+  await createSteps(task.id, steps);
+  await postMessage({ conversationId, from: "agent", agentId: agent.id, content: summary, metadata: { kind: "task_card", task_id: task.id } });
   return task.id;
 }
 
-async function replyToOwner(agent: AgentRow, conversationId: string, text: string) {
-  const { data: history } = await adminClient()
-    .from("messages")
-    .select("content, sender_agent_id")
-    .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: false })
-    .limit(10);
+/** Direct reply from the owner's own agent, with Recall of the plans the owner can see. */
+async function replyToOwner(agent: AgentRow, userId: string, conversationId: string, text: string) {
+  const db = adminClient();
+  const [{ data: history }, recall] = await Promise.all([
+    db.from("messages").select("content, sender_agent_id").eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(10),
+    buildRecall(userId),
+  ]);
   const turns = (history ?? []).reverse().map((m) => ({
     role: (m.sender_agent_id ? "assistant" : "user") as "assistant" | "user",
     content: m.content,
@@ -135,15 +132,17 @@ async function replyToOwner(agent: AgentRow, conversationId: string, text: strin
   // The API needs the conversation to start with a user turn.
   while (turns.length && turns[0].role !== "user") turns.shift();
 
+  // Plans contain other people's words, so they're passed as data, not instructions.
+  const recallBlock = recall.length ? `\n\n${wrapUntrusted("your_plans", JSON.stringify(recall, null, 1))}` : "";
   let reply: string;
   try {
     reply = await llm().generateText({
       purpose: "owner_chat",
       tier: "smart",
-      system: `${OWNER_CHAT_SYSTEM}\nYour owner is ${agent.display_name} (@${agent.handle}).`,
+      system: `${OWNER_CHAT_SYSTEM}\nYour owner is ${agent.display_name} (@${agent.handle}). Today is ${new Date().toDateString()}.${recallBlock}`,
       messages: turns.length ? turns : [{ role: "user", content: text }],
       maxTokens: 2000,
-      mockContext: { text },
+      mockContext: { text, recall },
     });
   } catch (error) {
     reply = `Sorry — I couldn't think that through (${errorText(error)}).`;
@@ -193,18 +192,18 @@ export { runTask, recoverStuckTasks, MAX_ATTEMPTS } from "@/lib/plans/engine";
 // ------------------------------------------------------------- proposals
 
 async function completeProposalStep(taskId: string, result: Record<string, unknown>) {
-  await adminClient()
-    .from("plan_steps")
-    .update({ status: "done", result: asJson(result) })
-    .eq("task_id", taskId)
-    .eq("type", "proposal");
+  await adminClient().from("plan_steps").update({ status: "done", result: asJson(result) }).eq("task_id", taskId).eq("type", "proposal");
 }
 
-export async function decideProposal(proposalId: string, userId: string, decision: "accept" | "reject") {
+/**
+ * The organiser decides on the drafted plan. Accepting shares it in a group and
+ * resumes the engine (which opens RSVPs). Returns true if the task should run.
+ */
+export async function decideProposal(proposalId: string, userId: string, decision: "accept" | "reject"): Promise<boolean> {
   const db = adminClient();
   const { data: proposal } = await db.from("proposals").select("*, tasks(*)").eq("id", proposalId).maybeSingle();
   if (!proposal?.tasks || proposal.tasks.owner_id !== userId) throw new Error("Proposal not found");
-  if (proposal.status !== "pending") return;
+  if (proposal.status !== "pending") return false;
   const task = proposal.tasks;
   const content = proposal.content as unknown as Proposal & { disclaimer: string };
 
@@ -213,48 +212,25 @@ export async function decideProposal(proposalId: string, userId: string, decisio
     await completeProposalStep(task.id, { proposalId, decision: "rejected" });
     await setTaskStatus(task.id, "rejected");
     await postMessage({ conversationId: task.conversation_id, from: "agent", agentId: task.initiator_agent, content: "OK, I've dropped that plan. Nothing was sent to anyone." });
-    return;
+    return false;
   }
 
-  // Accept: share the proposal with the participants in a group conversation.
-  const agents = await Promise.all(content.participants.map((h) => getAgentByHandle(h)));
-  const memberIds = agents.filter((a): a is AgentRow => a !== null).map((a) => a.owner_id);
-  const existing = await findConversation("group", [userId, ...memberIds]);
-  const group = existing ? await getConversation(existing.id) : await createConversation({ kind: "group", title: content.title, createdBy: userId, memberIds });
-  if (!group) throw new Error("Could not create group");
-
-  await db.from("proposals").update({ status: "accepted", group_conversation_id: group.id }).eq("id", proposalId);
-  const organiser = agents.find((a) => a?.id === task.initiator_agent);
-  if (organiser) await db.from("proposal_responses").upsert({ proposal_id: proposalId, agent_id: organiser.id, response: "accepted" });
+  // Accept: share the proposal with the participants in the plan's group.
+  const organiserHandle = (await getAgentById(task.initiator_agent))?.handle;
+  const group = await ensurePlanGroup(task, content.participants.filter((h) => h !== organiserHandle), content.title);
+  const { data: claimed } = await db.from("proposals").update({ status: "accepted", group_conversation_id: group.id }).eq("id", proposalId).eq("status", "pending").select("id");
+  if (!claimed?.length) return false;
   await completeProposalStep(task.id, { proposalId, decision: "accepted", groupId: group.id });
-  await setTaskStatus(task.id, "accepted");
   await postMessage({
     conversationId: group.id,
     from: "agent",
     agentId: task.initiator_agent,
     content: `Proposed plan: ${content.title}, ${content.day} at ${displayClock(content.time)}. ${content.disclaimer}`,
-    metadata: { kind: "proposal", proposal_id: proposalId },
+    metadata: { kind: "proposal", proposal_id: proposalId, task_id: task.id },
   });
-  await postMessage({ conversationId: task.conversation_id, from: "agent", agentId: task.initiator_agent, content: "Shared the plan with everyone in a group chat. They can accept or decline there." });
-}
-
-/** A participant (not the organiser) answers a proposal shared in a group. */
-export async function respondToProposal(proposalId: string, userId: string, agent: AgentRow, response: "accepted" | "declined") {
-  const db = adminClient();
-  const { data: proposal } = await db.from("proposals").select("*").eq("id", proposalId).maybeSingle();
-  if (!proposal?.group_conversation_id || proposal.status !== "accepted") throw new Error("Proposal not found");
-  if (!(await isMember(proposal.group_conversation_id, userId))) throw new Error("Proposal not found");
-  const content = proposal.content as unknown as Proposal;
-  if (!content.participants.includes(agent.handle)) throw new Error("You're not part of this plan");
-
-  await db.from("proposal_responses").upsert({ proposal_id: proposalId, agent_id: agent.id, response });
-  await postMessage({
-    conversationId: proposal.group_conversation_id,
-    from: "human",
-    userId,
-    content: response === "accepted" ? "✅ I'm in." : "❌ I can't make it.",
-    metadata: { kind: "proposal_response", proposal_id: proposalId },
-  });
+  await postMessage({ conversationId: task.conversation_id, from: "agent", agentId: task.initiator_agent, content: "Shared the plan with everyone in a group chat. They can say if they're in there." });
+  // Continue the plan (RSVP step) in the engine.
+  return setTaskStatus(task.id, "running", undefined, ["proposal_ready"]);
 }
 
 // ------------------------------------------------------------- agent chats

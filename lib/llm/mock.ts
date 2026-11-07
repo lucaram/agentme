@@ -5,6 +5,7 @@ import {
   type ParticipantReply,
 } from "@/lib/coordination/heuristics";
 import { recordUsage } from "@/lib/usage/meter";
+import { describeRecall, type RecallPlan } from "@/lib/agents/recall-format";
 import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest } from "./types";
 
 type Faq = { q: string; a: string };
@@ -22,9 +23,15 @@ export class MockProvider implements LLMProvider {
     const ctx = (req.mockContext ?? {}) as Record<string, unknown>;
     let text: string;
     switch (req.purpose) {
-      case "owner_chat":
-        text = "I can coordinate plans with your contacts' agents. Try: \"Arrange dinner with @marco and @paul on Saturday evening.\"";
+      case "owner_chat": {
+        const recall = (ctx.recall ?? []) as RecallPlan[];
+        const asksAboutPlans = /\b(what time|when|who|replied|answer|agree|poll|vote|result|plan|coming)\b/i.test(String(ctx.text ?? ""));
+        text =
+          asksAboutPlans && recall.length
+            ? describeRecall(String(ctx.text ?? ""), recall)
+            : "I can coordinate plans with your contacts' agents, run polls and ask them questions. Try: \"Arrange dinner with @marco and @paul on Saturday evening.\"";
         break;
+      }
       case "business_faq":
         text = answerFaq(String(ctx.question ?? ""), (ctx.businessInfo ?? {}) as BusinessInfo);
         break;

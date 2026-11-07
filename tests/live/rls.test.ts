@@ -58,6 +58,7 @@ describe.skipIf(!up)("RLS: plans shared in a group (live)", () => {
   let taskId: string;
   let proposalId: string;
   let groupId: string;
+  let stepId: string;
 
   beforeAll(async () => {
     const ids = await agentIds();
@@ -67,7 +68,7 @@ describe.skipIf(!up)("RLS: plans shared in a group (live)", () => {
     await db.from("conversation_members").insert([ids.luca, ids.marco].map((a) => ({ conversation_id: groupId, user_id: a.owner_id })));
     const { data: task } = await db
       .from("tasks")
-      .insert({ owner_id: ids.luca.owner_id, initiator_agent: ids.luca.id, conversation_id: conv!.id, goal: "[test] rls", status: "accepted" })
+      .insert({ owner_id: ids.luca.owner_id, initiator_agent: ids.luca.id, conversation_id: conv!.id, goal: "[test] rls", status: "accepted", group_conversation_id: groupId })
       .select("id")
       .single();
     taskId = task!.id;
@@ -77,7 +78,9 @@ describe.skipIf(!up)("RLS: plans shared in a group (live)", () => {
       .select("id")
       .single();
     proposalId = proposal!.id;
-    await db.from("proposal_responses").insert({ proposal_id: proposalId, agent_id: ids.luca.id, response: "accepted" });
+    const { data: step } = await db.from("plan_steps").insert({ task_id: taskId, position: 0, type: "rsvp", status: "done" }).select("id").single();
+    stepId = step!.id;
+    await db.from("step_responses").insert({ step_id: stepId, agent_id: ids.luca.id, value: { response: "in" } });
   });
 
   afterAll(async () => {
@@ -88,15 +91,18 @@ describe.skipIf(!up)("RLS: plans shared in a group (live)", () => {
   it("group members can see the plan and everyone's answers (not only the organiser)", async () => {
     const marco = await signIn("marco");
     const { data: proposals } = await marco.from("proposals").select("id").eq("id", proposalId);
-    const { data: responses } = await marco.from("proposal_responses").select("response").eq("proposal_id", proposalId);
+    const { data: steps } = await marco.from("plan_steps").select("id").eq("task_id", taskId);
+    const { data: responses } = await marco.from("step_responses").select("value").eq("step_id", stepId);
     expect(proposals).toHaveLength(1);
-    expect(responses).toEqual([{ response: "accepted" }]);
+    expect(steps).toHaveLength(1);
+    expect(responses).toEqual([{ value: { response: "in" } }]);
   });
 
   it("people outside the group see neither", async () => {
     const paul = await signIn("paul");
     const { data: proposals } = await paul.from("proposals").select("id").eq("id", proposalId);
-    const { data: responses } = await paul.from("proposal_responses").select("response").eq("proposal_id", proposalId);
-    expect([proposals, responses]).toEqual([[], []]);
+    const { data: steps } = await paul.from("plan_steps").select("id").eq("task_id", taskId);
+    const { data: responses } = await paul.from("step_responses").select("value").eq("step_id", stepId);
+    expect([proposals, steps, responses]).toEqual([[], [], []]);
   });
 });
