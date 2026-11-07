@@ -119,7 +119,12 @@ describe.skipIf(!serverUp)("poll, question and RSVP v2 (live)", () => {
     expect((await taskRow(task.id)).status).toBe("completed");
     const { data: ex } = await admin().from("task_exchanges").select("status, answered_by, disclosed_categories, skill").eq("task_id", task.id).single();
     expect(ex).toEqual({ status: "completed", answered_by: "human", disclosed_categories: ["answer"], skill: "coordination.question" });
-    const relayed = (await messages(conversationId)).filter((m) => m.content.includes("Yes, from 10am!"));
+    // Only this task's messages (other suites may share Luca's conversation).
+    const { data: relayed } = await admin()
+      .from("messages")
+      .select("content, sender_user_id, sender_agent_id, is_ai_generated")
+      .eq("metadata->>task_id", task.id)
+      .eq("metadata->>kind", "answer");
     expect(relayed).toEqual([
       { content: "💬 @marco answered personally: “Yes, from 10am!”", sender_user_id: null, sender_agent_id: ids.luca.id, is_ai_generated: true },
     ]);
