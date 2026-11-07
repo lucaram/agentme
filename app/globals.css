@@ -1,26 +1,73 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --background: #f6f5f1;
+  --surface: #ffffff;
+  --foreground: #1b1a17;
+  --muted: #6b6860;
+  --border: #e4e1d8;
+  --accent: #2f6b4f;
+  --accent-soft: #e3efe8;
+  --agent: #eef1fb;
+  --agent-border: #d7ddf3;
+  --danger: #b4372f;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #121311;
+    --surface: #1b1c1a;
+    --foreground: #ecebe6;
+    --muted: #a19f97;
+    --border: #2d2e2a;
+    --accent: #6fbf95;
+    --accent-soft: #1f3329;
+    --agent: #1c2131;
+    --agent-border: #2c3550;
+    --danger: #ef7a72;
   }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-agent: var(--agent);
+  --color-agent-border: var(--agent-border);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition disabled:opacity-50 bg-accent text-white hover:opacity-90 dark:text-black;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition disabled:opacity-50 border border-border bg-surface hover:bg-accent-soft;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition disabled:opacity-50 border border-danger text-danger hover:bg-danger hover:text-white;
+  }
+  .input {
+    @apply w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent;
+  }
+  .card {
+    @apply rounded-2xl border border-border bg-surface p-4;
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium;
+  }
+  .hint {
+    @apply text-xs text-muted;
+  }
 }

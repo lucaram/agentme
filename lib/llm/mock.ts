@@ -1,0 +1,80 @@
+import {
+  heuristicIntent,
+  heuristicPlan,
+  heuristicReply,
+  type ParticipantReply,
+} from "@/lib/coordination/heuristics";
+import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest } from "./types";
+
+type Faq = { q: string; a: string };
+type BusinessInfo = { description?: string; hours?: string; faqs?: Faq[] };
+
+/**
+ * Deterministic stand-in for a real model. Used by tests, CI and offline demos
+ * (LLM_PROVIDER=mock). Works only from `mockContext`, which callers build from
+ * the same (already minimised) data they put into the prompt.
+ */
+export class MockProvider implements LLMProvider {
+  readonly name = "mock";
+
+  async generateText(req: LLMRequest): Promise<string> {
+    const ctx = (req.mockContext ?? {}) as Record<string, unknown>;
+    switch (req.purpose) {
+      case "owner_chat":
+        return "I can coordinate plans with your contacts' agents. Try: \"Arrange dinner with @marco and @paul on Saturday evening.\"";
+      case "business_faq":
+        return answerFaq(String(ctx.question ?? ""), (ctx.businessInfo ?? {}) as BusinessInfo);
+      default:
+        throw new LLMError(`Mock has no text output for ${req.purpose}`, "invalid_output");
+    }
+  }
+
+  async generateObject<T>(req: LLMObjectRequest<T>): Promise<T> {
+    const ctx = (req.mockContext ?? {}) as Record<string, unknown>;
+    let value: unknown;
+    switch (req.purpose) {
+      case "intent":
+        value = heuristicIntent(String(ctx.text ?? ""));
+        break;
+      case "coordination_reply":
+        value = heuristicReply(
+          (ctx.facts ?? {}) as Partial<Record<"availability" | "food" | "location", string>>,
+          String(ctx.window ?? ""),
+        );
+        break;
+      case "proposal":
+        value = heuristicPlan(
+          String(ctx.organiser),
+          (ctx.replies ?? []) as ParticipantReply[],
+          String(ctx.event ?? "meetup"),
+          String(ctx.window ?? ""),
+        );
+        break;
+      default:
+        throw new LLMError(`Mock has no object output for ${req.purpose}`, "invalid_output");
+    }
+    const parsed = req.schema.safeParse(value);
+    if (!parsed.success) throw new LLMError("Mock output did not match schema.", "invalid_output");
+    return parsed.data;
+  }
+}
+
+const STOPWORDS = new Set(["the", "you", "your", "can", "are", "have", "has", "for", "and", "any", "there", "what", "with", "does", "how", "our"]);
+const keywords = (s: string) => (s.toLowerCase().match(/[a-z]{3,}/g) ?? []).filter((w) => !STOPWORDS.has(w));
+
+function answerFaq(question: string, info: BusinessInfo): string {
+  // Booking requests always get the "no bookings" answer, whatever the FAQs say.
+  if (/\b(book|reserve|reservation)\b/i.test(question) && !/\bgroup/i.test(question)) {
+    return "I can't take bookings or check live availability. Please contact the business directly to reserve.";
+  }
+  const words = new Set(keywords(question));
+  let best: Faq | undefined;
+  let bestScore = 0;
+  for (const faq of info.faqs ?? []) {
+    const score = keywords(faq.q).filter((w) => words.has(w) || words.has(w.replace(/s$/, ""))).length;
+    if (score > bestScore) [best, bestScore] = [faq, score];
+  }
+  if (best) return best.a;
+  if (/\b(open|hours|close|closing)\b/i.test(question) && info.hours) return `Our opening hours: ${info.hours}`;
+  return "I don't have that information. Please contact the business directly.";
+}
