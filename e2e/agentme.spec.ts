@@ -161,6 +161,28 @@ test("contact request, accept and direct message", async ({ browser }) => {
 
   await eve.page.goto("/chats");
   await expect(eve.page.getByText("Hi Eve, welcome!")).toBeVisible();
+
+  // WhatsApp-style unread counters: on the chat and on the Chats tab...
+  const row = eve.page.getByRole("link", { name: /^🦉 Paul/ });
+  await expect(row.getByTestId("unread-badge")).toHaveText("1");
+  // The tab shows the total across chats (it may include other unread chats, e.g. her agent's welcome).
+  const total = async () => {
+    const badge = eve.page.getByTestId("chats-badge");
+    return (await badge.count()) ? Number(await badge.textContent()) : 0;
+  };
+  const before = await total();
+  expect(before).toBeGreaterThanOrEqual(1);
+  // ...live, when another message arrives...
+  await send(paul.page, "Are you coming on Saturday?");
+  await expect(row.getByTestId("unread-badge")).toHaveText("2", { timeout: 10_000 });
+  await expect(eve.page.getByTestId("chats-badge")).toHaveText(String(before + 1));
+  // ...and cleared by opening the chat. Paul's own view never counts his messages.
+  await row.click();
+  await expect(eve.page.getByText("Are you coming on Saturday?")).toBeVisible();
+  await eve.page.getByRole("link", { name: "Chats" }).click();
+  await expect(row.getByTestId("unread-badge")).toHaveCount(0);
+  // Reading the chat removes exactly its 2 messages from the total.
+  await expect.poll(total).toBe(before - 1);
   await eve.close();
   await paul.close();
 });

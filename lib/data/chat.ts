@@ -95,3 +95,4 @@ export async function postMessage(msg: NewMessage): Promise<MessageRow> {
   if (error) throw error;
   return data;
 }
+

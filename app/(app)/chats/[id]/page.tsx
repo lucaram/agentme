@@ -8,6 +8,7 @@ import { ProposalCard, type ProposalView } from "./ProposalCard";
 import { PollCard } from "./PollCard";
 import { AssignCard } from "./AssignCard";
 import { leaveConversation } from "../../actions";
+import { MarkRead } from "@/components/MarkRead";
 
 export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
   const { id } = await params;
@@ -17,6 +18,8 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
   // All reads use the user's session: RLS decides what is visible.
   const { data: conv } = await supabase.from("conversations").select("*, conversation_members(user_id)").eq("id", id).maybeSingle();
   if (!conv) notFound();
+  // Seen now (database clock). The client also re-marks when new messages arrive while open.
+  await supabase.rpc("mark_conversation_read", { p_conversation: id });
 
   const [{ data: messages }, { data: agents }] = await Promise.all([
     supabase.from("messages").select("*").eq("conversation_id", id).order("created_at").limit(200),
@@ -88,6 +91,8 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
 
   return (
     <div className="flex flex-1 flex-col">
+      {/* Seeing the chat (including messages that arrive while it is open) clears its unread counter. */}
+      <MarkRead conversationId={id} latestMessageId={(messages ?? []).at(-1)?.id ?? null} />
       <RealtimeRefresh
         channel={`conv-${id}`}
         tables={["messages", "tasks", "task_exchanges", "proposals", "plan_steps", "step_responses", "item_claims"]}

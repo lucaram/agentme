@@ -63,6 +63,15 @@ export async function sendMessage(conversationId: string, text: string): Promise
   return {};
 }
 
+/** The user has seen this conversation up to now (clears its unread counter). */
+export async function markReadAction(conversationId: string) {
+  await requireAgent();
+  if (!Id.safeParse(conversationId).success) return;
+  // Database clock + the caller's own row only (see mark_conversation_read).
+  const supabase = await createClient();
+  await supabase.rpc("mark_conversation_read", { p_conversation: conversationId });
+}
+
 // ------------------------------------------------------------- tasks & proposals
 
 export async function approveTaskAction(taskId: string) {

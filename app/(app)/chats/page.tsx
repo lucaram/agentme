@@ -6,6 +6,17 @@ import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 
 const KIND_LABEL = { my_agent: "Your agent", dm: "Direct message", group: "Group", agent_chat: "Agent chat" } as const;
 
+/** WhatsApp-style time: "14:05" today, "Yesterday", otherwise "07/11". */
+function formatWhen(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const today = new Date();
+  const days = Math.round((new Date(today.toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 86_400_000);
+  if (days <= 0) return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  if (days === 1) return "Yesterday";
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit" });
+}
+
 export default async function ChatsPage({ searchParams }: PageProps<"/chats">) {
   const { user, agent } = await requireAgent();
   const { error } = await searchParams;
@@ -19,6 +30,9 @@ export default async function ChatsPage({ searchParams }: PageProps<"/chats">) {
     .limit(1, { referencedTable: "messages" });
 
   const { data: agents } = await supabase.from("agents").select("id, owner_id, handle, display_name, avatar");
+  // Unread messages per chat (RLS: only the user's own memberships).
+  const { data: unreadRows } = await supabase.rpc("unread_counts");
+  const unread = new Map((unreadRows ?? []).map((r) => [r.conversation_id, Number(r.unread)]));
   const byOwner = new Map((agents ?? []).map((a) => [a.owner_id, a]));
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));
 
@@ -49,7 +63,7 @@ export default async function ChatsPage({ searchParams }: PageProps<"/chats">) {
             : last.sender_user_id
               ? `${byOwner.get(last.sender_user_id)?.display_name ?? "Someone"}: `
               : "";
-      return { id: c.id, kind: c.kind, name, icon, last, author, at: last?.created_at ?? "" };
+      return { id: c.id, kind: c.kind, name, icon, last, author, at: last?.created_at ?? "", unread: unread.get(c.id) ?? 0 };
     })
     .sort((a, b) => (a.kind === "my_agent" ? -1 : b.kind === "my_agent" ? 1 : b.at.localeCompare(a.at)));
 
@@ -65,10 +79,22 @@ export default async function ChatsPage({ searchParams }: PageProps<"/chats">) {
             <Link href={`/chats/${r.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-accent-soft">
               <span className="text-2xl">{r.icon}</span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{r.name}</span>
-                <span className="block truncate text-sm text-muted">
+                <span className={`block truncate ${r.unread ? "font-semibold" : "font-medium"}`}>{r.name}</span>
+                <span className={`block truncate text-sm ${r.unread ? "text-foreground" : "text-muted"}`}>
                   {r.last ? `${r.author}${r.last.content}` : KIND_LABEL[r.kind]}
                 </span>
+              </span>
+              <span className="flex shrink-0 flex-col items-end gap-1">
+                <span className={`text-xs ${r.unread ? "text-accent" : "text-muted"}`}>{formatWhen(r.at)}</span>
+                {r.unread > 0 && (
+                  <span
+                    className="min-w-5 rounded-full bg-accent px-1.5 text-center text-xs font-semibold leading-5 text-white dark:text-black"
+                    data-testid="unread-badge"
+                    aria-label={`${r.unread} unread`}
+                  >
+                    {r.unread > 99 ? "99+" : r.unread}
+                  </span>
+                )}
               </span>
             </Link>
           </li>
