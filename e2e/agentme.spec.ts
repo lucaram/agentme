@@ -166,7 +166,10 @@ test("contact request, accept and direct message", async ({ browser }) => {
   const row = eve.page.getByRole("link", { name: /^🦉 Paul/ });
   await expect(row.getByTestId("unread-badge")).toHaveText("1");
   // The tab shows the total across chats (it may include other unread chats, e.g. her agent's welcome).
-  const total = async () => Number((await eve.page.getByTestId("chats-badge").textContent({ timeout: 5_000 }).catch(() => "0")) || 0);
+  const total = async () => {
+    const badge = eve.page.getByTestId("chats-badge");
+    return (await badge.count()) ? Number(await badge.textContent()) : 0;
+  };
   const before = await total();
   expect(before).toBeGreaterThanOrEqual(1);
   // ...live, when another message arrives...
