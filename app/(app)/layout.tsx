@@ -17,14 +17,15 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const { user, agent } = await requireAgent();
   const supabase = await createClient();
   // RLS: counts only this user's own open requests.
-  const { count: inboxCount } = await supabase
-    .from("inbox_items")
-    .select("*", { count: "exact", head: true })
-    .eq("status", "open");
+  const [{ count: inboxCount }, { data: unreadRows }] = await Promise.all([
+    supabase.from("inbox_items").select("*", { count: "exact", head: true }).eq("status", "open"),
+    supabase.rpc("unread_counts"),
+  ]);
+  const unreadTotal = (unreadRows ?? []).reduce((n, r) => n + Number(r.unread), 0);
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
-      <RealtimeRefresh channel={`inbox-badge-${user.id}`} tables={["inbox_items"]} />
+      <RealtimeRefresh channel={`badges-${user.id}`} tables={["inbox_items", "messages"]} />
       <header className="sticky top-0 z-10 border-b border-border bg-background/90 px-4 pt-3 backdrop-blur">
         <div className="flex items-center justify-between">
           <Link href="/chats" className="flex items-center gap-2 font-semibold">
@@ -42,6 +43,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           {NAV.map(([href, label]) => (
             <Link key={href} href={href} className="flex items-center gap-1 rounded-full px-3 py-1 hover:bg-accent-soft">
               {label}
+              {href === "/chats" && unreadTotal > 0 && (
+                <span className="rounded-full bg-accent px-1.5 text-[10px] font-semibold text-white dark:text-black" data-testid="chats-badge" aria-label={`${unreadTotal} unread`}>
+                  {unreadTotal > 99 ? "99+" : unreadTotal}
+                </span>
+              )}
               {href === "/inbox" && Boolean(inboxCount) && (
                 <span className="rounded-full bg-danger px-1.5 text-[10px] font-semibold text-white" data-testid="inbox-badge" aria-label={`${inboxCount} open`}>
                   {inboxCount}

@@ -91,14 +91,14 @@ isOneToOne: false
                   ]
                 },"conversation_members": {
                   Row: {
-                    "conversation_id": string,"joined_at": string,"user_id": string
+                    "conversation_id": string,"joined_at": string,"last_read_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "conversation_id": string,"joined_at"?: string,"user_id": string
+                    "conversation_id": string,"joined_at"?: string,"last_read_at"?: string,"user_id": string
                   }
                   Update: {
-                    "conversation_id"?: string,"joined_at"?: string,"user_id"?: string
+                    "conversation_id"?: string,"joined_at"?: string,"last_read_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -467,6 +467,11 @@ isOneToOne: false
                            },
 "renew_task_lease":
 { Args: { "p_lease_seconds": number,"p_task": string,"p_token": string }; Returns: boolean
+                           },
+"unread_counts":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "conversation_id": string,"unread": number
+            }[]
                            }
           }
           Enums: {

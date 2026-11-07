@@ -106,3 +106,42 @@ describe.skipIf(!up)("RLS: plans shared in a group (live)", () => {
     expect([proposals, steps, responses]).toEqual([[], [], []]);
   });
 });
+
+describe.skipIf(!up)("unread counters (live)", () => {
+  it("count others' messages since last read; not your own, not event lines; only your chats", async () => {
+    const db = admin();
+    const ids = await agentIds();
+    const { data: conv } = await db.from("conversations").insert({ kind: "group", title: "[test] unread", created_by: ids.luca.owner_id }).select("id").single();
+    try {
+      const past = new Date(Date.now() - 60_000).toISOString();
+      await db.from("conversation_members").insert([
+        { conversation_id: conv!.id, user_id: ids.luca.owner_id, last_read_at: past },
+        { conversation_id: conv!.id, user_id: ids.marco.owner_id, last_read_at: past },
+      ]);
+      await db.from("messages").insert([
+        { conversation_id: conv!.id, sender_user_id: ids.marco.owner_id, is_ai_generated: false, content: "hi" },
+        { conversation_id: conv!.id, sender_user_id: ids.marco.owner_id, is_ai_generated: false, content: "there?" },
+        { conversation_id: conv!.id, sender_user_id: ids.luca.owner_id, is_ai_generated: false, content: "yes" },
+        { conversation_id: conv!.id, sender_agent_id: ids.luca.id, is_ai_generated: true, content: "agent note" },
+        { conversation_id: conv!.id, is_ai_generated: false, content: "Luca created the group." },
+      ]);
+      const signIn = async (handle: string) => {
+        const c = createClient(URL!, ANON!, { auth: { persistSession: false } });
+        await c.auth.signInWithPassword({ email: `${handle}@agentme.test`, password: "password123" });
+        return c;
+      };
+      const countFor = async (handle: string) => {
+        const { data } = await (await signIn(handle)).rpc("unread_counts");
+        return Number((data ?? []).find((r: { conversation_id: string }) => r.conversation_id === conv!.id)?.unread ?? 0);
+      };
+      expect(await countFor("luca")).toBe(3); // Marco x2 + the agent's message
+      expect(await countFor("marco")).toBe(2); // Luca's message + Luca's agent; never his own
+      expect(await countFor("paul")).toBe(0); // not a member: nothing visible
+
+      await db.from("conversation_members").update({ last_read_at: new Date().toISOString() }).eq("conversation_id", conv!.id).eq("user_id", ids.luca.owner_id);
+      expect(await countFor("luca")).toBe(0);
+    } finally {
+      await db.from("conversations").delete().eq("id", conv!.id);
+    }
+  });
+});

@@ -161,6 +161,20 @@ test("contact request, accept and direct message", async ({ browser }) => {
 
   await eve.page.goto("/chats");
   await expect(eve.page.getByText("Hi Eve, welcome!")).toBeVisible();
+
+  // WhatsApp-style unread counters: on the chat and on the Chats tab...
+  const row = eve.page.getByRole("link", { name: /^🦉 Paul/ });
+  await expect(row.getByTestId("unread-badge")).toHaveText("1");
+  await expect(eve.page.getByTestId("chats-badge")).toHaveText("1");
+  // ...live, when another message arrives...
+  await send(paul.page, "Are you coming on Saturday?");
+  await expect(row.getByTestId("unread-badge")).toHaveText("2", { timeout: 10_000 });
+  // ...and cleared by opening the chat. Paul's own view never counts his messages.
+  await row.click();
+  await expect(eve.page.getByText("Are you coming on Saturday?")).toBeVisible();
+  await eve.page.getByRole("link", { name: "Chats" }).click();
+  await expect(eve.page.getByTestId("unread-badge")).toHaveCount(0);
+  await expect(eve.page.getByTestId("chats-badge")).toHaveCount(0);
   await eve.close();
   await paul.close();
 });
