@@ -106,9 +106,10 @@ export function heuristicIntent(text: string): Intent {
   }
 
   // Assign: "Ask @a and @b who brings what for Saturday: drinks, dessert, bread"
-  if (/\b(who brings|who'?ll bring|who will bring|bring what|sign[- ]?up|who can bring|who does what)\b/i.test(text)) {
+  if (/\b(who brings|who'?ll bring|who will bring|bring what|sign[- ]?up|who can bring|who does what|who drives)\b/i.test(text)) {
     const items = text.includes(":") ? splitList(text.slice(text.lastIndexOf(":") + 1)).slice(0, 20) : [];
-    if (items.length) return { ...base, kind: "assign", event: day ? `Who brings what — ${capitalise(day)}` : "Who brings what", items };
+    const title = /\bwho drives\b/i.test(text) ? "Who drives which day" : day ? `Who brings what — ${capitalise(day)}` : "Who brings what";
+    if (items.length) return { ...base, kind: "assign", event: title, items };
   }
 
   // Poll: "vote", "poll", "which ... X or Y", "choose between ..."

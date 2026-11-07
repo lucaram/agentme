@@ -49,6 +49,27 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
   ]);
 
   const target = conv.target_agent ? byId.get(conv.target_agent) : undefined;
+
+  // Template chips for My Agent, filled with the owner's own contacts.
+  let examples: { label: string; text: string }[] | undefined;
+  if (conv.kind === "my_agent") {
+    const { data: contacts } = await supabase.from("contacts").select("requester_agent, addressee_agent").eq("status", "accepted");
+    const friends = (contacts ?? [])
+      .map((c) => byId.get(c.requester_agent === agent.id ? c.addressee_agent : c.requester_agent))
+      .filter((a) => a && a.type === "personal")
+      .map((a) => `@${a!.handle}`);
+    const [a, b] = [friends[0] ?? "@friend", friends[1] ?? friends[0] ?? "@friend"];
+    const both = a === b ? a : `${a} and ${b}`;
+    examples = [
+      { label: "🍝 Dinner", text: `Arrange dinner with ${both} on Saturday evening` },
+      { label: "⚽ Five-a-side", text: `Organise five-a-side on Thursday at 7pm with ${both}, need 3, someone bring a ball and bibs` },
+      { label: "📊 Poll", text: `Ask ${both} to vote: Italian, Thai or Indian` },
+      { label: "🧺 Who brings what", text: `Ask ${both} who brings what for Saturday: drinks, dessert and bread` },
+      { label: "🚗 Carpool", text: `Ask ${both} who drives which day: Monday, Tuesday, Wednesday` },
+      { label: "💬 Question", text: `Ask ${a} if they can help me move on Sunday` },
+      { label: "📣 Announcement", text: `Tell ${both}: the trip is tomorrow, bring lunch` },
+    ];
+  }
   const others = conv.conversation_members.filter((m) => m.user_id !== user.id).map((m) => byOwner.get(m.user_id));
   const title =
     conv.kind === "my_agent"
@@ -129,6 +150,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
                 <TaskCard
                   task={task as TaskView}
                   exchanges={(exchanges ?? []).filter((e) => e.task_id === task.id)}
+                  steps={(steps ?? []).filter((s) => s.task_id === task.id)}
                   agents={byId}
                   canAct={task.owner_id === user.id}
                 />
@@ -181,6 +203,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
               : "Message"
         }
         thinkingLabel={conv.kind === "dm" || conv.kind === "group" ? undefined : "Agent is thinking…"}
+        examples={examples}
       />
     </div>
   );

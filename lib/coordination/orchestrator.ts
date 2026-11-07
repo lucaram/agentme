@@ -3,19 +3,19 @@ import { adminClient } from "@/lib/supabase/admin";
 import { llm, LLMError } from "@/lib/llm";
 import { sendAgentMessage } from "@/lib/a2a/client";
 import { extractMentions } from "@/lib/policy/handles";
-import { CATEGORY_LABELS, isRequestableCategory } from "@/lib/policy/disclosure";
 import { getAgentByHandle, getAgentById, getRelationship, type AgentRow } from "@/lib/data/agents";
 import { getConversation, postMessage } from "@/lib/data/chat";
-import { INTENT_SYSTEM, OWNER_CHAT_SYSTEM, wrapUntrusted } from "@/lib/agents/prompts";
+import { COMPOSE_SYSTEM, OWNER_CHAT_SYSTEM, wrapUntrusted } from "@/lib/agents/prompts";
 import { buildRecall } from "@/lib/agents/recall";
 import { asJson } from "@/lib/data/json";
-import { MAX_PLAN_PEOPLE, type NewStep, type TaskParsed } from "@/lib/plans/types";
-import { announceSteps, assignSteps, coordinationSteps, createSteps, pollSteps, questionSteps, rsvpSteps } from "@/lib/plans/steps";
+import { MAX_PLAN_PEOPLE, type TaskParsed } from "@/lib/plans/types";
+import { createSteps } from "@/lib/plans/steps";
+import { ComposeSchema, heuristicCompose, validateDraft, type PlanDraft } from "@/lib/plans/compose";
 import { ensurePlanGroup } from "@/lib/plans/group";
 import { withdrawInboxForTask } from "@/lib/plans/inbox";
 import { describeRetry, hit } from "@/lib/limits";
-import { displayClock, heuristicIntent } from "./heuristics";
-import { IntentSchema, type Intent, type Proposal } from "./schemas";
+import { displayClock } from "./heuristics";
+import type { Proposal } from "./schemas";
 
 export type { TaskParsed } from "@/lib/plans/types";
 
@@ -41,24 +41,25 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
   const mentions = extractMentions(text).filter((h) => h !== agent.handle);
   if (mentions.length === 0) return replyToOwner(agent, userId, conversationId, text);
 
-  let intent: Intent;
+  // The AI composes a plan from building blocks; code validates it below.
+  let draft: PlanDraft;
   try {
-    intent = await llm().generateObject({
-      purpose: "intent",
-      tier: "fast",
-      system: INTENT_SYSTEM,
+    draft = await llm().generateObject({
+      purpose: "compose",
+      tier: "smart",
+      system: COMPOSE_SYSTEM,
       messages: [{ role: "user", content: text }],
-      schema: IntentSchema,
-      maxTokens: 1000,
+      schema: ComposeSchema,
+      maxTokens: 2000,
       mockContext: { text },
     });
   } catch {
-    // Intent parsing is low risk; fall back to deterministic parsing.
-    intent = heuristicIntent(text);
+    // Composition is checked by code anyway; fall back to deterministic composition.
+    draft = heuristicCompose(text);
   }
-  if (intent.kind === "chat") return replyToOwner(agent, userId, conversationId, text);
+  if (draft.kind === "chat" || !draft.steps.length) return replyToOwner(agent, userId, conversationId, text);
 
-  // Participants come from the @mentions the OWNER typed, never from the model alone.
+  // Participants come from the @mentions the OWNER typed, never from the model.
   const say = (content: string) => postMessage({ conversationId, from: "agent", agentId: agent.id, content });
   const valid: string[] = [];
   const rejected: string[] = [];
@@ -75,78 +76,54 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
     return say(`A plan can include up to ${MAX_PLAN_PEOPLE} people, including you. Please mention fewer people.`);
   }
 
-  // Code-side checks on what the model extracted.
-  const options = [...new Set(intent.options.map((o) => o.trim()).filter((o) => o && o.length <= 60))].slice(0, 6);
-  const question = intent.question.trim().slice(0, 500);
-  if (intent.kind === "poll" && options.length < 2) {
-    return say("For a poll I need at least two options, e.g. “Ask @marco and @paul to vote: Saturday or Sunday”.");
-  }
-  if ((intent.kind === "poll" || intent.kind === "question") && !question) {
-    return say("What should I ask? For example: “Ask @marco if he can help me move on Sunday”.");
-  }
-  const items = [...new Map(intent.items.map((i) => i.trim()).filter((i) => i && i.length <= 80).map((i) => [i.toLowerCase(), i])).values()].slice(0, 20);
-  if (intent.kind === "assign" && !items.length) {
-    return say("Which items or jobs should people sign up for? For example: “Ask @marco and @paul who brings what for Saturday: drinks, dessert, bread”.");
-  }
-  const message = intent.message.trim().slice(0, 1000);
-  if (intent.kind === "announce" && !message) {
-    return say("What should I tell them? For example: “Tell @marco and @paul: the trip is tomorrow, bring lunch”.");
-  }
-  const time = /^\d{2}:\d{2}$/.test(intent.time) ? intent.time : "";
-  const people = valid.length + 1;
-  const min = intent.min > 1 ? intent.min : 0;
-  const max = intent.max > 1 ? intent.max : 0;
-  if (intent.kind === "rsvp") {
-    if (!time || !intent.window) return say("What day and time? For example: “Organise five-a-side on Thursday at 7pm with @marco and @paul”.");
-    if (min > people) return say(`You need at least ${min} people but invited ${people} including you. Mention more people or lower the number.`);
-    if (min && max && min > max) return say(`The minimum (${min}) can't be more than the maximum (${max}).`);
-  }
+  const plan = validateDraft(draft, { organiser: agent.handle, participants: valid });
+  if (!plan.ok) return say(`I couldn't set that up: ${plan.error}`);
 
   const limit = await hit("tasksPerUser", userId);
   if (!limit.allowed) return say(`You've started a lot of plans recently. Please try again in ${describeRetry(limit.retryAfterSeconds)}.`);
 
-  let parsed: TaskParsed;
-  let steps: NewStep[];
-  let summary: string;
-  if (intent.kind === "rsvp") {
-    parsed = { kind: "rsvp", event: intent.event || "Get-together", window: intent.window, participants: valid, categories: [], time, min, max };
-    steps = rsvpSteps(parsed);
-    const limits = [min && `needs at least ${min} people`, max && `max ${max} places, then a waitlist`].filter(Boolean).join("; ");
-    summary = `I'll invite ${listHandles(valid)} to ${parsed.event}, ${parsed.window} at ${displayClock(time)}, in a new group and ask who's in.${limits ? ` (${limits})` : ""} Approve?`;
-  } else if (intent.kind === "assign") {
-    const title = intent.event && intent.event !== "meetup" ? intent.event : "Who brings what";
-    parsed = { kind: "assign", event: title, window: intent.window, participants: valid, categories: [], items };
-    steps = assignSteps(agent.handle, valid, title, items);
-    summary = `I'll share a sign-up list with ${listHandles(valid)}: ${items.join(" · ")}. Everyone claims their own items; nobody is assigned anything. Approve?`;
-  } else if (intent.kind === "announce") {
-    parsed = { kind: "announce", event: "", window: "", participants: valid, categories: [], message };
-    steps = announceSteps(valid, message);
-    summary = `I'll send this to ${listHandles(valid)} in a new group, exactly as written and as your own message: “${message}” Approve?`;
-  } else if (intent.kind === "poll") {
-    parsed = { kind: "poll", event: intent.event, window: intent.window, participants: valid, categories: [], question, options };
-    steps = pollSteps(agent.handle, valid, question, options);
-    summary = `I'll ask ${listHandles(valid)} to vote: “${question}” Options: ${options.join(" · ")}. You vote too. Options can't change once sent. Approve?`;
-  } else if (intent.kind === "question") {
-    parsed = { kind: "question", event: intent.event, window: intent.window, participants: valid, categories: [], question };
-    steps = questionSteps(valid, question);
-    summary = `I'll ask ${listHandles(valid)}: “${question}” Only they will see it, and they'll answer personally. Approve?`;
-  } else {
-    const categories = [...new Set(["availability", ...intent.categories])].filter(isRequestableCategory);
-    parsed = { kind: "coordinate", event: intent.event || "meetup", window: intent.window || "this week", participants: valid, categories };
-    steps = coordinationSteps(parsed);
-    const asks = categories.map((c) => CATEGORY_LABELS[c].toLowerCase()).join(" and ");
-    summary = `I'll ask ${listHandles(valid)}'s agents for their ${asks} for ${parsed.event} (${parsed.window}). Nothing else will be shared. Approve?`;
-  }
-
   const { data: task, error } = await adminClient()
     .from("tasks")
-    .insert({ owner_id: userId, initiator_agent: agent.id, conversation_id: conversationId, goal: text, parsed: asJson(parsed) })
+    .insert({ owner_id: userId, initiator_agent: agent.id, conversation_id: conversationId, goal: text, parsed: asJson(plan.parsed) })
     .select("id")
     .single();
   if (error) throw error;
-  await createSteps(task.id, steps);
-  await postMessage({ conversationId, from: "agent", agentId: agent.id, content: summary, metadata: { kind: "task_card", task_id: task.id } });
+  await createSteps(task.id, plan.steps);
+  await postMessage({ conversationId, from: "agent", agentId: agent.id, content: planSummary(valid, plan.preview), metadata: { kind: "task_card", task_id: task.id } });
   return task.id;
+}
+
+function planSummary(people: string[], preview: string[]) {
+  const steps = preview.length === 1 ? preview[0] : preview.map((line, i) => `${i + 1}. ${line}`).join("\n");
+  return `Here's the plan with ${listHandles(people)}:\n${steps}\nNothing is sent until you approve, and you can edit it first.`;
+}
+
+/**
+ * The organiser edits the plan in the preview before approving. Same code
+ * checks as a freshly composed plan; only possible while awaiting approval.
+ */
+export async function updateDraft(taskId: string, userId: string, draft: PlanDraft): Promise<{ ok: true } | { ok: false; error: string }> {
+  const db = adminClient();
+  const { data: task } = await db.from("tasks").select("*").eq("id", taskId).maybeSingle();
+  if (!task || task.owner_id !== userId) return { ok: false, error: "Not found." };
+  if (task.status !== "awaiting_approval") return { ok: false, error: "This plan was already approved or stopped." };
+  const organiser = await getAgentById(task.initiator_agent);
+  const participants = (task.parsed as unknown as TaskParsed).participants ?? [];
+  const parsedDraft = ComposeSchema.safeParse({ ...draft, kind: "plan" });
+  if (!parsedDraft.success) return { ok: false, error: "Some fields are too long or invalid." };
+  const plan = validateDraft(parsedDraft.data, { organiser: organiser?.handle ?? "", participants });
+  if (!plan.ok) return { ok: false, error: plan.error };
+
+  await db.from("plan_steps").delete().eq("task_id", taskId);
+  await createSteps(taskId, plan.steps);
+  await db.from("tasks").update({ parsed: asJson(plan.parsed) }).eq("id", taskId).eq("status", "awaiting_approval");
+  await db
+    .from("messages")
+    .update({ content: planSummary(participants, plan.preview) })
+    .eq("conversation_id", task.conversation_id)
+    .eq("metadata->>task_id", taskId)
+    .eq("metadata->>kind", "task_card");
+  return { ok: true };
 }
 
 /** Direct reply from the owner's own agent, with Recall of the plans the owner can see. */

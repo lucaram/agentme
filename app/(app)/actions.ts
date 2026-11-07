@@ -17,7 +17,9 @@ import {
   decideProposal,
   handleOwnerMessage,
   runTask,
+  updateDraft,
 } from "@/lib/coordination/orchestrator";
+import type { PlanDraft } from "@/lib/plans/compose";
 import { FACT_CATEGORIES } from "@/lib/policy/disclosure";
 import { describeRetry, hit } from "@/lib/limits";
 import { continueWithoutWaiting } from "@/lib/plans/engine";
@@ -69,6 +71,14 @@ export async function approveTaskAction(taskId: string) {
     // Respond immediately; agents work in the background and progress streams in via Realtime.
     after(() => runTask(taskId));
   }
+}
+
+/** Organiser edits the composed plan in the preview, before approving. */
+export async function updateDraftAction(taskId: string, draft: PlanDraft): Promise<{ error?: string }> {
+  const { user } = await requireAgent();
+  const result = await updateDraft(taskId, user.id, draft);
+  revalidatePath("/chats", "layout");
+  return result.ok ? {} : { error: result.error };
 }
 
 /** Organiser: go ahead with the people who answered instead of waiting for the rest. */

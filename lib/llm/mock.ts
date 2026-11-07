@@ -6,6 +6,7 @@ import {
 } from "@/lib/coordination/heuristics";
 import { recordUsage } from "@/lib/usage/meter";
 import { describeRecall, type RecallPlan } from "@/lib/agents/recall-format";
+import { heuristicCompose } from "@/lib/plans/compose";
 import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest } from "./types";
 
 type Faq = { q: string; a: string };
@@ -46,6 +47,9 @@ export class MockProvider implements LLMProvider {
     const ctx = (req.mockContext ?? {}) as Record<string, unknown>;
     let value: unknown;
     switch (req.purpose) {
+      case "compose":
+        value = heuristicCompose(String(ctx.text ?? ""));
+        break;
       case "intent":
         value = heuristicIntent(String(ctx.text ?? ""));
         break;

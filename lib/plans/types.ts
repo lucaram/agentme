@@ -11,7 +11,7 @@ export const MAX_PLAN_PEOPLE = 20;
 /** What the owner asked for, as understood when the task was created. */
 export type TaskParsed = {
   /** Missing on plans created before Milestone 2 (all of which were "coordinate"). */
-  kind?: "coordinate" | "rsvp" | "poll" | "question" | "assign" | "announce";
+  kind?: "coordinate" | "rsvp" | "poll" | "question" | "assign" | "announce" | "composed";
   event: string;
   window: string;
   participants: string[];

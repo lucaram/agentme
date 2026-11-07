@@ -359,3 +359,35 @@ test("an announcement is sent with the organiser's exact words, as their own mes
   await luca.close();
   await marco.close();
 });
+
+test("the composer: a template becomes an editable plan of blocks, run in one group", async ({ browser }) => {
+  const luca = await as(browser, "luca");
+  await openMyAgent(luca.page);
+  // Template chips are filled with Luca's own contacts.
+  await luca.page.getByRole("button", { name: "⚽ Five-a-side" }).click();
+  await expect(luca.page.getByLabel("Message", { exact: true })).toHaveValue(/Organise five-a-side on Thursday at 7pm with @\w+ and @\w+, need 3, someone bring a ball and bibs/);
+  await luca.page.getByRole("button", { name: "Send" }).click();
+
+  // The preview shows each block before anything is sent.
+  const task = luca.page.getByRole("region", { name: "Agent task" }).last();
+  await expect(task.getByTestId("step-rsvp")).toContainText("Five-a-side, Thursday at 7:00 PM");
+  await expect(task.getByTestId("assign-items")).toHaveText("ball · bibs");
+
+  // Edit it before approving.
+  await task.getByRole("button", { name: "Edit plan" }).click();
+  const editor = task.getByRole("form", { name: "Edit plan" });
+  await editor.getByTestId("edit-rsvp").getByLabel("Event").fill("Thursday football");
+  await editor.getByTestId("edit-assign").getByLabel(/Items/).fill("ball, bibs, water");
+  await editor.getByRole("button", { name: "Save plan" }).click();
+  await expect(task.getByTestId("assign-items")).toHaveText("ball · bibs · water");
+  await expect(task.getByTestId("step-rsvp")).toContainText("Thursday football");
+  await task.getByRole("button", { name: "Approve" }).click();
+
+  // Marco gets the invitation and the sign-up list in the same new group.
+  const marco = await as(browser, "marco");
+  await marco.page.getByRole("link", { name: /^👥 Thursday football/ }).click();
+  await expect(marco.page.getByTestId("proposal")).toContainText("Thursday football");
+  await expect(marco.page.getByTestId("assign")).toContainText("water");
+  await luca.close();
+  await marco.close();
+});

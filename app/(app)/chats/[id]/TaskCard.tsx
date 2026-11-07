@@ -1,26 +1,15 @@
 import { ActionButton } from "@/components/ActionButton";
 import { CATEGORY_LABELS, type FactCategory } from "@/lib/policy/disclosure";
 import { displayClock } from "@/lib/coordination/heuristics";
+import { draftFromSteps } from "@/lib/plans/compose";
+import type { TaskParsed } from "@/lib/plans/types";
 import type { Database } from "@/lib/database.types";
 import { approveTaskAction, cancelTaskAction, continueWithoutWaitingAction } from "../../actions";
+import { DraftEditor } from "./DraftEditor";
 
-export type TaskView = Database["public"]["Tables"]["tasks"]["Row"] & {
-  parsed: {
-    kind?: "coordinate" | "rsvp" | "poll" | "question" | "assign" | "announce";
-    time?: string;
-    min?: number;
-    max?: number;
-    items?: string[];
-    message?: string;
-    event: string;
-    window: string;
-    participants: string[];
-    categories: string[];
-    question?: string;
-    options?: string[];
-  };
-};
+export type TaskView = Database["public"]["Tables"]["tasks"]["Row"] & { parsed: TaskParsed };
 type Exchange = Database["public"]["Tables"]["task_exchanges"]["Row"];
+type StepRow = Database["public"]["Tables"]["plan_steps"]["Row"];
 type AgentLite = { handle: string; avatar: string };
 
 const STATUS: Record<TaskView["status"], string> = {
@@ -33,6 +22,16 @@ const STATUS: Record<TaskView["status"], string> = {
   rejected: "Plan dropped",
   cancelled: "Stopped",
   failed: "Failed",
+};
+
+const HEADINGS: Record<NonNullable<TaskParsed["kind"]>, string> = {
+  coordinate: "🗂️ Agent coordination",
+  rsvp: "📨 Invitation",
+  poll: "📊 Poll",
+  question: "💬 Question",
+  assign: "🧺 Sign-up list",
+  announce: "📣 Announcement",
+  composed: "🧩 Plan",
 };
 
 function exchangeLabel(e: Exchange, handle: string | undefined): string {
@@ -50,90 +49,117 @@ function exchangeLabel(e: Exchange, handle: string | undefined): string {
   }
 }
 
+const STEP_ICON: Record<string, string> = {
+  collect: "🗓️",
+  proposal: "📝",
+  rsvp: "📨",
+  poll: "📊",
+  question: "💬",
+  assign: "🧺",
+  announce: "📣",
+};
+
+/** One line per step, so the organiser sees exactly what will happen before approving. */
+function StepLine({ step, parsed, hasProposal }: { step: StepRow; parsed: TaskParsed; hasProposal: boolean }) {
+  const c = (step.config ?? {}) as Record<string, unknown>;
+  const list = (v: unknown) => ((v as string[]) ?? []).join(" · ");
+  const limits = [c.min && `at least ${c.min}`, c.max && `max ${c.max} (then a waitlist)`].filter(Boolean).join(", ");
+  let body: React.ReactNode;
+  switch (step.type) {
+    case "collect":
+      body = (
+        <>
+          Ask their agents for {((c.categories as string[]) ?? []).map((x) => CATEGORY_LABELS[x as FactCategory]?.toLowerCase() ?? x).join(" and ")} for{" "}
+          {parsed.event} ({parsed.window}). Nothing else is shared.
+        </>
+      );
+      break;
+    case "proposal":
+      body = "Draft a plan for you to approve before anyone sees it.";
+      break;
+    case "rsvp":
+      body = hasProposal ? (
+        <>Ask who&apos;s in once you share it{limits && <> (<span data-testid="rsvp-limits">{limits}</span>)</>}.</>
+      ) : (
+        <>
+          Invite everyone to {String(c.title ?? parsed.event)}, {String(c.day ?? parsed.window)}
+          {c.time ? ` at ${displayClock(String(c.time))}` : ""} and ask who&apos;s in
+          {limits && <> (<span data-testid="rsvp-limits">{limits}</span>)</>}.
+        </>
+      );
+      break;
+    case "poll":
+      body = (
+        <>
+          Everyone votes: “{String(c.question)}” <span data-testid="poll-options">{list(c.options)}</span>
+        </>
+      );
+      break;
+    case "question":
+      body = <>Ask each of them personally: “{String(c.question)}”</>;
+      break;
+    case "assign":
+      body = (
+        <>
+          Sign-up list: <span data-testid="assign-items">{list(c.items)}</span>. Everyone claims their own.
+        </>
+      );
+      break;
+    case "announce":
+      body = <>Send your exact words as your own message: “{String(c.message)}”</>;
+      break;
+    default:
+      body = step.type;
+  }
+  const done = step.status === "done" ? " ✓" : step.status === "waiting" ? " ⏳" : "";
+  return (
+    <li className="text-xs" data-testid={`step-${step.type}`}>
+      {STEP_ICON[step.type] ?? "•"} {body}
+      <span className="text-muted">{done}</span>
+    </li>
+  );
+}
+
 export function TaskCard({
   task,
   exchanges,
+  steps,
   agents,
   canAct,
 }: {
   task: TaskView;
   exchanges: Exchange[];
+  steps: StepRow[];
   agents: Map<string, AgentLite>;
   canAct: boolean;
 }) {
   const kind = task.parsed.kind ?? "coordinate";
-  const asks = task.parsed.categories.map((c) => CATEGORY_LABELS[c as FactCategory] ?? c).join(", ");
-  const heading = {
-    coordinate: "🗂️ Agent coordination",
-    rsvp: "📨 Invitation",
-    poll: "📊 Poll",
-    question: "💬 Question",
-    assign: "🧺 Sign-up list",
-    announce: "📣 Announcement",
-  }[kind];
+  const ordered = [...steps].sort((a, b) => a.position - b.position);
+  const hasProposal = ordered.some((s) => s.type === "proposal");
   // Retried/interrupted attempts stay in History; the card shows the latest per person.
   const latest = [...new Map(exchanges.map((e) => [e.to_agent ?? e.id, e])).values()];
+  const editable = canAct && task.status === "awaiting_approval";
+
   return (
     <section className="mt-2 w-full max-w-[85%] rounded-2xl border border-agent-border bg-surface p-3 text-sm" aria-label="Agent task">
-      <div className="flex items-center justify-between">
-        <span className="font-medium">{heading}</span>
-        <span className={`text-xs ${task.status === "failed" ? "text-danger" : "text-muted"}`} data-testid="task-status">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium">
+          {HEADINGS[kind]}
+          {kind === "composed" && task.parsed.event ? `: ${task.parsed.event}` : ""}
+        </span>
+        <span className={`shrink-0 text-xs ${task.status === "failed" ? "text-danger" : "text-muted"}`} data-testid="task-status">
           {STATUS[task.status]}
         </span>
       </div>
       <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
         <dt className="text-muted">{kind === "coordinate" ? "Agents" : "People"}</dt>
         <dd>{task.parsed.participants.map((h) => `@${h}`).join(", ")}</dd>
-        {kind === "coordinate" && (
-          <>
-            <dt className="text-muted">Will ask for</dt>
-            <dd>{asks}</dd>
-            <dt className="text-muted">When</dt>
-            <dd>{task.parsed.window}</dd>
-          </>
-        )}
-        {(kind === "poll" || kind === "question") && (
-          <>
-            <dt className="text-muted">{kind === "poll" ? "Vote on" : "Question"}</dt>
-            <dd>“{task.parsed.question}”</dd>
-          </>
-        )}
-        {kind === "rsvp" && (
-          <>
-            <dt className="text-muted">Event</dt>
-            <dd>
-              {task.parsed.event}, {task.parsed.window}
-              {task.parsed.time ? ` at ${displayClock(task.parsed.time)}` : ""}
-            </dd>
-            {(task.parsed.min || task.parsed.max) && (
-              <>
-                <dt className="text-muted">Places</dt>
-                <dd data-testid="rsvp-limits">
-                  {[task.parsed.min && `at least ${task.parsed.min}`, task.parsed.max && `max ${task.parsed.max} (then a waitlist)`].filter(Boolean).join(", ")}
-                </dd>
-              </>
-            )}
-          </>
-        )}
-        {kind === "assign" && (
-          <>
-            <dt className="text-muted">Items</dt>
-            <dd data-testid="assign-items">{(task.parsed.items ?? []).join(" · ")}</dd>
-          </>
-        )}
-        {kind === "announce" && (
-          <>
-            <dt className="text-muted">Message</dt>
-            <dd>“{task.parsed.message}”</dd>
-          </>
-        )}
-        {kind === "poll" && (
-          <>
-            <dt className="text-muted">Options</dt>
-            <dd data-testid="poll-options">{(task.parsed.options ?? []).join(" · ")}</dd>
-          </>
-        )}
       </dl>
+      <ol className="mt-2 space-y-1" aria-label="Steps">
+        {ordered.map((s) => (
+          <StepLine key={s.id} step={s} parsed={task.parsed} hasProposal={hasProposal} />
+        ))}
+      </ol>
 
       {latest.length > 0 && (
         <ul className="mt-3 space-y-1 border-t border-border pt-2">
@@ -159,7 +185,7 @@ export function TaskCard({
         </ul>
       )}
 
-      {kind === "coordinate" && latest.some((e) => e.status === "completed") && (
+      {ordered.some((s) => s.type === "collect") && latest.some((e) => e.status === "completed" && e.skill === "coordination.availability") && (
         <p className="mt-2 text-[11px] text-muted">
           Agents answer within what their owners allowed them to share; anything else is asked to the person. Nobody has agreed to anything yet.
         </p>
@@ -179,6 +205,7 @@ export function TaskCard({
           )}
         </div>
       )}
+      {editable && <DraftEditor taskId={task.id} initial={draftFromSteps(task.parsed.event, ordered, task.parsed)} />}
     </section>
   );
 }

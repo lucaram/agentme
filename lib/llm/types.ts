@@ -5,7 +5,8 @@ import type { z } from "zod";
  * purpose-specific output, and gives logs/cost tracking a stable label.
  */
 export type LLMPurpose =
-  | "intent" // parse an owner's request into a coordination task
+  | "intent" // parse an owner's request into a coordination task (legacy single-block)
+  | "compose" // compose a plan from building blocks
   | "coordination_reply" // answer another agent's availability/preference request
   | "proposal" // turn collected replies into a plan
   | "owner_chat" // talk to the agent's own owner
