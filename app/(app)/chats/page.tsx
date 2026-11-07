@@ -88,6 +88,7 @@ export default async function ChatsPage({ searchParams }: PageProps<"/chats">) {
               ))}
             </div>
             {error === "group" && <p className="text-sm text-danger">Pick at least one contact.</p>}
+            {error === "group-size" && <p className="text-sm text-danger">A group can have up to 20 people, including you.</p>}
             <button className="btn-primary">Create group</button>
           </form>
         ) : (

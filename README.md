@@ -72,6 +72,22 @@ official A2A client, so the protocol path is always exercised, and external A2A 
 | RLS on every table. Browsers can only read their own data and can't write directly. | `supabase/migrations` |
 | Deleting an account cascades: agent, facts, contacts, private chats, tasks, audit. | `app/(app)/actions.ts` |
 
+## Plans, blocks and the "ask my human" inbox (V2)
+
+- **Plans are made of steps (blocks)** run by the plan engine (`lib/plans/engine.ts`). Each block has its own handler in
+  `lib/plans/blocks/`. Milestone 1 implements `collect` (availability + preferences) and `proposal`. More blocks
+  (RSVP v2, poll, question, recall, assign, threshold, change, announce) arrive in the next milestones.
+- **A step can wait on people.** The task then releases its worker (status `waiting`), and it's woken and resumed
+  when someone answers. Resuming reuses everything that already happened.
+- **Ask my human.** When a *contact's* agent asks for something essential that your agent may not share (for
+  example, your availability is private), your agent doesn't guess and doesn't go silent:
+  - The request goes to your **Inbox**, prefilled from your own info.
+  - You can **share**, **share and remember** (a standing permission), or **decline**.
+  - The organiser sees "asked @you personally" and then "answered by @you personally".
+  - Strangers can never reach your inbox, and no AI runs until you answer.
+- The organiser can **Continue without waiting**, or **Stop**. Either way, open requests are withdrawn.
+- **Beta limit:** at most 20 people per plan or group, including the organiser.
+
 ## Reliability, limits and cost
 
 - **Coordination survives restarts.** A running task is advanced only by the worker that holds its

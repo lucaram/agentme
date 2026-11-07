@@ -202,3 +202,48 @@ describe("business agents", () => {
     expect(r.calls).toHaveLength(0);
   });
 });
+
+describe("ask my human (inbox)", () => {
+  const privateAvailability: Fact[] = [
+    { category: "availability", value: "Saturdays after 9 PM", disclosure: "private" },
+    { category: "food", value: "Italian", disclosure: "contacts" },
+    { category: "notes", value: PRIVATE_NOTE, disclosure: "private" },
+  ];
+
+  it("forwards to the owner when a contact needs something essential the agent may not share", async () => {
+    const r = useRecorder();
+    const res = await respondAsAgent(marco, { callerHandle: "luca", relationship: "accepted", text: "", data: request() }, privateAvailability);
+    expect(res.status).toBe("needs_human");
+    if (res.status !== "needs_human") return;
+    expect(res.missing).toEqual(["availability"]);
+    expect(res.shareable).toEqual({ food: "Italian" }); // only what is shareable anyway
+    expect(res.disclosed).toEqual([]);
+    expect(JSON.stringify(res)).not.toContain("9 PM"); // the private value never leaves
+    expectNoSecrets(JSON.stringify(res));
+    expect(r.calls).toHaveLength(0); // no AI cost until the human decides
+  });
+
+  it("also forwards when the agent simply doesn't know", async () => {
+    useRecorder();
+    const res = await respondAsAgent(marco, { callerHandle: "luca", relationship: "accepted", text: "", data: request() }, []);
+    expect(res.status).toBe("needs_human");
+  });
+
+  it("strangers can never reach someone's inbox, even when the policy is 'anyone'", async () => {
+    useRecorder();
+    const open = { ...marco, contact_policy: "anyone" as const };
+    const res = await respondAsAgent(open, { callerHandle: "eve", relationship: "none", text: "", data: request() }, privateAvailability);
+    expect(res.status).toBe("completed");
+    expect(res.disclosed).toEqual([]);
+    for (const relationship of ["pending", "blocked"] as const) {
+      const other = await respondAsAgent(open, { callerHandle: "eve", relationship, text: "", data: request() }, privateAvailability);
+      expect(other.status).not.toBe("needs_human");
+    }
+  });
+
+  it("does not bother the owner when the agent can answer the essentials itself", async () => {
+    useRecorder();
+    const res = await respondAsAgent(marco, { callerHandle: "luca", relationship: "accepted", text: "", data: request() }, facts);
+    expect(res.status).toBe("completed");
+  });
+});

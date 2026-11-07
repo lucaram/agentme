@@ -21,6 +21,9 @@ import {
 } from "@/lib/coordination/orchestrator";
 import { FACT_CATEGORIES } from "@/lib/policy/disclosure";
 import { describeRetry, hit } from "@/lib/limits";
+import { continueWithoutWaiting } from "@/lib/plans/engine";
+import { answerInboxItem, declineInboxItem } from "@/lib/plans/inbox";
+import { MAX_PLAN_PEOPLE } from "@/lib/plans/types";
 import { withUsageContext } from "@/lib/usage/context";
 
 const Id = z.uuid();
@@ -65,6 +68,34 @@ export async function approveTaskAction(taskId: string) {
     // Respond immediately; agents work in the background and progress streams in via Realtime.
     after(() => runTask(taskId));
   }
+}
+
+/** Organiser: go ahead with the people who answered instead of waiting for the rest. */
+export async function continueWithoutWaitingAction(taskId: string) {
+  const { user } = await requireAgent();
+  if (await continueWithoutWaiting(taskId, user.id)) after(() => runTask(taskId));
+}
+
+// ------------------------------------------------------------- inbox ("ask my human")
+
+export async function answerInboxAction(itemId: string, answers: Record<string, string>, remember: boolean): Promise<{ error?: string }> {
+  const { user, agent } = await requireAgent();
+  const result = await withUsageContext({ userId: user.id, agentId: agent.id }, () => answerInboxItem(itemId, user.id, answers, remember));
+  if (!result.ok) return { error: result.error };
+  const wake = result.wake;
+  if (wake) after(() => runTask(wake));
+  revalidatePath("/inbox");
+  return {};
+}
+
+export async function declineInboxAction(itemId: string): Promise<{ error?: string }> {
+  const { user } = await requireAgent();
+  const result = await declineInboxItem(itemId, user.id);
+  if (!result.ok) return { error: result.error };
+  const wake = result.wake;
+  if (wake) after(() => runTask(wake));
+  revalidatePath("/inbox");
+  return {};
 }
 
 export async function cancelTaskAction(taskId: string) {
@@ -175,6 +206,7 @@ export async function createGroup(form: FormData) {
     if (other && (await getContactRow(agent.id, other.id))?.status === "accepted") memberIds.push(other.owner_id);
   }
   if (!memberIds.length) redirect("/chats?error=group");
+  if (memberIds.length + 1 > MAX_PLAN_PEOPLE) redirect("/chats?error=group-size");
   const conv = await createConversation({ kind: "group", title, createdBy: user.id, memberIds });
   await postMessage({ conversationId: conv.id, from: "system", content: `${agent.display_name} created the group.` });
   redirect(`/chats/${conv.id}`);

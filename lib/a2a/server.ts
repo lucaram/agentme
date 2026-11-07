@@ -137,7 +137,13 @@ class AgentmeExecutor implements AgentExecutor {
         id: ctx.taskId,
         contextId: ctx.contextId,
         status: {
-          state: response.status === "completed" ? TaskState.TASK_STATE_COMPLETED : TaskState.TASK_STATE_REJECTED,
+          state:
+            response.status === "completed"
+              ? TaskState.TASK_STATE_COMPLETED
+              : response.status === "needs_human"
+                ? // Still in progress: the owner answers later via their inbox.
+                  TaskState.TASK_STATE_WORKING
+                : TaskState.TASK_STATE_REJECTED,
           message: reply,
           timestamp: new Date().toISOString(),
         },
@@ -190,7 +196,8 @@ async function recordExchange(
 ) {
   const db = adminClient();
   const row = {
-    status: response.status,
+    status: response.status === "needs_human" ? ("waiting_human" as const) : response.status,
+    answered_by: response.status === "completed" ? "agent" : null,
     response: asJson(
       response.status === "failed"
         ? null
@@ -201,6 +208,7 @@ async function recordExchange(
     a2a_task_id: a2aTaskId,
   };
 
+  let exchangeId: string | null = null;
   if (caller.exchangeId && caller.agent) {
     const { data } = await db
       .from("task_exchanges")
@@ -209,16 +217,45 @@ async function recordExchange(
       .eq("from_agent", caller.agent.id)
       .eq("to_agent", recipient.id)
       .select("id");
-    if (data?.length) return;
+    exchangeId = data?.[0]?.id ?? null;
   }
-  await db.from("task_exchanges").insert({
-    ...row,
-    task_id: null,
-    from_agent: caller.agent?.id ?? null,
-    to_agent: recipient.id,
-    skill: response.status === "failed" ? "unknown" : response.skill,
-    request: asJson(requestData ?? {}),
-  });
+  if (!exchangeId) {
+    const { data } = await db
+      .from("task_exchanges")
+      .insert({
+        ...row,
+        task_id: null,
+        from_agent: caller.agent?.id ?? null,
+        to_agent: recipient.id,
+        skill: response.status === "failed" ? "unknown" : response.skill,
+        request: asJson(requestData ?? {}),
+      })
+      .select("id")
+      .single();
+    exchangeId = data?.id ?? null;
+  }
+
+  if (response.status === "needs_human" && exchangeId) {
+    // Hand the request to the recipient's owner. Prefill: what the agent could share
+    // anyway; the owner's private values are added only when the owner opens the item.
+    await db.from("inbox_items").upsert(
+      {
+        owner_id: recipient.owner_id,
+        agent_id: recipient.id,
+        from_agent: caller.agent?.id ?? null,
+        task_id: caller.taskId ?? null,
+        exchange_id: exchangeId,
+        payload: asJson({
+          event: response.request.event,
+          window: response.request.window,
+          categories: response.request.categories,
+          missing: response.missing,
+          shareable: response.shareable,
+        }),
+      },
+      { onConflict: "exchange_id", ignoreDuplicates: true },
+    );
+  }
 }
 
 export async function agentCardResponse(handle: string): Promise<Response> {
