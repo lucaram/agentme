@@ -10,7 +10,7 @@ import { INTENT_SYSTEM, OWNER_CHAT_SYSTEM, wrapUntrusted } from "@/lib/agents/pr
 import { buildRecall } from "@/lib/agents/recall";
 import { asJson } from "@/lib/data/json";
 import { MAX_PLAN_PEOPLE, type NewStep, type TaskParsed } from "@/lib/plans/types";
-import { coordinationSteps, createSteps, pollSteps, questionSteps } from "@/lib/plans/steps";
+import { announceSteps, assignSteps, coordinationSteps, createSteps, pollSteps, questionSteps, rsvpSteps } from "@/lib/plans/steps";
 import { ensurePlanGroup } from "@/lib/plans/group";
 import { withdrawInboxForTask } from "@/lib/plans/inbox";
 import { describeRetry, hit } from "@/lib/limits";
@@ -84,6 +84,23 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
   if ((intent.kind === "poll" || intent.kind === "question") && !question) {
     return say("What should I ask? For example: “Ask @marco if he can help me move on Sunday”.");
   }
+  const items = [...new Map(intent.items.map((i) => i.trim()).filter((i) => i && i.length <= 80).map((i) => [i.toLowerCase(), i])).values()].slice(0, 20);
+  if (intent.kind === "assign" && !items.length) {
+    return say("Which items or jobs should people sign up for? For example: “Ask @marco and @paul who brings what for Saturday: drinks, dessert, bread”.");
+  }
+  const message = intent.message.trim().slice(0, 1000);
+  if (intent.kind === "announce" && !message) {
+    return say("What should I tell them? For example: “Tell @marco and @paul: the trip is tomorrow, bring lunch”.");
+  }
+  const time = /^\d{2}:\d{2}$/.test(intent.time) ? intent.time : "";
+  const people = valid.length + 1;
+  const min = intent.min > 1 ? intent.min : 0;
+  const max = intent.max > 1 ? intent.max : 0;
+  if (intent.kind === "rsvp") {
+    if (!time || !intent.window) return say("What day and time? For example: “Organise five-a-side on Thursday at 7pm with @marco and @paul”.");
+    if (min > people) return say(`You need at least ${min} people but invited ${people} including you. Mention more people or lower the number.`);
+    if (min && max && min > max) return say(`The minimum (${min}) can't be more than the maximum (${max}).`);
+  }
 
   const limit = await hit("tasksPerUser", userId);
   if (!limit.allowed) return say(`You've started a lot of plans recently. Please try again in ${describeRetry(limit.retryAfterSeconds)}.`);
@@ -91,7 +108,21 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
   let parsed: TaskParsed;
   let steps: NewStep[];
   let summary: string;
-  if (intent.kind === "poll") {
+  if (intent.kind === "rsvp") {
+    parsed = { kind: "rsvp", event: intent.event || "Get-together", window: intent.window, participants: valid, categories: [], time, min, max };
+    steps = rsvpSteps(parsed);
+    const limits = [min && `needs at least ${min} people`, max && `max ${max} places, then a waitlist`].filter(Boolean).join("; ");
+    summary = `I'll invite ${listHandles(valid)} to ${parsed.event}, ${parsed.window} at ${displayClock(time)}, in a new group and ask who's in.${limits ? ` (${limits})` : ""} Approve?`;
+  } else if (intent.kind === "assign") {
+    const title = intent.event && intent.event !== "meetup" ? intent.event : "Who brings what";
+    parsed = { kind: "assign", event: title, window: intent.window, participants: valid, categories: [], items };
+    steps = assignSteps(agent.handle, valid, title, items);
+    summary = `I'll share a sign-up list with ${listHandles(valid)}: ${items.join(" · ")}. Everyone claims their own items; nobody is assigned anything. Approve?`;
+  } else if (intent.kind === "announce") {
+    parsed = { kind: "announce", event: "", window: "", participants: valid, categories: [], message };
+    steps = announceSteps(valid, message);
+    summary = `I'll send this to ${listHandles(valid)} in a new group, exactly as written and as your own message: “${message}” Approve?`;
+  } else if (intent.kind === "poll") {
     parsed = { kind: "poll", event: intent.event, window: intent.window, participants: valid, categories: [], question, options };
     steps = pollSteps(agent.handle, valid, question, options);
     summary = `I'll ask ${listHandles(valid)} to vote: “${question}” Options: ${options.join(" · ")}. You vote too. Options can't change once sent. Approve?`;

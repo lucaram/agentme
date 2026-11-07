@@ -1,11 +1,17 @@
 import { ActionButton } from "@/components/ActionButton";
 import { CATEGORY_LABELS, type FactCategory } from "@/lib/policy/disclosure";
+import { displayClock } from "@/lib/coordination/heuristics";
 import type { Database } from "@/lib/database.types";
 import { approveTaskAction, cancelTaskAction, continueWithoutWaitingAction } from "../../actions";
 
 export type TaskView = Database["public"]["Tables"]["tasks"]["Row"] & {
   parsed: {
-    kind?: "coordinate" | "poll" | "question";
+    kind?: "coordinate" | "rsvp" | "poll" | "question" | "assign" | "announce";
+    time?: string;
+    min?: number;
+    max?: number;
+    items?: string[];
+    message?: string;
     event: string;
     window: string;
     participants: string[];
@@ -57,7 +63,14 @@ export function TaskCard({
 }) {
   const kind = task.parsed.kind ?? "coordinate";
   const asks = task.parsed.categories.map((c) => CATEGORY_LABELS[c as FactCategory] ?? c).join(", ");
-  const heading = kind === "poll" ? "📊 Poll" : kind === "question" ? "💬 Question" : "🗂️ Agent coordination";
+  const heading = {
+    coordinate: "🗂️ Agent coordination",
+    rsvp: "📨 Invitation",
+    poll: "📊 Poll",
+    question: "💬 Question",
+    assign: "🧺 Sign-up list",
+    announce: "📣 Announcement",
+  }[kind];
   // Retried/interrupted attempts stay in History; the card shows the latest per person.
   const latest = [...new Map(exchanges.map((e) => [e.to_agent ?? e.id, e])).values()];
   return (
@@ -79,10 +92,39 @@ export function TaskCard({
             <dd>{task.parsed.window}</dd>
           </>
         )}
-        {kind !== "coordinate" && (
+        {(kind === "poll" || kind === "question") && (
           <>
             <dt className="text-muted">{kind === "poll" ? "Vote on" : "Question"}</dt>
             <dd>“{task.parsed.question}”</dd>
+          </>
+        )}
+        {kind === "rsvp" && (
+          <>
+            <dt className="text-muted">Event</dt>
+            <dd>
+              {task.parsed.event}, {task.parsed.window}
+              {task.parsed.time ? ` at ${displayClock(task.parsed.time)}` : ""}
+            </dd>
+            {(task.parsed.min || task.parsed.max) && (
+              <>
+                <dt className="text-muted">Places</dt>
+                <dd data-testid="rsvp-limits">
+                  {[task.parsed.min && `at least ${task.parsed.min}`, task.parsed.max && `max ${task.parsed.max} (then a waitlist)`].filter(Boolean).join(", ")}
+                </dd>
+              </>
+            )}
+          </>
+        )}
+        {kind === "assign" && (
+          <>
+            <dt className="text-muted">Items</dt>
+            <dd data-testid="assign-items">{(task.parsed.items ?? []).join(" · ")}</dd>
+          </>
+        )}
+        {kind === "announce" && (
+          <>
+            <dt className="text-muted">Message</dt>
+            <dd>“{task.parsed.message}”</dd>
           </>
         )}
         {kind === "poll" && (

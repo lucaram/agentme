@@ -11,13 +11,21 @@ export const MAX_PLAN_PEOPLE = 20;
 /** What the owner asked for, as understood when the task was created. */
 export type TaskParsed = {
   /** Missing on plans created before Milestone 2 (all of which were "coordinate"). */
-  kind?: "coordinate" | "poll" | "question";
+  kind?: "coordinate" | "rsvp" | "poll" | "question" | "assign" | "announce";
   event: string;
   window: string;
   participants: string[];
   categories: string[];
   question?: string;
   options?: string[];
+  /** rsvp: fixed start time (HH:MM) and headcount limits, including the organiser. */
+  time?: string;
+  min?: number;
+  max?: number;
+  /** assign: items/roles to claim. */
+  items?: string[];
+  /** announce: the exact message the organiser approved. */
+  message?: string;
 };
 
 /**

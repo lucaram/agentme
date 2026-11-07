@@ -1,8 +1,10 @@
 import { ActionButton } from "@/components/ActionButton";
 import { displayClock } from "@/lib/coordination/heuristics";
+import { evaluate } from "@/lib/plans/threshold";
 import type { Database } from "@/lib/database.types";
 import { decideProposalAction } from "../../actions";
 import { RsvpControl } from "./RsvpControl";
+import { ChangePlanForm } from "./ChangePlanForm";
 
 export type ProposalView = Database["public"]["Tables"]["proposals"]["Row"] & {
   content: { title: string; day: string; time: string; cuisine: string | null; participants: string[]; rationale: string; disclaimer: string };
@@ -13,57 +15,71 @@ type AgentLite = { handle: string; avatar: string };
 export function ProposalCard({
   proposal,
   rsvpStepId,
+  rsvpConfig,
   responses,
   agents,
   myAgentId,
   myHandle,
   inGroup,
+  canChange,
 }: {
   proposal: ProposalView;
   rsvpStepId: string | null;
+  rsvpConfig: { min?: number | null; max?: number | null };
   responses: StepResponse[];
   agents: Map<string, AgentLite>;
   myAgentId: string;
   myHandle: string;
   inGroup: boolean;
+  canChange: boolean;
 }) {
   const c = proposal.content;
   const isOrganiserView = !inGroup;
-  const answerOf = (handle: string) => {
-    const entry = [...agents.entries()].find(([, a]) => a.handle === handle);
-    const r = entry ? responses.find((x) => x.agent_id === entry[0]) : undefined;
-    return { avatar: entry?.[1].avatar, response: (r?.value as { response?: "in" | "out" } | undefined)?.response };
-  };
+  const handleOf = (agentId: string) => agents.get(agentId)?.handle ?? "";
+  const avatarOf = (handle: string) => [...agents.values()].find((a) => a.handle === handle)?.avatar;
+  // Code decides who's going and who's waitlisted (in the order they said yes).
+  const state = evaluate(
+    responses.map((r) => ({ handle: handleOf(r.agent_id), response: (r.value as { response: "in" | "out" }).response, at: r.updated_at })),
+    rsvpConfig,
+  );
   const mine = responses.find((r) => r.agent_id === myAgentId);
   const myResponse = (mine?.value as { response?: "in" | "out" } | undefined)?.response ?? null;
+  const statusOf = (handle: string) =>
+    state.going.includes(handle) ? "✅ in" : state.waitlist.includes(handle) ? `🕒 waitlist #${state.waitlist.indexOf(handle) + 1}` : state.out.includes(handle) ? "❌ can't make it" : null;
 
   return (
     <section className="mt-2 w-full max-w-[85%] rounded-2xl border-2 border-accent bg-surface p-4 text-sm" aria-label="Proposal" data-testid="proposal">
-      <p className="text-xs uppercase tracking-wide text-muted">Suggested plan</p>
-      <h3 className="mt-1 text-base font-semibold">{c.title}</h3>
-      <p className="mt-1">
-        📅 {c.day}, {displayClock(c.time)}
+      <p className="text-xs uppercase tracking-wide text-muted">{c.rationale ? "Suggested plan" : "Plan"}</p>
+      <h3 className="mt-1 text-base font-semibold" data-testid="plan-title">{c.title}</h3>
+      <p className="mt-1" data-testid="plan-when">
+        📅 {c.day}
+        {c.time ? `, ${displayClock(c.time)}` : ""}
         {c.cuisine && <> · 🍽️ {c.cuisine}</>} · 👥 {c.participants.length} people
       </p>
       <p className="mt-1 text-xs text-muted">{c.participants.map((p) => `@${p}`).join(", ")}</p>
-      <p className="mt-2 text-xs text-muted">{c.rationale}</p>
+      {c.rationale && <p className="mt-2 text-xs text-muted">{c.rationale}</p>}
       <p className="mt-2 rounded-lg bg-accent-soft px-2 py-1 text-xs">{c.disclaimer}</p>
 
       {proposal.status === "accepted" && (
-        <ul className="mt-2 space-y-0.5 text-xs" aria-label="Who's in" data-testid="rsvps">
-          {c.participants.map((handle) => {
-            const { avatar, response } = answerOf(handle);
-            return (
+        <>
+          {(rsvpConfig.min || rsvpConfig.max) && (
+            <p className="mt-2 text-xs font-medium" data-testid="threshold">
+              {rsvpConfig.min ? (state.on ? `✅ It's on — ${state.going.length} of ${rsvpConfig.min} needed are in` : `⏳ ${state.going.length} of ${rsvpConfig.min} needed are in`) : `${state.going.length} in`}
+              {rsvpConfig.max ? ` · ${Math.max(0, rsvpConfig.max - state.going.length)} of ${rsvpConfig.max} places left` : ""}
+              {state.waitlist.length ? ` · ${state.waitlist.length} on the waitlist` : ""}
+            </p>
+          )}
+          <ul className="mt-2 space-y-0.5 text-xs" aria-label="Who's in" data-testid="rsvps">
+            {c.participants.map((handle) => (
               <li key={handle}>
-                {avatar} @{handle}:{" "}
-                {response === "in" ? "✅ in" : response === "out" ? "❌ can't make it" : <span className="text-muted">⏳ waiting</span>}
+                {avatarOf(handle)} @{handle}: {statusOf(handle) ?? <span className="text-muted">⏳ waiting</span>}
               </li>
-            );
-          })}
-        </ul>
+            ))}
+          </ul>
+        </>
       )}
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap items-start gap-2">
         {isOrganiserView && proposal.status === "pending" && (
           <>
             <ActionButton action={decideProposalAction.bind(null, proposal.id, "accept")} label="Share with everyone" pendingLabel="Sharing…" variant="btn-primary" />
@@ -77,6 +93,7 @@ export function ProposalCard({
           <RsvpControl stepId={rsvpStepId} current={myResponse} />
         )}
       </div>
+      {canChange && <ChangePlanForm proposalId={proposal.id} title={c.title} day={c.day} time={c.time} />}
     </section>
   );
 }

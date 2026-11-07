@@ -10,6 +10,8 @@ import { runProposal } from "./blocks/proposal";
 import { runRsvp } from "./blocks/rsvp";
 import { runPoll } from "./blocks/poll";
 import { runQuestion } from "./blocks/question";
+import { runAssign } from "./blocks/assign";
+import { runAnnounce } from "./blocks/announce";
 import type { StepHandler, StepType, TaskParsed, TaskRow } from "./types";
 
 // ------------------------------------------------------------- the plan engine
@@ -33,6 +35,8 @@ const HANDLERS: Partial<Record<StepType, StepHandler>> = {
   rsvp: runRsvp,
   poll: runPoll,
   question: runQuestion,
+  assign: runAssign,
+  announce: runAnnounce,
 };
 
 class LeaseLost extends Error {}
@@ -188,7 +192,7 @@ async function executeTask(task: TaskRow) {
         return parked?.length ? "parked" : "again";
       }
       // A plan built around a proposal ends "accepted" (shared); others simply complete.
-      await release(steps.some((s) => s.type === "proposal") ? "accepted" : "completed");
+      await release(steps.some((s) => s.type === "proposal" || s.type === "rsvp") ? "accepted" : "completed");
       return "finished";
     };
 

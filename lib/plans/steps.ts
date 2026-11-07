@@ -17,6 +17,26 @@ export function pollSteps(organiser: string, participants: string[], question: s
   return [{ type: "poll", config: { question, options, voters: [organiser, ...participants] } }];
 }
 
+/** An invitation to a fixed event: who's in (with optional minimum / maximum + waitlist). */
+export function rsvpSteps(parsed: TaskParsed): NewStep[] {
+  return [
+    {
+      type: "rsvp",
+      config: { title: parsed.event, day: parsed.window, time: parsed.time, min: parsed.min || null, max: parsed.max || null },
+    },
+  ];
+}
+
+/** A sign-up list: everyone claims their own items. */
+export function assignSteps(organiser: string, participants: string[], title: string, items: string[]): NewStep[] {
+  return [{ type: "assign", config: { title, items, people: [organiser, ...participants] } }];
+}
+
+/** An announcement: the organiser's exact words, no reply needed. */
+export function announceSteps(participants: string[], message: string): NewStep[] {
+  return [{ type: "announce", config: { message, participants } }];
+}
+
 /** A question: each person answers personally. */
 export function questionSteps(participants: string[], question: string): NewStep[] {
   return [{ type: "question", config: { question, participants } }];

@@ -97,6 +97,15 @@ Milestone 2 blocks, all started from **My Agent** and approved before anything i
 | **Question** | `Ask @marco if he can help me move on Sunday` | Only contacts can ask. The question goes to the person's Inbox, and their agent never answers on their behalf. The answer is relayed as "answered personally". |
 | **Recall** | `What time did we agree for dinner?` | My Agent answers only from plans you can already see: times agreed, who's in, who hasn't replied, poll results, and answers. |
 
+Milestone 3 blocks. Each plan gets its own group, named after it:
+
+| Block | Try | How it works |
+| --- | --- | --- |
+| **Invitation + Threshold** | `Organise five-a-side on Thursday at 7pm with @marco and @paul, need 4` or `..., max 2` | A fixed day and time means there's nothing to coordinate, so people are simply invited and asked who's in.<br>**Minimum:** the group is told "It's on! ✅" when it's reached, and warned if it drops back below.<br>**Maximum:** extra "yes" answers join a waitlist in the order they came, and move up automatically when a place opens.<br>Code does all the counting. |
+| **Assign** | `Ask @marco and @paul who brings what for Saturday: drinks, dessert, bread` | A sign-up list where everyone claims their own items; nobody is assigned anything they didn't pick. The database guarantees an item can't be claimed twice. "Everything is covered ✅" appears when the list is complete. |
+| **Change** | **Change plan** on a shared plan (organiser only) | Edit the name, day or time. A day or time change asks everyone else to confirm again. Every change is kept in the history, and the organiser gets a heads-up if the new time clashes with what agents said. |
+| **Announce** | `Tell @marco and @paul: the trip is tomorrow, bring lunch` | You approve the exact words, and they're sent as **your own message** (not AI) in a new group. No reply is needed. |
+
 ## Reliability, limits and cost
 
 - **Coordination survives restarts.** A running task is advanced only by the worker that holds its

@@ -76,7 +76,7 @@ export function heuristicIntent(text: string): Intent {
   const lower = text.toLowerCase();
   const participants = extractMentions(text);
   const event =
-    lower.match(/\b(dinner|lunch|breakfast|brunch|coffee|drinks|meeting|call|walk|game)\b/)?.[1] ?? "meetup";
+    lower.match(/\b(dinner|lunch|breakfast|brunch|coffee|drinks|meeting|call|walk|game|five-a-side|5-a-side|football|tennis|match|party|movie|cinema|trip|run)\b/)?.[1] ?? "meetup";
   const day = lower.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tonight|tomorrow|this weekend|weekend)\b/)?.[1];
   const part = lower.match(/\b(morning|afternoon|evening|night|lunchtime)\b/)?.[1];
   const window = [day && capitalise(day), part].filter(Boolean).join(" ") || "this week";
@@ -88,8 +88,28 @@ export function heuristicIntent(text: string): Intent {
     categories: (MEALS.includes(event) || event === "drinks" ? ["availability", "food"] : ["availability"]) as Intent["categories"],
     question: "",
     options: [] as string[],
+    time: "",
+    min: 0,
+    max: 0,
+    items: [] as string[],
+    message: "",
   };
   if (!participants.length) return { ...base, kind: "chat" };
+  const withoutMentions = text.replace(/@[a-z0-9_]+/gi, "").replace(/\s+/g, " ").trim();
+
+  // Announce: "Tell @a and @b: the trip is tomorrow" — sent exactly as written.
+  if (/^\s*(tell|announce|inform|let\b.*\bknow)\b/i.test(text)) {
+    const message =
+      (text.includes(":") ? text.slice(text.indexOf(":") + 1) : text.match(/\bthat\s+(.+)$/i)?.[1] ?? withoutMentions.replace(/^\s*(tell|announce|inform)\b/i, ""))
+        .trim();
+    if (message) return { ...base, kind: "announce", message: message.slice(0, 1000) };
+  }
+
+  // Assign: "Ask @a and @b who brings what for Saturday: drinks, dessert, bread"
+  if (/\b(who brings|who'?ll bring|who will bring|bring what|sign[- ]?up|who can bring|who does what)\b/i.test(text)) {
+    const items = text.includes(":") ? splitList(text.slice(text.lastIndexOf(":") + 1)).slice(0, 20) : [];
+    if (items.length) return { ...base, kind: "assign", event: day ? `Who brings what — ${capitalise(day)}` : "Who brings what", items };
+  }
 
   // Poll: "vote", "poll", "which ... X or Y", "choose between ..."
   if (/\b(poll|vote|which|choose between|prefer)\b/i.test(text)) {
@@ -100,8 +120,26 @@ export function heuristicIntent(text: string): Intent {
   const ask = text.match(/\bask\b(?:\s+@[a-z0-9_]+(?:\s*(?:,|and)\s*@[a-z0-9_]+)*)\s*(?:if|whether|:|to)?\s*(.+)$/i);
   if (ask && !verbs.test(ask[1])) return { ...base, kind: "question", question: toQuestion(ask[1]) };
 
+  // A fixed day AND time means the owner already decided: just invite and ask who's in.
+  const at = text.match(/\bat\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b/i)?.[1];
+  const clock = at ? parseClock(at) : null;
+  const min = Number(text.match(/\b(?:need|at least|minimum(?: of)?)\s+(\d{1,2})\b/i)?.[1] ?? 0);
+  const max = Number(text.match(/\b(?:max(?:imum)?(?: of)?|up to|no more than)\s+(\d{1,2})\b/i)?.[1] ?? 0);
+  if (clock !== null && day && (verbs.test(text) || event !== "meetup" || /\binvite\b/i.test(text))) {
+    return { ...base, kind: "rsvp", event: capitalise(event === "meetup" ? "get-together" : event), time: formatClock(clock), min, max };
+  }
+
   if (verbs.test(text) || event !== "meetup") return { ...base, kind: "coordinate" };
   return { ...base, kind: "chat" };
+}
+
+/** "drinks, dessert and bread" -> ["drinks", "dessert", "bread"] */
+export function splitList(segment: string): string[] {
+  const items = segment
+    .split(/\s*,\s*|\s+and\s+|\s*;\s*/i)
+    .map((o) => o.replace(/[?.!]+$/, "").trim())
+    .filter((o) => o.length >= 1 && o.length <= 80);
+  return [...new Map(items.map((o) => [o.toLowerCase(), o])).values()];
 }
 
 /** "...vote: Italian, Thai or Indian" / "which day works better, Saturday or Sunday?" */

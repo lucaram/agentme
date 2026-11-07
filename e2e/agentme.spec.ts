@@ -273,3 +273,89 @@ test("a question is answered personally and relayed to whoever asked", async ({ 
   await luca.close();
   await marco.close();
 });
+
+test("an invitation with a waitlist, then the organiser changes the time", async ({ browser }) => {
+  const luca = await as(browser, "luca");
+  await openMyAgent(luca.page);
+  await send(luca.page, "Organise five-a-side on Thursday at 7pm with @marco and @paul, max 2");
+  const task = luca.page.getByRole("region", { name: "Agent task" }).last();
+  await expect(task.getByTestId("rsvp-limits")).toHaveText("max 2 (then a waitlist)");
+  await task.getByRole("button", { name: "Approve" }).click();
+  await expect(luca.page.getByText(/I've invited everyone in a new group, “Five-a-side”/)).toBeVisible();
+
+  // Luca is in automatically; Marco takes the last place; Paul goes on the waitlist.
+  const marco = await as(browser, "marco");
+  await marco.page.getByRole("link", { name: /^👥 Five-a-side/ }).click();
+  await marco.page.getByTestId("proposal").getByRole("radio", { name: "I'm in" }).click();
+  await expect(marco.page.getByText("Marco is in ✅")).toBeVisible();
+  const paul = await as(browser, "paul");
+  await paul.page.getByRole("link", { name: /^👥 Five-a-side/ }).click();
+  await paul.page.getByTestId("proposal").getByRole("radio", { name: "I'm in" }).click();
+  await expect(paul.page.getByText("Paul is on the waitlist (#1) — the plan is full (2 max).")).toBeVisible();
+  await expect(paul.page.getByTestId("rsvps")).toContainText("@paul: 🕒 waitlist #1");
+
+  // Marco drops out: Paul moves up automatically.
+  await marco.page.getByTestId("proposal").getByRole("radio", { name: "Can't make it" }).click();
+  await expect(paul.page.getByText("Paul moved up from the waitlist: is in ✅")).toBeVisible({ timeout: 10_000 });
+
+  // Change: the organiser moves it to 8pm; everyone else is asked to confirm again.
+  await luca.page.getByRole("link", { name: "Chats" }).click();
+  await luca.page.getByRole("link", { name: /^👥 Five-a-side/ }).click();
+  const plan = luca.page.getByTestId("proposal");
+  await plan.getByRole("button", { name: "Change plan" }).click();
+  await plan.getByLabel("Time").fill("20:00");
+  await plan.getByRole("button", { name: "Save change" }).click();
+  await expect(luca.page.getByText("Luca changed the plan: Five-a-side, Thursday at 8:00 PM (was Thursday at 7:00 PM). Please confirm again.")).toBeVisible();
+  await expect(paul.page.getByTestId("plan-when")).toContainText("8:00 PM", { timeout: 10_000 });
+  await expect(paul.page.getByTestId("rsvps")).toContainText("@paul: ⏳ waiting");
+  await expect(paul.page.getByTestId("rsvps")).toContainText("@luca: ✅ in");
+  await luca.close();
+  await marco.close();
+  await paul.close();
+});
+
+test("a sign-up list: everyone claims their own items until everything is covered", async ({ browser }) => {
+  const luca = await as(browser, "luca");
+  await openMyAgent(luca.page);
+  await send(luca.page, "Ask @marco and @paul who brings what for Saturday: drinks, dessert and bread");
+  const task = luca.page.getByRole("region", { name: "Agent task" }).last();
+  await expect(task.getByTestId("assign-items")).toHaveText("drinks · dessert · bread");
+  await task.getByRole("button", { name: "Approve" }).click();
+
+  const marco = await as(browser, "marco");
+  await marco.page.getByRole("link", { name: /^👥 🧺 Who brings what/ }).click();
+  await marco.page.getByTestId("item-drinks").getByRole("button", { name: "I'll take it" }).click();
+  await expect(marco.page.getByTestId("item-drinks")).toContainText("you");
+
+  const paul = await as(browser, "paul");
+  await paul.page.getByRole("link", { name: /^👥 🧺 Who brings what/ }).click();
+  await expect(paul.page.getByTestId("item-drinks")).toContainText("@marco");
+  await expect(paul.page.getByTestId("item-drinks").getByRole("button")).toHaveCount(0); // can't take someone else's item
+  await paul.page.getByTestId("item-dessert").getByRole("button", { name: "I'll take it" }).click();
+
+  await luca.page.getByRole("link", { name: "Chats" }).click();
+  await luca.page.getByRole("link", { name: /^👥 🧺 Who brings what/ }).click();
+  await luca.page.getByTestId("item-bread").getByRole("button", { name: "I'll take it" }).click();
+  await expect(luca.page.getByTestId("assign-progress")).toContainText("Everything is covered ✅");
+  await expect(marco.page.getByText("Everything is covered ✅").first()).toBeVisible({ timeout: 10_000 });
+  await luca.close();
+  await marco.close();
+  await paul.close();
+});
+
+test("an announcement is sent with the organiser's exact words, as their own message", async ({ browser }) => {
+  const luca = await as(browser, "luca");
+  await openMyAgent(luca.page);
+  await send(luca.page, "Tell @marco and @paul: the trip is tomorrow, bring lunch");
+  const task = luca.page.getByRole("region", { name: "Agent task" }).last();
+  await expect(task).toContainText("“the trip is tomorrow, bring lunch”");
+  await task.getByRole("button", { name: "Approve" }).click();
+
+  const marco = await as(browser, "marco");
+  await marco.page.getByRole("link", { name: /^👥 📣 the trip is tomorrow/ }).click();
+  const message = marco.page.getByRole("listitem").filter({ hasText: "the trip is tomorrow, bring lunch" });
+  await expect(message).toContainText("Luca");
+  await expect(message.getByTitle("Written by an AI agent")).toHaveCount(0); // the organiser's own words, not AI
+  await luca.close();
+  await marco.close();
+});
