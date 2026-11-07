@@ -71,8 +71,13 @@ test("three agents coordinate a dinner and humans approve it", async ({ browser 
   await marco.page.getByRole("link", { name: /Dinner — Italian/ }).click();
   const shared = marco.page.getByTestId("proposal");
   await expect(shared).toContainText("7:30 PM");
+  // Group members see the organiser's answer...
+  await expect(shared.getByTestId("rsvps")).toContainText("@luca: ✅ in");
   await shared.getByRole("button", { name: "I'm in" }).click();
   await expect(marco.page.getByText("✅ I'm in.")).toBeVisible();
+  // ...and their own, immediately, with the buttons gone.
+  await expect(shared.getByTestId("rsvps")).toContainText("@marco: ✅ in");
+  await expect(shared.getByRole("button", { name: "I'm in" })).toHaveCount(0);
 
   // Luca's page was opened with a full load (the Realtime auth race). It must update live.
   await luca.page.reload();
