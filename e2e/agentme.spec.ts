@@ -227,21 +227,21 @@ test("a poll: the organiser approves fixed options, people vote, the app counts"
   // Marco's own agent suggests from Marco's own food preferences; Marco decides.
   // Each plan gets its own group, named after it.
   const marco = await as(browser, "marco");
-  await marco.page.getByRole("link", { name: /📊 Which option do you prefer\?/ }).click();
+  await marco.page.getByRole("link", { name: /^👥 📊 Which option do you prefer\?/ }).click();
   const poll = marco.page.getByTestId("poll").last();
   await expect(poll.getByTestId("poll-suggestion")).toContainText("Your agent suggests Italian");
   await poll.getByRole("button", { name: "Italian" }).click();
   await expect(poll.getByTestId("poll-count-Italian")).toContainText("1 vote");
 
   const paul = await as(browser, "paul");
-  await paul.page.getByRole("link", { name: /📊 Which option do you prefer\?/ }).click();
+  await paul.page.getByRole("link", { name: /^👥 📊 Which option do you prefer\?/ }).click();
   const paulPoll = paul.page.getByTestId("poll").last();
   await expect(paulPoll.getByTestId("poll-suggestion")).toHaveCount(0); // "Italian or Thai": ambiguous, no suggestion
   await paulPoll.getByRole("button", { name: "Thai" }).click();
 
   // Luca votes last: everyone has voted, so the app closes and announces the result.
   await luca.page.getByRole("link", { name: "Chats" }).click();
-  await luca.page.getByRole("link", { name: /📊 Which option do you prefer\?/ }).click();
+  await luca.page.getByRole("link", { name: /^👥 📊 Which option do you prefer\?/ }).click();
   await luca.page.getByTestId("poll").last().getByRole("button", { name: "Italian" }).click();
   await expect(luca.page.getByText("Poll closed: “Which option do you prefer?” — Italian (2 of 3 votes).")).toBeVisible();
   await expect(marco.page.getByTestId("poll").last()).toContainText("Result: Italian", { timeout: 10_000 });
