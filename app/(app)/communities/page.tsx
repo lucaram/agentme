@@ -17,7 +17,7 @@ function List({ rows, counts, roles, toReview }: { rows: Row[]; counts: Map<stri
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium">{c.name}</span>
               <span className="block truncate text-xs text-muted">
-                {counts.get(c.id) ?? 0} members · {c.visibility === "private" ? "🔒 Private" : "Public"}
+                {counts.get(c.id) ?? 0} {(counts.get(c.id) ?? 0) === 1 ? "member" : "members"} · {c.visibility === "private" ? "🔒 Private" : "Public"}
                 {roles?.get(c.id) && roles.get(c.id) !== "member" && ` · ${roles.get(c.id) === "owner" ? "Owner" : "Moderator"}`}
                 {c.description && ` · ${c.description}`}
               </span>
@@ -34,10 +34,8 @@ function List({ rows, counts, roles, toReview }: { rows: Row[]; counts: Map<stri
   );
 }
 
-export default async function CommunitiesPage({ searchParams }: PageProps<"/communities">) {
+export default async function CommunitiesPage() {
   const { user } = await requireAgent();
-  const { q } = await searchParams;
-  const query = (typeof q === "string" ? q : "").trim().replace(/[^\p{L}\p{N} _.'&-]/gu, "").slice(0, 40);
   const supabase = await createClient();
   const { data: memberships } = await supabase.from("community_members").select("community_id, role").eq("user_id", user.id);
   const mineIds = (memberships ?? []).map((m) => m.community_id);
@@ -55,14 +53,8 @@ export default async function CommunitiesPage({ searchParams }: PageProps<"/comm
 
   const [{ data: mine }, { data: publicOnes }] = await Promise.all([
     mineIds.length ? supabase.from("communities").select("id, name, description, avatar, visibility").in("id", mineIds).order("name") : Promise.resolve({ data: [] as Row[] }),
-    (() => {
-      let req = supabase.from("communities").select("id, name, description, avatar, visibility").eq("visibility", "public");
-      if (query) {
-        const pattern = `%${query.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
-        req = req.or(`name.ilike.${pattern},description.ilike.${pattern}`);
-      }
-      return req.order("created_at", { ascending: false }).limit(30);
-    })(),
+    // Search lives in the header bar; here, the biggest public communities.
+    supabase.from("communities").select("id, name, description, avatar, visibility").eq("visibility", "public").order("created_at", { ascending: false }).limit(50),
   ]);
   const discover = (publicOnes ?? []).filter((c) => !roles.has(c.id));
   const allIds = [...(mine ?? []), ...discover].map((c) => c.id);
@@ -85,12 +77,9 @@ export default async function CommunitiesPage({ searchParams }: PageProps<"/comm
       </section>
 
       <section aria-label="Discover communities" className="space-y-2">
-        <h2 className="text-sm font-semibold text-muted">Discover communities</h2>
-        <form className="flex gap-2" role="search">
-          <input className="input" name="q" defaultValue={query} placeholder="Search communities (e.g. football, politics)" aria-label="Search communities" />
-          <button className="btn-primary">Search</button>
-        </form>
-        {discover.length ? <List rows={discover} counts={counts} /> : <p className="text-sm text-muted">{query ? `No public communities match “${query}”.` : "No other public communities yet."}</p>}
+        <h2 className="text-sm font-semibold text-muted">Popular public communities</h2>
+        <p className="hint">Looking for something specific? Use the search bar at the top.</p>
+        {discover.length ? <List rows={discover.slice(0, 20)} counts={counts} /> : <p className="text-sm text-muted">No other public communities yet.</p>}
       </section>
     </div>
   );

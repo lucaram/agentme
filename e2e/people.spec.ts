@@ -169,3 +169,19 @@ test("the tab bar is simple: requests live in My Agent, Find people in Contacts,
   await expect(luca.page.getByRole("heading", { name: "Activity" })).toBeVisible();
   await luca.close();
 });
+
+test("the header search follows the tab: contacts on Contacts, your groups on Groups", async ({ browser }) => {
+  const luca = await as(browser, "luca");
+  await luca.page.goto("/contacts");
+  const contacts = luca.page.getByRole("combobox", { name: "Search your contacts" });
+  await contacts.fill("@pau");
+  await expect(luca.page.getByRole("option").first()).toContainText("@paul");
+  await luca.page.goto("/groups");
+  const groups = luca.page.getByRole("combobox", { name: "Search your groups" });
+  await groups.fill("which option");
+  await luca.page.getByRole("option").first().click();
+  await expect(luca.page.getByRole("heading", { level: 1, name: /Which option do you prefer/ })).toBeVisible();
+  await luca.page.goto("/settings");
+  await expect(luca.page.getByRole("combobox", { name: /^Search/ })).toHaveCount(0); // no search on Settings
+  await luca.close();
+});
