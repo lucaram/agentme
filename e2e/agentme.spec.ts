@@ -178,7 +178,9 @@ test("contact request, accept and direct message", async ({ browser }) => {
   await expect(eve.page.getByTestId("chats-badge")).toHaveText(String(before + 1));
   // ...and cleared by opening the chat. Paul's own view never counts his messages.
   await row.click();
-  await expect(eve.page.getByText("Are you coming on Saturday?")).toBeVisible();
+  // Wait until the chat is really open: the message text is also on the list as the preview.
+  await expect(eve.page).toHaveURL(/\/chats\/[0-9a-f-]+$/);
+  await expect(eve.page.getByRole("heading", { name: /Paul/ })).toBeVisible();
   await eve.page.getByRole("link", { name: "Chats" }).click();
   await expect(row.getByTestId("unread-badge")).toHaveCount(0);
   // Reading the chat removes exactly its 2 messages from the total.

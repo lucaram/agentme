@@ -24,6 +24,12 @@ async function fetchTotal(): Promise<number | null> {
  */
 export function ChatsBadge({ initial }: { initial: number }) {
   const [count, setCount] = useState(initial);
+  // A fresh server value (the header re-rendered, e.g. after router.refresh) wins.
+  const [serverValue, setServerValue] = useState(initial);
+  if (initial !== serverValue) {
+    setServerValue(initial);
+    setCount(initial);
+  }
   const pathname = usePathname();
 
   useEffect(() => {
