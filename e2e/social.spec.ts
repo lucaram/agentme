@@ -30,8 +30,12 @@ test("groups: create from the Groups tab, only admins send, make someone admin",
   await luca.page.getByRole("button", { name: "＋ New group" }).click();
   const form = luca.page.getByRole("form", { name: "New group" });
   await form.getByLabel("Group name").fill(name);
-  await form.getByLabel(/Marco/).check();
-  await form.getByLabel(/Paul/).check();
+  const search = form.getByRole("combobox", { name: "Search contacts" });
+  await search.fill("mar");
+  await form.getByRole("option", { name: /Marco/ }).click();
+  await search.fill("@pau");
+  await search.press("Enter");
+  await expect(form.getByTestId("picked-member")).toHaveText([/Marco/, /Paul/]);
   await form.getByRole("button", { name: "Create group" }).click();
   await expect(luca.page).toHaveURL(/\/groups\/[0-9a-f-]+$/);
   await expect(luca.page.getByRole("heading", { name })).toBeVisible();
