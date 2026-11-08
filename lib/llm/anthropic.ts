@@ -27,7 +27,7 @@ export class AnthropicProvider implements LLMProvider {
       model,
       max_tokens: req.maxTokens ?? 4000,
       system: req.system,
-      messages: req.messages,
+      messages: withAttachments(req),
       // Short, bounded tasks: low effort keeps latency and cost down.
       output_config: { effort: "low" as const },
       ...(fallback ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
@@ -69,6 +69,19 @@ export class AnthropicProvider implements LLMProvider {
       throw wrap(error);
     }
   }
+}
+
+/** Puts PDFs/images in front of the text of the last user message. */
+function withAttachments(req: LLMRequest): Anthropic.Beta.BetaMessageParam[] {
+  if (!req.attachments?.length) return req.messages;
+  const files = req.attachments.map((f) =>
+    f.mediaType === "application/pdf"
+      ? ({ type: "document", source: { type: "base64", media_type: "application/pdf", data: f.base64 } } as const)
+      : ({ type: "image", source: { type: "base64", media_type: f.mediaType as "image/png" | "image/jpeg" | "image/gif" | "image/webp", data: f.base64 } } as const),
+  );
+  return req.messages.map((m, i) =>
+    i === req.messages.length - 1 && m.role === "user" ? { role: "user", content: [...files, { type: "text", text: m.content }] } : m,
+  );
 }
 
 /**

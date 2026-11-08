@@ -20,7 +20,6 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
   const { data: tips } = await supabase.from("agent_tips").select("id, topic, tip").order("created_at", { ascending: false });
   const hint = (kind: string) => identifiers?.find((i) => i.kind === kind)?.hint ?? null;
   const fact = (c: string) => facts?.find((f) => f.category === c);
-  const info = agent.business_info as { description?: string; hours?: string; faqs?: { q: string; a: string }[] };
 
   return (
     <div className="space-y-8">
@@ -128,18 +127,13 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
             ))}
           </section>
         ) : (
-          <section className="card space-y-3">
-            <h2 className="font-semibold">Business information (public)</h2>
-            <p className="hint">Your agent answers only from this. It never takes bookings, orders or payments.</p>
-            <textarea className="input" name="description" rows={2} defaultValue={info.description ?? ""} placeholder="Description" />
-            <input className="input" name="hours" defaultValue={info.hours ?? ""} placeholder="Opening hours" />
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="grid gap-2 sm:grid-cols-2">
-                <input className="input" name={`faq_q_${i}`} defaultValue={info.faqs?.[i - 1]?.q ?? ""} placeholder={`FAQ ${i}: question`} />
-                <input className="input" name={`faq_a_${i}`} defaultValue={info.faqs?.[i - 1]?.a ?? ""} placeholder="Answer" />
-              </div>
-            ))}
-          </section>
+          <Link href="/business" className="card flex items-center justify-between hover:bg-accent-soft">
+            <span>
+              <span className="block font-semibold">Business information</span>
+              <span className="block text-xs text-muted">What your agent knows (your words, your website and menu) is managed in My Business.</span>
+            </span>
+            <span className="text-accent">›</span>
+          </Link>
         )}
         <button className="btn-primary">Save</button>
       </form>

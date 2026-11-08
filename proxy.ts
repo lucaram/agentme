@@ -45,6 +45,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Skip static assets, the PWA manifest and the A2A API (it uses agent tokens, not cookies).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icon.svg|api/a2a).*)"],
+  // Skip static assets, the PWA manifest, public demo pages and the A2A API (it uses agent tokens, not cookies).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icon.svg|api/a2a|demo/).*)"],
 };

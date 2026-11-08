@@ -21,6 +21,6 @@ export default defineConfig({
     url: `${process.env.E2E_BASE_URL ?? "http://localhost:3000"}/login`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    env: { LLM_PROVIDER: "mock" },
+    env: { LLM_PROVIDER: "mock", ALLOW_LOCAL_FETCH: "1" },
   },
 });

@@ -97,6 +97,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"business_sources": {
+                  Row: {
+                    "agent_id": string,"content": string | null,"created_at": string,"error": string | null,"id": string,"kind": string | null,"last_read_at": string | null,"status": string,"url": string,"visibility": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "agent_id": string,"content"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"kind"?: string | null,"last_read_at"?: string | null,"status"?: string,"url": string,"visibility"?: string
+                  }
+                  Update: {
+                    "agent_id"?: string,"content"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"kind"?: string | null,"last_read_at"?: string | null,"status"?: string,"url"?: string,"visibility"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "business_sources_agent_id_fkey"
+      columns: ["agent_id"]
+isOneToOne: false
+      referencedRelation: "agents"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"communities": {
                   Row: {
                     "avatar": string,"created_at": string,"description": string | null,"id": string,"name": string,"owner_id": string | null,"rules": string | null,"visibility": string

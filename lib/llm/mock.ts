@@ -51,7 +51,11 @@ export class MockProvider implements LLMProvider {
         }
         break;
       }
-      case "ask_around_summary": {
+      case "business_ingest":
+        // Deterministic stand-in for reading a PDF or photo.
+        text = `(Read from ${String(ctx.kind ?? "file")}) ${String(ctx.hint ?? "Menu items and prices")}`;
+        break;
+            case "ask_around_summary": {
         // Deterministic: one labelled line per tip.
         const tips = (ctx.tips ?? []) as { handle: string; answer: string }[];
         text = tips.map((t) => `- **@${t.handle}:** ${t.answer}`).join("\n");
@@ -83,6 +87,12 @@ export class MockProvider implements LLMProvider {
           String(ctx.window ?? ""),
         );
         break;
+      case "business_faq": {
+        // Deterministic: FAQs, then a line of the business's info/website mentioning the question's words.
+        const answer = answerFaq(String(ctx.question ?? ""), (ctx.businessInfo ?? {}) as BusinessInfo, String(ctx.knowledge ?? ""));
+        value = { answer, needs_team: answer.startsWith("I don't have") };
+        break;
+      }
       case "proposal":
         value = heuristicPlan(
           String(ctx.organiser),
@@ -117,7 +127,7 @@ async function meterMock(req: LLMRequest, output: string) {
 const STOPWORDS = new Set(["the", "you", "your", "can", "are", "have", "has", "for", "and", "any", "there", "what", "with", "does", "how", "our"]);
 const keywords = (s: string) => (s.toLowerCase().match(/[a-z]{3,}/g) ?? []).filter((w) => !STOPWORDS.has(w));
 
-function answerFaq(question: string, info: BusinessInfo): string {
+function answerFaq(question: string, info: BusinessInfo, knowledge = ""): string {
   // Booking requests always get the "no bookings" answer, whatever the FAQs say.
   if (/\b(book|reserve|reservation)\b/i.test(question) && !/\bgroup/i.test(question)) {
     return "I can't take bookings or check live availability. Please contact the business directly to reserve.";
@@ -130,6 +140,10 @@ function answerFaq(question: string, info: BusinessInfo): string {
     if (score > bestScore) [best, bestScore] = [faq, score];
   }
   if (best) return best.a;
+  // A line from the business's own info or website that mentions what was asked.
+  const lines = knowledge.split("\n").map((l) => l.trim()).filter((l) => l && !/^(Business:|From |<\/?\w)/.test(l));
+  const hit = lines.find((l) => keywords(l).some((w) => words.has(w) || words.has(`${w}s`) || words.has(w.replace(/s$/, ""))));
+  if (hit) return hit;
   if (/\b(open|hours|close|closing)\b/i.test(question) && info.hours) return `Our opening hours: ${info.hours}`;
   return "I don't have that information. Please contact the business directly.";
 }

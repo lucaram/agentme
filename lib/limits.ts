@@ -20,6 +20,10 @@ export const LIMITS = {
   contactSyncsPerAgent: { windowSeconds: 86400, max: 20 },
   /** Phone verification codes sent. */
   phoneCodesPerAgent: { windowSeconds: 3600, max: 5 },
+  /** "Re-read now" on a business link. */
+  businessRereadsPerAgent: { windowSeconds: 3600, max: 20 },
+  /** Questions a business agent hands to its team, per asking agent and business. */
+  businessHandoffsPerCaller: { windowSeconds: 86400, max: 10 },
   /** "Ask around" requests (each reaches up to 25 contacts). */
   askAroundPerUser: { windowSeconds: 86400, max: 10 },
   /** Introductions an agent may make. */

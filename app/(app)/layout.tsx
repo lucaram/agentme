@@ -42,7 +42,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         </div>
         <ChatSearch />
         <nav className="-mx-1 mt-2 flex gap-1 overflow-x-auto pb-2 text-sm">
-          {NAV.map(([href, label]) => (
+          {[...NAV.slice(0, 4), ...(agent.type === "business" ? ([["/business", "My Business"]] as const) : []), ...NAV.slice(4)].map(([href, label]) => (
             <Link key={href} href={href} className="flex items-center gap-1 rounded-full px-3 py-1 hover:bg-accent-soft">
               {label}
               {href === "/chats" && <ChatsBadge initial={unreadTotal} />}

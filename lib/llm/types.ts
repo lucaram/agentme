@@ -12,7 +12,8 @@ export type LLMPurpose =
   | "proposal" // turn collected replies into a plan
   | "owner_chat" // talk to the agent's own owner
   | "business_faq" // answer a question from business-provided info only
-  | "ask_around_summary"; // summarise friends' recommendations for the owner
+  | "ask_around_summary" // summarise friends' recommendations for the owner
+  | "business_ingest"; // read a business's PDF or photo (e.g. a menu) into text
 
 export type LLMTier = "smart" | "fast";
 
@@ -24,6 +25,8 @@ export interface LLMRequest {
   system: string;
   messages: LLMMessage[];
   maxTokens?: number;
+  /** Files sent with the last user message (a PDF menu, a photo of a menu). */
+  attachments?: { mediaType: string; base64: string }[];
   /**
    * Structured context the mock provider uses instead of reading prose.
    * Must contain nothing beyond what is already in `system`/`messages`.
