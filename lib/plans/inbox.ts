@@ -7,6 +7,7 @@ import { CoordinationReplySchema } from "@/lib/coordination/schemas";
 import { isRequestableCategory } from "@/lib/policy/disclosure";
 import type { InboxRequest } from "@/lib/agents/respond";
 import { wakeTask } from "./engine";
+import { addToBusinessInfo, relayTeamAnswer } from "@/lib/business/handoff";
 
 export type InboxPayload = InboxRequest;
 export type InfoRequestPayload = Extract<InboxRequest, { kind: "info_request" }>;
@@ -54,6 +55,11 @@ export async function answerInboxItem(itemId: string, ownerId: string, raw: Reco
     response = { text: parsed.data.answer, data: { type: "agentme.question.answer", answer: parsed.data.answer } };
     disclosed = ["answer"];
     stored = { answer: parsed.data.answer };
+    // Business: the team's answer goes back to the asker; optionally it becomes part of the business info.
+    if (payload.business) {
+      await relayTeamAnswer(item, parsed.data.answer);
+      if (remember) await addToBusinessInfo(item.agent_id, payload.question, parsed.data.answer);
+    }
     // Ask around: optionally keep the answer as a tip the agent may share by itself next time.
     if (remember && payload.ask_around) {
       await db.from("agent_tips").insert({ agent_id: item.agent_id, topic: payload.question.slice(0, 80), tip: parsed.data.answer.slice(0, 500) });
@@ -108,7 +114,9 @@ export async function declineInboxItem(itemId: string, ownerId: string): Promise
   if (item.status !== "open") return { ok: false, error: "This request is no longer open." };
   const db = adminClient();
   const agent = await getAgentById(item.agent_id);
-  const verb = payloadOf(item).kind === "question" ? "answer" : "share";
+  const declined = payloadOf(item);
+  const verb = declined.kind === "question" ? "answer" : "share";
+  if (declined.kind === "question" && declined.business) await relayTeamAnswer(item, null);
   if (item.exchange_id) {
     await db
       .from("task_exchanges")

@@ -1,4 +1,5 @@
 import "server-only";
+import { businessSources } from "@/lib/business/sources";
 import { NEEDS_ANSWER, tellOwner } from "@/lib/requests/notify";
 import {
   A2A_VERSION_HEADER,
@@ -91,10 +92,15 @@ export async function handleA2ARequest(request: Request, handle: string): Promis
     const facts = recipient.type === "personal" ? await getFacts(recipient.id) : [];
     // Saved tips, only ever shared for an "ask around" whose topic matches one.
     const tips = recipient.type === "personal" ? await getTips(recipient.id) : [];
+    // Business agents: text read from the business's own links. A question they can't
+    // answer may go to the business's team, for signed-in agents only and rate-limited.
+    const sources = recipient.type === "business" ? await businessSources(recipient.id) : [];
+    const requestHandoff = async () =>
+      Boolean(caller.agent) && (await hit("businessHandoffsPerCaller", `${caller.agent!.id}:${recipient.id}`)).allowed;
     // AI cost of this reply is attributed to the recipient's owner and, when the
     // platform-signed token names one, to the coordination task it serves.
     return withUsageContext({ taskId: caller.taskId ?? null, agentId: recipient.id, userId: recipient.owner_id }, () =>
-      respondAsAgent(recipient, { callerHandle: caller.agent?.handle ?? null, relationship, text, data }, facts, tips),
+      respondAsAgent(recipient, { callerHandle: caller.agent?.handle ?? null, relationship, text, data }, facts, tips, { sources, requestHandoff }),
     );
   }, (response, a2aTaskId, requestData) => recordExchange(recipient, caller, response, a2aTaskId, requestData));
 
@@ -260,7 +266,9 @@ async function recordExchange(
       const from = caller.agent ? `@${caller.agent.handle}` : "Someone";
       const what =
         response.inbox.kind === "question"
-          ? response.inbox.ask_around
+          ? response.inbox.business
+            ? `🏪 ${from} asked ${recipient.display_name}: “${response.inbox.question}” Your agent didn't have the answer in your business info.`
+            : response.inbox.ask_around
             ? `🔎 ${from} is asking around: “${response.inbox.question}” Share a tip if you have one.`
             : `🔔 ${from} asks you: “${response.inbox.question}”.`
           : `🔔 ${from}'s agent is organising ${response.inbox.event} and needs something only you can share.`;

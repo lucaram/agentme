@@ -1,0 +1,112 @@
+"use server";
+
+import { after } from "next/server";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { requireAgent } from "@/lib/auth";
+import { adminClient } from "@/lib/supabase/admin";
+import { asJson } from "@/lib/data/json";
+import { checkUrl } from "@/lib/business/extract";
+import { businessSources, readSource } from "@/lib/business/sources";
+import { draftBusinessAnswer } from "@/lib/agents/respond";
+import { withUsageContext } from "@/lib/usage/context";
+import { describeRetry, hit } from "@/lib/limits";
+
+type Out = { error?: string };
+const MAX_LINKS = 20;
+
+async function requireBusiness() {
+  const { user, agent } = await requireAgent();
+  if (agent.type !== "business") throw new Error("Not a business account");
+  return { user, agent };
+}
+
+type Info = { about?: string; customers?: string; description?: string; hours?: string; faqs?: { q: string; a: string }[] };
+
+/** "About your business" (public) and "For customers only", in plain language. */
+export async function saveBusinessInfoAction(_prev: Out | undefined, form: FormData): Promise<Out & { saved?: boolean }> {
+  const { agent } = await requireBusiness();
+  const about = String(form.get("about") ?? "").trim().slice(0, 8000);
+  const customers = String(form.get("customers") ?? "").trim().slice(0, 4000);
+  if (!about) return { error: "Tell your agent a little about your business." };
+  const info = (agent.business_info ?? {}) as Info;
+  await adminClient()
+    .from("agents")
+    .update({ bio: about.split("\n")[0].slice(0, 280), business_info: asJson({ ...info, about, customers, description: about.slice(0, 500) }) })
+    .eq("id", agent.id);
+  revalidatePath("/business");
+  return { saved: true };
+}
+
+export async function removeFaqAction(index: number): Promise<Out> {
+  const { agent } = await requireBusiness();
+  const info = (agent.business_info ?? {}) as Info;
+  const faqs = (info.faqs ?? []).filter((_, i) => i !== index);
+  await adminClient().from("agents").update({ business_info: asJson({ ...info, faqs }) }).eq("id", agent.id);
+  revalidatePath("/business");
+  return {};
+}
+
+/** A link your agent reads: your website, a PDF menu, a photo of your menu. Read in the background. */
+export async function addSourceAction(url: string, visibility: string): Promise<Out> {
+  const { agent } = await requireBusiness();
+  const check = checkUrl(String(url ?? ""));
+  if (!check.ok) return { error: check.error };
+  const db = adminClient();
+  const { count } = await db.from("business_sources").select("*", { count: "exact", head: true }).eq("agent_id", agent.id);
+  if ((count ?? 0) >= MAX_LINKS) return { error: `You can add up to ${MAX_LINKS} links.` };
+  const { data, error } = await db
+    .from("business_sources")
+    .insert({ agent_id: agent.id, url: check.url.toString(), visibility: visibility === "customers" ? "customers" : "public" })
+    .select("id")
+    .single();
+  if (error || !data) return { error: error?.code === "23505" ? "That link is already there." : "Couldn't add that link." };
+  after(() => readSource(data.id));
+  revalidatePath("/business");
+  return {};
+}
+
+async function ownSource(id: string, agentId: string) {
+  if (!z.uuid().safeParse(id).success) return null;
+  const { data } = await adminClient().from("business_sources").select("id").eq("id", id).eq("agent_id", agentId).maybeSingle();
+  return data;
+}
+
+export async function rereadSourceAction(id: string): Promise<Out> {
+  const { agent } = await requireBusiness();
+  if (!(await ownSource(id, agent.id))) return { error: "Not found." };
+  const limit = await hit("businessRereadsPerAgent", agent.id);
+  if (!limit.allowed) return { error: `Please wait ${describeRetry(limit.retryAfterSeconds)} before re-reading again.` };
+  await adminClient().from("business_sources").update({ status: "pending" }).eq("id", id);
+  after(() => readSource(id));
+  revalidatePath("/business");
+  return {};
+}
+
+export async function removeSourceAction(id: string): Promise<Out> {
+  const { agent } = await requireBusiness();
+  await adminClient().from("business_sources").delete().eq("id", String(id ?? "")).eq("agent_id", agent.id);
+  revalidatePath("/business");
+  return {};
+}
+
+export async function setSourceVisibilityAction(id: string, visibility: string): Promise<Out> {
+  const { agent } = await requireBusiness();
+  if (!(await ownSource(id, agent.id))) return { error: "Not found." };
+  await adminClient().from("business_sources").update({ visibility: visibility === "customers" ? "customers" : "public" }).eq("id", id);
+  revalidatePath("/business");
+  return {};
+}
+
+/** "Try it": what your agent would answer a visitor (or a customer), before anyone asks. */
+export async function tryQuestionAction(question: string, asCustomer: boolean): Promise<Out & { answer?: string; needsTeam?: boolean }> {
+  const { user, agent } = await requireBusiness();
+  const q = String(question ?? "").trim().slice(0, 500);
+  if (!q) return { error: "Type a question a customer might ask." };
+  const limit = await hit("agentMessagesPerUser", user.id);
+  if (!limit.allowed) return { error: `Too many tries. Wait ${describeRetry(limit.retryAfterSeconds)}.` };
+  const reply = await withUsageContext({ userId: user.id, agentId: agent.id }, async () =>
+    draftBusinessAnswer(agent, q, await businessSources(agent.id), asCustomer ? "customers" : "public"),
+  );
+  return { answer: reply.answer, needsTeam: reply.needs_team };
+}

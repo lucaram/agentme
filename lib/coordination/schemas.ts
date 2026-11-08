@@ -35,6 +35,12 @@ export const QuestionRequestSchema = z.object({
 });
 export type QuestionRequest = z.infer<typeof QuestionRequestSchema>;
 
+/** A business agent's answer: the text, and whether its team should be asked instead. */
+export const BusinessAnswerSchema = z.object({
+  answer: z.string().max(1500).describe("The answer to the visitor, 1-3 sentences."),
+  needs_team: z.boolean().describe("true when the information isn't in the business info or website content."),
+});
+
 /** "Ask around": a contact asks for a recommendation (answered from a saved tip, or by the person). */
 export const AskAroundRequestSchema = z.object({
   type: z.literal("agentme.ask_around"),

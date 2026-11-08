@@ -2,6 +2,7 @@ import "server-only";
 import { recoverStuckTasks } from "@/lib/plans/engine";
 import { pruneRateLimits } from "@/lib/limits";
 import { pruneContactLists } from "@/lib/people/imports";
+import { refreshDueSources } from "@/lib/business/sources";
 
 const SWEEP_EVERY_MS = 30_000;
 const PRUNE_EVERY_MS = 15 * 60_000;
@@ -13,7 +14,7 @@ declare global {
 /**
  * Background maintenance for a long-running Node server (`next dev` / `next start`):
  * resumes coordination tasks whose worker died, and prunes old rate-limit windows
- * and unfinished contact lists.
+ * unfinished contact lists, and re-reads business links older than a day.
  * Safe with several instances: task claims are atomic in Postgres.
  * (On serverless hosting, call the same functions from a scheduled cron route instead.)
  */
@@ -31,6 +32,7 @@ export function startSweeper() {
         lastPrune = Date.now();
         await pruneRateLimits();
         await pruneContactLists();
+        await refreshDueSources();
       }
     } catch (error) {
       console.error("[agentme] sweeper error", error instanceof Error ? error.message : error);

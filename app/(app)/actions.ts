@@ -362,19 +362,8 @@ export async function saveSettings(form: FormData) {
         { onConflict: "agent_id,category" },
       );
     }
-  } else {
-    const faqs = [1, 2, 3, 4, 5]
-      .map((i) => ({ q: String(form.get(`faq_q_${i}`) ?? "").trim(), a: String(form.get(`faq_a_${i}`) ?? "").trim() }))
-      .filter((f) => f.q && f.a);
-    const description = String(form.get("description") ?? "").trim().slice(0, 500);
-    await db
-      .from("agents")
-      .update({
-        bio: description.slice(0, 280) || null,
-        business_info: asJson({ description, hours: String(form.get("hours") ?? "").trim().slice(0, 300), faqs }),
-      })
-      .eq("id", agent.id);
   }
+  // Business details are edited in My Business (they'd be wiped if saved from here).
   revalidatePath("/settings");
   redirect("/settings?saved=1");
 }

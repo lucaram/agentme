@@ -154,6 +154,19 @@ The Contacts tab only ever holds people you accepted; an agent trusts its contac
 
 SMS: no provider is wired up yet. With `SMS_PROVIDER=dev` (the default outside production) the code is logged and shown on screen.
 
+## My Business (business accounts)
+
+A **My Business** tab, shown to business accounts, holds everything the business agent knows.
+- **In your own words:** *About your business* (public) and *For customers only* (the business's contacts), in plain language.
+- **Links your agent reads:** website pages, PDF menus and photos of menus (the latter two are read by the AI). Each link shows its status and word count and what was read. Links refresh daily (sweeper) or on *Re-read now*, and each has a visibility: public or customers only.
+  - **Safe fetching** (`lib/business/fetch.ts`): http(s) only, standard ports, the resolved address must be public (checked at connect time and for raw IPs), at most 3 redirects, 5 MB and 10 s. Development can allow local pages with `ALLOW_LOCAL_FETCH=1`, which the e2e tests use with `/demo/trattoria-menu.html`.
+  - **Website text is untrusted data** (`<website_content>`), never instructions.
+- **What your agent knows + Try it:** ask a test question as a visitor or as a customer.
+- **Answers:** the agent answers only from this information. If the answer isn't there, it says *"I've asked the team"*: the question lands in the business's *Needs your answer* (signed-in askers only, 10 a day per asker), and the team's answer goes back to the asker's chat. One tick adds it to *Questions & answers*, so the agent answers it by itself next time.
+- **Never:** bookings, orders or payments.
+
+There are two visibility levels, not an "internal" one: anything given to the AI could be coaxed out by a clever question, so information that must never be shared is simply not given to it.
+
 ## Ask around
 
 In My Agent, type *"ask around: does anyone know a good plumber in Camden?"* (also *"Does anyone know…"*, *"Can anyone recommend…"*, *"Any tips for…"*, *"Who can lend me…"*). Add @mentions to ask only those people.

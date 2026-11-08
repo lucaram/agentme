@@ -3,6 +3,7 @@ import { canContact, type ContactPolicy, type Relationship } from "@/lib/policy/
 import { isRequestableCategory, selectDisclosableFacts, type Fact, type RequestableCategory } from "@/lib/policy/disclosure";
 import {
   AskAroundRequestSchema,
+  BusinessAnswerSchema,
   CoordinationReplySchema,
   CoordinationRequestSchema,
   QuestionRequestSchema,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/coordination/schemas";
 import { BUSINESS_FAQ_SYSTEM, COORDINATION_REPLY_SYSTEM, wrapUntrusted } from "./prompts";
 import { matchTips } from "@/lib/people/askAround";
+import { businessKnowledge, type KnowledgeSource } from "@/lib/business/knowledge";
 
 export type Tip = { topic: string; tip: string };
 
@@ -56,7 +58,7 @@ export type InboxRequest =
       /** Requested categories it could share automatically, for the owner to review. */
       shareable: Partial<Record<RequestableCategory, string>>;
     }
-  | { kind: "question"; question: string; ask_around?: boolean };
+  | { kind: "question"; question: string; ask_around?: boolean; business?: boolean };
 
 /** Categories without which a coordination reply is useless; if not shareable, ask the human. */
 const ESSENTIAL: readonly RequestableCategory[] = ["availability"];
@@ -81,6 +83,7 @@ export async function respondAsAgent(
   incoming: IncomingA2A,
   facts: readonly Fact[],
   tips: readonly Tip[] = [],
+  business: BusinessContext = { sources: [], requestHandoff: async () => false },
 ): Promise<AgentResponse> {
   const isCoordination = CoordinationRequestSchema.safeParse(incoming.data);
   const isQuestion = QuestionRequestSchema.safeParse(incoming.data);
@@ -104,7 +107,7 @@ export async function respondAsAgent(
   }
 
   if (recipient.type === "business") {
-    return answerBusinessQuestion(recipient, isQuestion.success ? isQuestion.data.question : incoming.text);
+    return answerBusinessQuestion(recipient, isQuestion.success ? isQuestion.data.question : incoming.text, incoming, business);
   }
 
   // Ask around: only contacts, only if the person allows it. A saved tip on the
@@ -216,32 +219,53 @@ export async function respondAsAgent(
   };
 }
 
-type BusinessInfo = { description?: string; hours?: string; faqs?: { q: string; a: string }[] };
+export type BusinessContext = {
+  /** Text read from the business's own links (with visibility). */
+  sources: KnowledgeSource[];
+  /** May this unanswered question go to the business's team? (signed-in callers, rate-limited) */
+  requestHandoff: () => Promise<boolean>;
+};
 
-async function answerBusinessQuestion(recipient: RecipientAgent, question: string): Promise<AgentResponse> {
-  const info = (recipient.business_info ?? {}) as BusinessInfo;
+/**
+ * The business agent's answer from what it knows, for a visitor ("public") or
+ * one of the business's contacts ("customers"). Also used by "Try it".
+ */
+export async function draftBusinessAnswer(
+  recipient: Pick<RecipientAgent, "display_name" | "handle" | "business_info">,
+  question: string,
+  sources: KnowledgeSource[],
+  audience: "public" | "customers",
+) {
   const trimmed = question.trim().slice(0, 1000);
-  if (!trimmed) return refuse("business.faq", "empty_question", "Please ask a question.");
-
-  const infoBlock = [
-    `Business: ${recipient.display_name} (@${recipient.handle})`,
-    info.description && `About: ${info.description}`,
-    info.hours && `Opening hours: ${info.hours}`,
-    ...(info.faqs ?? []).map((f) => `Q: ${f.q}\nA: ${f.a}`),
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const text = await llm().generateText({
+  const { info, websites } = businessKnowledge(recipient, sources, audience);
+  return llm().generateObject({
     purpose: "business_faq",
     tier: "fast",
     system: BUSINESS_FAQ_SYSTEM,
     messages: [
-      { role: "user", content: `<business_info>\n${infoBlock}\n</business_info>\n\n${wrapUntrusted("untrusted_question", trimmed)}` },
+      { role: "user", content: `<business_info>\n${info}\n</business_info>\n\n${websites}\n\n${wrapUntrusted("untrusted_question", trimmed)}` },
     ],
+    schema: BusinessAnswerSchema,
     maxTokens: 600,
-    mockContext: { question: trimmed, businessInfo: info },
+    mockContext: { question: trimmed, businessInfo: recipient.business_info, knowledge: `${info}\n${websites}` },
   });
+}
 
-  return { status: "completed", skill: "business.faq", text, disclosed: ["business_info"] };
+async function answerBusinessQuestion(recipient: RecipientAgent, question: string, incoming: IncomingA2A, business: BusinessContext): Promise<AgentResponse> {
+  const trimmed = question.trim().slice(0, 1000);
+  if (!trimmed) return refuse("business.faq", "empty_question", "Please ask a question.");
+  // Customers-only information is for the business's contacts.
+  const reply = await draftBusinessAnswer(recipient, trimmed, business.sources, incoming.relationship === "accepted" ? "customers" : "public");
+
+  // Not in the business's information: its team answers instead (never a guess).
+  if (reply.needs_team && incoming.callerHandle && (await business.requestHandoff())) {
+    return {
+      status: "needs_human",
+      skill: "business.faq",
+      text: "I don't have that in my information yet, so I've asked the team. They'll reply here.",
+      disclosed: [],
+      inbox: { kind: "question", question: trimmed, business: true },
+    };
+  }
+  return { status: "completed", skill: "business.faq", text: reply.answer, disclosed: ["business_info"] };
 }
