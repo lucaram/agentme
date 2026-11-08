@@ -4,6 +4,7 @@ import { CATEGORY_LABELS, FACT_CATEGORIES } from "@/lib/policy/disclosure";
 import { deleteAccount, saveSettings } from "../actions";
 import { PhoneVerify } from "./PhoneVerify";
 import { SaveAccount } from "./SaveAccount";
+import { DiscoverableToggle } from "./DiscoverableToggle";
 
 export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
   const { agent } = await requireAgent();
@@ -31,11 +32,9 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         <section id="find-me" className="card space-y-3">
           <div>
             <h2 className="font-semibold">How friends can find you</h2>
-            <p className="hint">
-              Only people who have your email or number <b>and</b> whom you have too will see you under “People you know”. Nobody else can
-              look you up by them.
-            </p>
+            <p className="hint">People who have your email or number in their contacts can find you on AGENTME. Your details are never shown to them.</p>
           </div>
+          <DiscoverableToggle initial={agent.discoverable} />
           <p className="text-sm">✉️ {hint("email") ? `${hint("email")} ✓` : "Your email isn't verified yet."}</p>
           <PhoneVerify current={hint("phone")} />
         </section>

@@ -21,32 +21,6 @@ async function send(page: Page, text: string) {
   await page.getByRole("button", { name: "Send" }).click();
 }
 
-async function typeContacts(page: Page, text: string) {
-  await page.goto("/discover");
-  await page.getByRole("listitem").filter({ hasText: "Type or paste" }).getByRole("button", { name: "Add" }).click();
-  await page.getByLabel("Emails and phone numbers").fill(text);
-  await page.getByRole("button", { name: "Find people" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Checked 1 contacts" })).toBeVisible();
-}
-
-test("people you know: only shown when both have each other", async ({ browser }) => {
-  const eve = await as(browser, "eve");
-  await typeContacts(eve.page, "Marco <marco@agentme.test>");
-  await expect(eve.page.getByTestId("suggestion")).toHaveCount(0); // Marco doesn't have Eve (yet)
-  await expect(eve.page.getByTestId("findable-email")).toContainText("e•••@agentme.test ✓");
-
-  // Marco connects his email contacts (simulated in development: the demo accounts).
-  const marco = await as(browser, "marco");
-  await marco.page.goto("/discover");
-  await marco.page.getByRole("link", { name: "Connect Gmail" }).click();
-  await expect(marco.page.getByRole("status").filter({ hasText: "Gmail contacts" })).toBeVisible();
-  await expect(marco.page.getByTestId("suggestion").filter({ hasText: "@eve" })).toBeVisible();
-  await eve.page.reload();
-  await expect(eve.page.getByTestId("suggestion").filter({ hasText: "@marco" })).toContainText("You're in each other's contacts");
-  await eve.close();
-  await marco.close();
-});
-
 test("scanning a live QR code connects instantly and opens the chat", async ({ browser }) => {
   const luca = await as(browser, "luca");
   await luca.page.goto("/contacts");
@@ -128,4 +102,30 @@ test("an invite link lets someone without AGENTME join a plan as a guest", async
   await expect(luca.page.getByText("Gina joined with the invite link.")).toBeVisible({ timeout: 15_000 });
   await context.close();
   await luca.close();
+});
+
+test("connecting contacts shows a list to tick: add who you want, invite the rest", async ({ browser }) => {
+  // Development simulates the email provider: the demo accounts plus two people not on AGENTME.
+  const marco = await as(browser, "marco");
+  await marco.page.goto("/discover");
+  await marco.page.getByRole("link", { name: "Connect", exact: true }).click();
+  const list = marco.page.getByTestId("contact-list");
+  await expect(list).toContainText("on AGENTME");
+
+  // Existing contacts are marked; you only tick the ones you want.
+  await expect(list.getByRole("listitem").filter({ hasText: "Luca (luca@agentme.test)" })).toContainText("✓ Contact");
+  await list.getByLabel("Trattoria Sole (trattoria@agentme.test)").check();
+  await list.getByRole("button", { name: "Add 1 selected" }).click();
+  await expect(list.getByRole("status")).toContainText("Sent 1 contact request");
+  await expect(list.getByRole("listitem").filter({ hasText: "Trattoria Sole" })).toContainText("Requested");
+
+  // People not on AGENTME: an invite from your own email app.
+  const invite = list.getByRole("listitem").filter({ hasText: "Anna Bianchi (anna.bianchi@example.com)" }).getByRole("link", { name: "Invite" });
+  await expect(invite).toHaveAttribute("href", /^mailto:anna\.bianchi%40example\.com\?subject=Join%20me%20on%20AGENTME/);
+  await expect(list).not.toContainText("marco@agentme.test"); // never yourself
+
+  await list.getByRole("button", { name: "Done" }).click();
+  await expect(marco.page.getByTestId("contact-list")).toHaveCount(0);
+  await expect(marco.page.getByText("Last checked")).toBeVisible();
+  await marco.close();
 });

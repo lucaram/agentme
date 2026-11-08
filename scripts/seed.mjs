@@ -1,5 +1,6 @@
 // Seeds demo users/agents for local development and e2e tests.
 // Usage: npm run seed   (idempotent: deletes and recreates the demo accounts)
+import { createHmac } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -8,6 +9,16 @@ if (!url || !key) throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE
 const db = createClient(url, key, { auth: { persistSession: false } });
 
 export const PASSWORD = "password123";
+
+// Same keyed hash as lib/people/crypto.ts, so the demo accounts can be found by their (confirmed) email.
+const secret = process.env.A2A_SIGNING_SECRET;
+const identifierKey = secret ? createHmac("sha256", secret).update("agentme:identifier:v1").digest() : null;
+const emailIdentifier = (agentId, email) => ({
+  agent_id: agentId,
+  kind: "email",
+  hash: createHmac("sha256", identifierKey).update(`email:${email}`).digest("base64url"),
+  hint: `${email.slice(0, 1)}•••@${email.split("@")[1]}`,
+});
 
 const PEOPLE = [
   {
@@ -87,6 +98,10 @@ async function main() {
       .single();
     if (agentError) throw agentError;
     agents[p.handle] = { id: agent.id, userId };
+    if (identifierKey) {
+      const { error: idError } = await db.from("agent_identifiers").insert(emailIdentifier(agent.id, p.email));
+      if (idError) throw idError;
+    }
     if (p.facts.length) {
       const { error: factError } = await db.from("agent_facts").insert(
         p.facts.map(([category, value, disclosure]) => ({ agent_id: agent.id, category, value, disclosure })),

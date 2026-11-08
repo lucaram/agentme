@@ -2,18 +2,20 @@
 
 import { useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { clearContactsAction, syncContactsAction } from "../people-actions";
+import { createListAction } from "../people-actions";
 import { extractEntries } from "@/lib/people/normalise";
 import { detectCountryCode } from "@/lib/people/country";
 import { LocalTime } from "@/components/LocalTime";
+import type { RawContact } from "@/lib/people/imports";
 
-type Mode = "real" | "simulated" | "off";
 type Sources = Partial<Record<"google" | "microsoft" | "phone" | "typed", string>>;
-type ContactsManager = { select: (props: string[], opts: { multiple: boolean }) => Promise<{ email?: string[]; tel?: string[] }[]> };
+type PickerContact = { name?: string[]; email?: string[]; tel?: string[] };
+type ContactsManager = { select: (props: string[], opts: { multiple: boolean }) => Promise<PickerContact[]> };
+export type EmailOption = { email: string; href: string | null; simulated: boolean };
 
 const noop = () => () => {};
 
-function Option({ icon, title, text, synced, children }: { icon: string; title: string; text: string; synced?: string; children: React.ReactNode }) {
+function Option({ icon, title, text, synced, children }: { icon: string; title: string; text: React.ReactNode; synced?: string; children?: React.ReactNode }) {
   return (
     <li className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
       <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xl">{icon}</span>
@@ -22,79 +24,74 @@ function Option({ icon, title, text, synced, children }: { icon: string; title: 
         <span className="block text-sm text-muted">{text}</span>
         {synced && (
           <span className="mt-0.5 block text-xs text-accent">
-            ✓ Synced <LocalTime iso={synced} />
+            ✓ Last checked <LocalTime iso={synced} />
           </span>
         )}
       </span>
-      <span className="flex flex-wrap gap-2">{children}</span>
+      {children && <span className="flex flex-wrap gap-2">{children}</span>}
     </li>
   );
 }
 
 /**
- * Find people you know, three ways: email contacts (Gmail / Outlook), phone
- * contacts, or typed in. Only people who also have you show up; the contacts
- * themselves are compared and forgotten.
+ * Three ways to find people you know. Each one shows a list to tick from;
+ * nobody is added automatically.
  */
-export function FindPeople({
-  sources,
-  providers,
-  preferred,
-}: {
-  sources: Sources;
-  providers: { google: Mode; microsoft: Mode };
-  preferred: "google" | "microsoft" | null;
-}) {
+export function FindPeople({ sources, email }: { sources: Sources; email: EmailOption }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [typing, setTyping] = useState(false);
   const [text, setText] = useState("");
-  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   // The phone's contact list is reachable from the web only in some mobile browsers (Chrome on Android).
   const hasPicker = useSyncExternalStore(noop, () => "contacts" in navigator && "ContactsManager" in window, () => false);
 
-  const sync = (entries: string[], source: "phone" | "typed", label: string) =>
+  const check = (contacts: RawContact[], source: "phone" | "typed") =>
     start(async () => {
-      if (!entries.length) {
-        setStatus({ ok: false, text: "No email addresses or phone numbers found." });
+      setError(null);
+      if (!contacts.length) {
+        setError("No email addresses or phone numbers found.");
         return;
       }
-      const result = await syncContactsAction(entries, detectCountryCode(), source);
-      setStatus(result.error ? { ok: false, text: result.error } : { ok: true, text: `✓ Checked ${result.checked} ${label}. Anyone who also has you now appears above.` });
-      if (!result.error) {
+      const result = await createListAction(contacts, detectCountryCode(), source);
+      if (result.error) setError(result.error);
+      else {
         setText("");
         setTyping(false);
       }
       router.refresh();
     });
 
-  const emailButtons = (["google", "microsoft"] as const)
-    .filter((p) => providers[p] !== "off")
-    .sort((a, b) => Number(b === preferred) - Number(a === preferred));
-  const anySynced = Object.keys(sources).length > 0;
+  const domain = email.email.split("@")[1] ?? "";
 
   return (
     <div>
       <ul className="divide-y divide-border">
-        {emailButtons.length > 0 && (
-          <Option
-            icon="✉️"
-            title="Email contacts"
-            text="Find friends in your Gmail or Outlook address book. You'll be asked to allow read-only access, once."
-            synced={sources.google ?? sources.microsoft}
-          >
-            {emailButtons.map((p, i) => (
-              <a key={p} href={`/api/contacts/${p}`} className={i === 0 ? "btn-primary" : "btn-ghost"}>
-                {p === "google" ? "Connect Gmail" : "Connect Outlook"}
-              </a>
-            ))}
-          </Option>
-        )}
+        <Option
+          icon="✉️"
+          title="Email contacts"
+          text={
+            email.href ? (
+              <>
+                Everyone in the address book of <b className="text-foreground">{email.email}</b>.{email.simulated && " (Development: simulated contacts.)"}
+              </>
+            ) : (
+              <>Connecting contacts from @{domain} isn&apos;t available yet. Type or paste them instead.</>
+            )
+          }
+          synced={sources.google ?? sources.microsoft}
+        >
+          {email.href && (
+            <a href={email.href} className="btn-primary">
+              Connect
+            </a>
+          )}
+        </Option>
 
         <Option
           icon="📱"
           title="Phone contacts"
-          text={hasPicker ? "Pick the people in your phone to look for, like WhatsApp does." : "Works in Chrome on Android phones. On iPhone it will come with the AGENTME app."}
+          text={hasPicker ? "The people saved in your phone, like WhatsApp." : "Works in Chrome on Android phones. On iPhone it will come with the AGENTME app."}
           synced={sources.phone}
         >
           {hasPicker && (
@@ -104,16 +101,16 @@ export function FindPeople({
               disabled={pending}
               onClick={async () => {
                 const contacts = (navigator as unknown as { contacts: ContactsManager }).contacts;
-                const picked = await contacts.select(["email", "tel"], { multiple: true }).catch(() => []);
-                if (picked.length) sync(picked.flatMap((c) => [...(c.email ?? []), ...(c.tel ?? [])]), "phone", "phone contacts");
+                const picked = await contacts.select(["name", "email", "tel"], { multiple: true }).catch(() => [] as PickerContact[]);
+                if (picked.length) check(picked.map((c) => ({ name: c.name?.[0] ?? null, addresses: [...(c.email ?? []), ...(c.tel ?? [])] })), "phone");
               }}
             >
-              Choose contacts
+              Connect
             </button>
           )}
         </Option>
 
-        <Option icon="✏️" title="Type or paste" text="Add a few emails or phone numbers yourself." synced={sources.typed}>
+        <Option icon="✏️" title="Type or paste" text="A few email addresses or phone numbers." synced={sources.typed}>
           {!typing && (
             <button type="button" className="btn-ghost" onClick={() => setTyping(true)}>
               Add
@@ -134,7 +131,12 @@ export function FindPeople({
             aria-label="Emails and phone numbers"
           />
           <div className="flex gap-2">
-            <button type="button" className="btn-primary" disabled={pending || !text.trim()} onClick={() => sync(extractEntries(text), "typed", "contacts")}>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={pending || !text.trim()}
+              onClick={() => check(extractEntries(text).map((address) => ({ name: null, addresses: [address] })), "typed")}
+            >
               Find people
             </button>
             <button type="button" className="btn-ghost" onClick={() => setTyping(false)}>
@@ -143,29 +145,8 @@ export function FindPeople({
           </div>
         </div>
       )}
-
       {pending && <p className="text-sm text-muted" role="status">Checking…</p>}
-      {status && (
-        <p className={`text-sm ${status.ok ? "text-accent" : "text-danger"}`} role={status.ok ? "status" : "alert"}>
-          {status.text}
-        </p>
-      )}
-      {anySynced && (
-        <button
-          type="button"
-          className="mt-2 text-xs text-muted underline"
-          disabled={pending}
-          onClick={() =>
-            start(async () => {
-              await clearContactsAction();
-              setStatus({ ok: true, text: "Done: everything from your contacts has been forgotten." });
-              router.refresh();
-            })
-          }
-        >
-          Forget my synced contacts
-        </button>
-      )}
+      {error && <p className="text-sm text-danger" role="alert">{error}</p>}
     </div>
   );
 }

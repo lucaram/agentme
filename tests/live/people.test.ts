@@ -14,6 +14,8 @@ const PASSWORD = "people-test-password";
 
 const lib = async () => ({
   matching: await import("@/lib/people/matching"),
+  lists: await import("@/lib/people/imports"),
+  requests: await import("@/lib/people/requests"),
   intro: await import("@/lib/people/introductions"),
   invites: await import("@/lib/plans/invites"),
   chat: await import("@/lib/data/chat"),
@@ -27,7 +29,6 @@ const contactBetween = async (x: Person, y: Person) =>
       .maybeSingle()
   ).data;
 const befriend = (x: Person, y: Person) => admin().from("contacts").insert({ requester_agent: x.agent.id, addressee_agent: y.agent.id, status: "accepted" });
-const suggestedHandles = async (p: Person) => (await (await lib()).matching.mutualSuggestions(p.agent.id)).map((s) => s.handle);
 const confirmed = (p: Person) => ({ email: p.email, emailConfirmed: true });
 
 describe.skipIf(!dbUp)("finding people (live)", () => {
@@ -54,35 +55,57 @@ describe.skipIf(!dbUp)("finding people (live)", () => {
     for (const id of ids) await db.auth.admin.deleteUser(id);
   });
 
-  it("suggests someone only when BOTH have each other, and never reveals one-sided matches", async () => {
-    const { matching } = await lib();
-    const { a, b } = people;
-    await matching.registerAccountEmail(a.agent.id, confirmed(a));
-    await matching.registerAccountEmail(b.agent.id, confirmed(b));
+  it("connecting contacts shows a list: findable people to tick, others to invite; nothing is added by itself", async () => {
+    const { matching, lists, requests } = await lib();
+    const { a, b, c, d } = people;
+    for (const p of [a, b, c]) await matching.registerAccountEmail(p.agent.id, confirmed(p));
 
-    const first = await matching.syncAddressBook(a.agent, [b.email, "someone-not-on-agentme@example.com"], null);
-    expect(first).toEqual({ ok: true, checked: 2 }); // a count of entries, never of matches
-    expect(await suggestedHandles(a)).toEqual([]);
-    expect(await suggestedHandles(b)).toEqual([]);
+    const made = await lists.createContactList(
+      a.agent,
+      "typed",
+      [
+        { name: "Bee", addresses: [`  ${b.email.toUpperCase()} `] },
+        { name: "Cee", addresses: [c.email] },
+        { name: "Stranger", addresses: ["nobody-here@example.com"] },
+        { name: "Broken", addresses: ["not an address"] },
+      ],
+      null,
+    );
+    expect(made).toEqual({ ok: true, total: 3 });
+    let list = (await lists.loadContactList(a.agent.id))!;
+    expect(list.onAgentme.map((p) => [p.name, p.handle, p.status])).toEqual([
+      ["Bee", b.handle, "none"],
+      ["Cee", c.handle, "none"],
+    ]);
+    expect(list.others).toEqual([{ name: "Stranger", address: "nobody-here@example.com" }]);
+    expect(await contactBetween(a, b)).toBeNull();
 
-    await matching.syncAddressBook(b.agent, [`  ${a.email.toUpperCase()} `], null);
-    expect(await suggestedHandles(a)).toEqual([b.handle]);
-    expect(await suggestedHandles(b)).toEqual([a.handle]);
+    // Someone who switched off "let people find me" looks like they're not on AGENTME.
+    await admin().from("agents").update({ discoverable: false }).eq("id", c.agent.id);
+    list = (await lists.loadContactList(a.agent.id))!;
+    expect(list.onAgentme.map((p) => p.handle)).toEqual([b.handle]);
+    expect(list.others.map((p) => p.name)).toContain("Cee");
+    await admin().from("agents").update({ discoverable: true }).eq("id", c.agent.id);
 
-    // Non-matching entries are not kept anywhere.
-    const { data: kept } = await admin().from("address_book_matches").select("matched_agent").eq("owner_agent", a.agent.id);
-    expect(kept).toEqual([{ matched_agent: b.agent.id }]);
+    // "Add" only works for people in your own list.
+    const listed = await lists.listedAgentIds(a.agent.id);
+    expect(listed.has(b.agent.id)).toBe(true);
+    expect(listed.has(d.agent.id)).toBe(false);
 
-    // Forgetting your contacts removes the suggestion on both sides.
-    await matching.clearAddressBook(a.agent.id);
-    expect(await suggestedHandles(b)).toEqual([]);
-    await matching.syncAddressBook(a.agent, [b.email], null);
-    expect(await suggestedHandles(b)).toEqual([a.handle]);
-
-    // Once connected (or blocked) they're no longer suggested.
-    await befriend(a, b);
-    expect(await suggestedHandles(a)).toEqual([]);
+    // Ticking sends a request; if they also add you, you're connected.
+    expect(await requests.sendContactRequest(a.agent, b.agent)).toEqual({ ok: true });
+    expect((await lists.loadContactList(a.agent.id))!.onAgentme.find((p) => p.handle === b.handle)!.status).toBe("pending");
+    expect(await requests.sendContactRequest(b.agent, a.agent)).toEqual({ ok: true });
+    expect((await contactBetween(a, b))?.status).toBe("accepted");
     await admin().from("contacts").delete().eq("requester_agent", a.agent.id).eq("addressee_agent", b.agent.id);
+
+    // The list is deleted when done, or after 30 minutes.
+    await lists.discardContactList(a.agent.id);
+    expect(await lists.loadContactList(a.agent.id)).toBeNull();
+    await lists.createContactList(a.agent, "typed", [{ name: "Bee", addresses: [b.email] }], null);
+    await admin().from("contact_imports").update({ expires_at: new Date(Date.now() - 1000).toISOString() }).eq("agent_id", a.agent.id);
+    expect(await lists.loadContactList(a.agent.id)).toBeNull();
+    expect((await admin().from("contact_imports").select("agent_id").eq("agent_id", a.agent.id)).data).toEqual([]);
   });
 
   it("phone numbers count only after a code proves them, and belong to the newest owner", async () => {
@@ -105,10 +128,10 @@ describe.skipIf(!dbUp)("finding people (live)", () => {
     expect((await admin().from("agent_identifiers").select("*").eq("agent_id", a.agent.id).eq("kind", "phone")).data).toEqual([]);
 
     // c saved it in local format: still matches b.
-    await matching.syncAddressBook(c.agent, [number.replace("+44 ", "0")], "+44");
-    const { data: edge } = await admin().from("address_book_matches").select("matched_agent").eq("owner_agent", c.agent.id);
-    expect(edge).toEqual([{ matched_agent: b.agent.id }]);
-    await matching.clearAddressBook(c.agent.id);
+    const { lists } = await lib();
+    await lists.createContactList(c.agent, "phone", [{ name: "B mobile", addresses: [number.replace("+44 ", "0")] }], "+44");
+    expect((await lists.loadContactList(c.agent.id))!.onAgentme.map((p) => p.agentId)).toEqual([b.agent.id]);
+    await lists.discardContactList(c.agent.id);
     await matching.removePhone(b.agent.id);
   });
 
@@ -205,11 +228,11 @@ describe.skipIf(!dbUp)("finding people (live)", () => {
     const own = await client.from("agent_identifiers").select("agent_id");
     expect(new Set(own.data!.map((r) => r.agent_id))).toEqual(new Set([a.agent.id]));
     expect((await client.from("agent_identifiers").select("*").eq("agent_id", b.agent.id)).data).toEqual([]);
-    expect((await client.from("address_book_matches").select("*")).data).toEqual([]);
+    expect((await client.from("contact_imports").select("*")).data).toEqual([]);
     expect((await client.from("plan_invites").select("*")).data).toEqual([]);
     expect((await client.from("phone_verifications").select("*")).data).toEqual([]);
     // And can't write them directly.
-    const write = await client.from("address_book_matches").insert({ owner_agent: a.agent.id, matched_agent: b.agent.id });
+    const write = await client.from("contact_imports").insert({ agent_id: a.agent.id, source: "typed", items: [], expires_at: new Date().toISOString() });
     expect(write.error).not.toBeNull();
     const rpc = await client.rpc("add_plan_participant", { p_task: a.agent.id, p_handle: a.handle, p_max: 20 });
     expect(rpc.error).not.toBeNull();

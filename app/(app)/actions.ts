@@ -30,6 +30,7 @@ import { MAX_PLAN_PEOPLE } from "@/lib/plans/types";
 import { withUsageContext } from "@/lib/usage/context";
 import { isAgentCommand } from "@/lib/agents/commands";
 import { handleAgentCommand } from "@/lib/agents/in-chat";
+import { sendContactRequest } from "@/lib/people/requests";
 
 const Id = z.uuid();
 
@@ -226,23 +227,11 @@ export async function requestContact(handle: string) {
   const { agent } = await requireAgent();
   const other = await getAgentByHandle(handle);
   if (!other || other.id === agent.id) return { error: "Agent not found." };
-  const existing = await getContactRow(agent.id, other.id);
-  if (existing) {
-    // Accepting a crossed request; never reveal or override a block.
-    if (existing.status === "pending" && existing.addressee_agent === agent.id) {
-      await adminClient().from("contacts").update({ status: "accepted" }).eq("id", existing.id);
-    }
-    revalidatePath("/contacts");
-    return { ok: true };
-  }
-  if (other.contact_policy === "nobody") return { error: `@${other.handle} isn't accepting contact requests.` };
-  const limit = await hit("contactRequestsPerAgent", agent.id);
-  if (!limit.allowed) return { error: `Too many contact requests. Try again in ${describeRetry(limit.retryAfterSeconds)}.` };
-  await adminClient().from("contacts").insert({ requester_agent: agent.id, addressee_agent: other.id });
+  const result = await sendContactRequest(agent, other);
   revalidatePath("/contacts");
   revalidatePath("/discover");
   revalidatePath(`/u/${other.handle}`);
-  return { ok: true };
+  return result;
 }
 
 async function ownContactRow(contactId: string) {

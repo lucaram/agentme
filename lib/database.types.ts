@@ -23,33 +23,7 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "address_book_matches": {
-                  Row: {
-                    "created_at": string,"matched_agent": string,"owner_agent": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "created_at"?: string,"matched_agent": string,"owner_agent": string
-                  }
-                  Update: {
-                    "created_at"?: string,"matched_agent"?: string,"owner_agent"?: string
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "address_book_matches_matched_agent_fkey"
-      columns: ["matched_agent"]
-isOneToOne: false
-      referencedRelation: "agents"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "address_book_matches_owner_agent_fkey"
-      columns: ["owner_agent"]
-isOneToOne: false
-      referencedRelation: "agents"
-      referencedColumns: ["id"]
-    }
-                  ]
-                },"agent_facts": {
+            "agent_facts": {
                   Row: {
                     "agent_id": string,"category": string,"disclosure": Database["public"]['Enums']["disclosure_level"],"id": string,"updated_at": string,"value": string
                   }
@@ -91,17 +65,37 @@ isOneToOne: false
                   ]
                 },"agents": {
                   Row: {
-                    "avatar": string,"bio": string | null,"business_info": NonNullable<Json>,"contact_policy": Database["public"]['Enums']["contact_policy"],"contact_sources": NonNullable<Json>,"contacts_synced_at": string | null,"created_at": string,"display_name": string,"guest": boolean,"handle": string,"id": string,"owner_id": string,"type": Database["public"]['Enums']["agent_type"]
+                    "avatar": string,"bio": string | null,"business_info": NonNullable<Json>,"contact_policy": Database["public"]['Enums']["contact_policy"],"contact_sources": NonNullable<Json>,"contacts_synced_at": string | null,"created_at": string,"discoverable": boolean,"display_name": string,"guest": boolean,"handle": string,"id": string,"owner_id": string,"type": Database["public"]['Enums']["agent_type"]
                   }
                   ComputedFields: never
                   Insert: {
-                    "avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"display_name": string,"guest"?: boolean,"handle": string,"id"?: string,"owner_id": string,"type"?: Database["public"]['Enums']["agent_type"]
+                    "avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name": string,"guest"?: boolean,"handle": string,"id"?: string,"owner_id": string,"type"?: Database["public"]['Enums']["agent_type"]
                   }
                   Update: {
-                    "avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"display_name"?: string,"guest"?: boolean,"handle"?: string,"id"?: string,"owner_id"?: string,"type"?: Database["public"]['Enums']["agent_type"]
+                    "avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name"?: string,"guest"?: boolean,"handle"?: string,"id"?: string,"owner_id"?: string,"type"?: Database["public"]['Enums']["agent_type"]
                   }
                   Relationships: [
                     
+                  ]
+                },"contact_imports": {
+                  Row: {
+                    "agent_id": string,"created_at": string,"expires_at": string,"items": NonNullable<Json>,"source": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "agent_id": string,"created_at"?: string,"expires_at": string,"items": NonNullable<Json>,"source": string
+                  }
+                  Update: {
+                    "agent_id"?: string,"created_at"?: string,"expires_at"?: string,"items"?: NonNullable<Json>,"source"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "contact_imports_agent_id_fkey"
+      columns: ["agent_id"]
+isOneToOne: true
+      referencedRelation: "agents"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"contacts": {
                   Row: {

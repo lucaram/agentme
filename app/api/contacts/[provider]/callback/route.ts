@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getUser } from "@/lib/auth";
 import { getAgentForUser } from "@/lib/data/agents";
 import { sameHash } from "@/lib/people/crypto";
-import { registerAccountEmail, syncAddressBook } from "@/lib/people/matching";
+import { registerAccountEmail } from "@/lib/people/matching";
+import { createContactList } from "@/lib/people/imports";
 import { fetchContacts, isProvider, providerMode } from "@/lib/people/providers";
 
 const STATE_COOKIE = "contacts_oauth_state";
@@ -28,10 +29,10 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/contacts
   if (!code || !expected || !sameHash(expected, state)) return back("synced=error");
 
   try {
-    const entries = await fetchContacts(provider, code);
+    const contacts = await fetchContacts(provider, code);
     await registerAccountEmail(agent.id, user);
-    const result = await syncAddressBook(agent, entries, null, provider);
-    return back(result.ok ? `synced=${provider}&checked=${result.checked}` : "synced=limit");
+    const result = await createContactList(agent, provider, contacts, null);
+    return back(result.ok ? "list=1" : "synced=limit");
   } catch (error) {
     console.error("contacts sync failed", provider, error instanceof Error ? error.message : error);
     return back("synced=error");
