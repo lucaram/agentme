@@ -47,7 +47,8 @@ export default async function PersonalLinkPage({ params, searchParams }: PagePro
           </div>
         ) : me.id === other.id ? (
           <p className="text-sm text-muted">
-            This is your business page: it&apos;s what your QR code opens. <Link className="text-accent underline" href="/print/qr">Print your poster</Link>
+            This is your business page, as customers see it: it&apos;s what your QR code opens. <Link className="text-accent underline" href="/print/qr">Print your poster</Link>{" "}
+            or <Link className="text-accent underline" href="/business">change what it shows</Link>.
           </p>
         ) : (
           <div className="w-full space-y-3">
