@@ -7,6 +7,7 @@ import { FindPeople } from "./FindPeople";
 import { ContactList } from "./ContactList";
 import { loadContactList } from "@/lib/people/imports";
 import { personalLink } from "@/lib/people/links";
+import { maskEmail } from "@/lib/people/normalise";
 
 /** Problems coming back from Gmail / Outlook. */
 function syncNotice(synced: unknown): string | null {
@@ -71,8 +72,8 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/discove
                 <Link href="/settings#find-me" className="rounded-full border border-dashed border-border px-3 py-1 text-muted hover:bg-accent-soft">
                   🙈 Nobody: you&apos;re hidden (change)
                 </Link>
-              ) : hint("email") ? (
-                <span className="rounded-full bg-accent-soft px-3 py-1" data-testid="findable-email">✉️ {hint("email")} ✓</span>
+              ) : user.email && user.emailConfirmed ? (
+                <span className="rounded-full bg-accent-soft px-3 py-1" data-testid="findable-email">✉️ {maskEmail(user.email)} ✓</span>
               ) : (
                 <span className="rounded-full border border-dashed border-border px-3 py-1 text-muted">✉️ Email not verified yet</span>
               )}

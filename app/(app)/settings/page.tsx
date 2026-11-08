@@ -5,9 +5,10 @@ import { deleteAccount, saveSettings } from "../actions";
 import { PhoneVerify } from "./PhoneVerify";
 import { SaveAccount } from "./SaveAccount";
 import { DiscoverableToggle } from "./DiscoverableToggle";
+import { maskEmail } from "@/lib/people/normalise";
 
 export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
-  const { agent } = await requireAgent();
+  const { user, agent } = await requireAgent();
   const { saved, error } = await searchParams;
   const supabase = await createClient();
   const [{ data: facts }, { data: identifiers }] = await Promise.all([
@@ -35,7 +36,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
             <p className="hint">People who have your email or number in their contacts can find you on AGENTME. Your details are never shown to them.</p>
           </div>
           <DiscoverableToggle initial={agent.discoverable} />
-          <p className="text-sm">✉️ {hint("email") ? `${hint("email")} ✓` : "Your email isn't verified yet."}</p>
+          <p className="text-sm">✉️ {user.email && user.emailConfirmed ? `${maskEmail(user.email)} ✓` : "Your email isn't verified yet."}</p>
           <PhoneVerify current={hint("phone")} />
         </section>
       )}

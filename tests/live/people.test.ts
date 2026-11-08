@@ -68,14 +68,16 @@ describe.skipIf(!dbUp)("finding people (live)", () => {
         { name: "Cee", addresses: [c.email] },
         { name: "Stranger", addresses: ["nobody-here@example.com"] },
         { name: "Broken", addresses: ["not an address"] },
+        { name: "Dee", addresses: [d.email] }, // never registered an identifier: found by confirmed email
       ],
       null,
     );
-    expect(made).toEqual({ ok: true, total: 3 });
+    expect(made).toEqual({ ok: true, total: 4 });
     let list = (await lists.loadContactList(a.agent.id))!;
     expect(list.onAgentme.map((p) => [p.name, p.handle, p.status])).toEqual([
       ["Bee", b.handle, "none"],
       ["Cee", c.handle, "none"],
+      ["Dee", d.handle, "none"],
     ]);
     expect(list.others).toEqual([{ name: "Stranger", address: "nobody-here@example.com" }]);
     expect(await contactBetween(a, b)).toBeNull();
@@ -83,14 +85,15 @@ describe.skipIf(!dbUp)("finding people (live)", () => {
     // Someone who switched off "let people find me" looks like they're not on AGENTME.
     await admin().from("agents").update({ discoverable: false }).eq("id", c.agent.id);
     list = (await lists.loadContactList(a.agent.id))!;
-    expect(list.onAgentme.map((p) => p.handle)).toEqual([b.handle]);
+    expect(list.onAgentme.map((p) => p.handle)).toEqual([b.handle, d.handle]);
     expect(list.others.map((p) => p.name)).toContain("Cee");
     await admin().from("agents").update({ discoverable: true }).eq("id", c.agent.id);
 
     // "Add" only works for people in your own list.
     const listed = await lists.listedAgentIds(a.agent.id);
     expect(listed.has(b.agent.id)).toBe(true);
-    expect(listed.has(d.agent.id)).toBe(false);
+    expect(listed.has(d.agent.id)).toBe(true);
+    expect(listed.has(a.agent.id)).toBe(false);
 
     // Ticking sends a request; if they also add you, you're connected.
     expect(await requests.sendContactRequest(a.agent, b.agent)).toEqual({ ok: true });
