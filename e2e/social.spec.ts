@@ -133,8 +133,9 @@ test("businesses in groups: an admin adds one, it answers only when mentioned, a
   // Added as a business, not as a member.
   const businesses = luca.page.getByRole("region", { name: "Businesses" });
   await businesses.getByText("＋ Add a business").click();
-  await businesses.getByLabel("Business @address").fill("trattoria");
-  await businesses.getByRole("button", { name: "Add", exact: true }).click();
+  await businesses.getByRole("combobox", { name: "Search businesses" }).fill("tratt");
+  await businesses.getByRole("option", { name: /@trattoria/ }).getByRole("button", { name: "Add" }).click();
+  await expect(businesses.getByRole("status")).toContainText("added");
   await expect(businesses.getByTestId("group-business")).toContainText("@trattoria");
   await expect(luca.page.getByTestId("group-member")).toHaveCount(2);
   const chatUrl = luca.page.url().replace("/groups/", "/chats/");

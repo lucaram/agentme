@@ -34,6 +34,25 @@ async function placementsCount(column: "conversation_id" | "community_id", id: s
   return count ?? 0;
 }
 
+export type BusinessHit = { id: string; handle: string; display_name: string; avatar: string; bio: string | null };
+
+/** Businesses that can be added (they answer anyone), by name or @address. */
+export async function searchBusinesses(query: string, exclude: string[] = []): Promise<BusinessHit[]> {
+  // Letters, digits, spaces and a few name characters only: nothing that can change the filter.
+  const q = query.trim().replace(/^@/, "").replace(/[^\p{L}\p{N} _'&.-]/gu, "").slice(0, 40);
+  if (q.length < 2) return [];
+  const like = q.replace(/_/g, "\\_");
+  const { data } = await adminClient()
+    .from("agents")
+    .select("id, handle, display_name, avatar, bio")
+    .eq("type", "business")
+    .eq("contact_policy", "anyone")
+    .or(`handle.ilike.${like}%,display_name.ilike.%${like}%`)
+    .order("display_name")
+    .limit(12);
+  return (data ?? []).filter((b) => !exclude.includes(b.id)).slice(0, 8);
+}
+
 // ------------------------------------------------------------- groups
 
 /** Group admins add a business; it's there straight away (the business can leave). */

@@ -19,6 +19,7 @@ import {
   removeMemberAction,
   removeMessageAction,
   reportGroupAction,
+  searchBusinessesAction,
   revokeGroupLinkAction,
   setGroupRoleAction,
   setMutedAction,
@@ -162,7 +163,13 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
           <details>
             <summary className="cursor-pointer text-sm font-medium text-accent">＋ Add a business</summary>
             <div className="mt-2">
-              <BusinessHandleForm action={addBusinessToGroupAction.bind(null, id)} button="Add" done="Added. Mention it in the chat to ask it something." />
+              <BusinessHandleForm
+                action={addBusinessToGroupAction.bind(null, id)}
+                search={searchBusinessesAction}
+                exclude={businesses.map((b) => b.id)}
+                button="Add"
+                done="added. Mention it in the chat to ask it something."
+              />
             </div>
           </details>
         ) : (

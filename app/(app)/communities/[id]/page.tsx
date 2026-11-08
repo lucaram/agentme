@@ -18,6 +18,7 @@ import {
   removeMessageAction,
   removePartnerAction,
   revokeCommunityLinkAction,
+  searchBusinessesAction,
   setCommunityRoleAction,
   setMutedAction,
   unbanAction,
@@ -213,7 +214,13 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
                 ))}
               </ul>
             )}
-            <BusinessHandleForm action={invitePartnerAction.bind(null, id)} button="Invite" done="Invitation sent. They'll appear here as a partner once they accept." />
+            <BusinessHandleForm
+              action={invitePartnerAction.bind(null, id)}
+              search={searchBusinessesAction}
+              exclude={partners.map((p) => p.agent.id)}
+              button="Invite"
+              done="invitation sent. It appears as a partner once they accept."
+            />
           </section>
 
           <section className="card space-y-2" aria-label="Members">

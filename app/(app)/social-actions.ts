@@ -281,3 +281,9 @@ export async function answerPartnerInviteAction(placementId: string, accept: boo
 export async function leavePlacementAction(placementId: string): Promise<Out> {
   return done(["/business"], await businesses.leavePlacement(placementId, await me()));
 }
+
+/** Search box for "Add a business" / "Invite a partner": businesses that answer anyone. */
+export async function searchBusinessesAction(query: string, exclude: string[]): Promise<businesses.BusinessHit[]> {
+  await requireAgent();
+  return businesses.searchBusinesses(String(query ?? ""), ids(exclude));
+}

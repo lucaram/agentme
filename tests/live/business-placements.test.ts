@@ -64,6 +64,18 @@ describe.skipIf(!dbUp)("businesses in groups and communities (live)", () => {
     expect(businesses.mentionedHandles("@Trattoria do you have a table? cc @marco, mail me at a@b.example. @agent summarise")).toEqual(["trattoria", "marco"]);
   });
 
+  it("search finds businesses that answer anyone, by name or @address", async () => {
+    const { businesses } = await lib();
+    const handles = async (q: string, exclude: string[] = []) => (await businesses.searchBusinesses(q, exclude)).map((b) => b.handle);
+    expect(await handles(`tp${run}_sh`)).toEqual([people.shop.agent.handle]);
+    expect(await handles(`@tp${run}`)).toEqual([people.shop.agent.handle]); // not the people, not the closed business
+    expect(await handles("Test shop")).toContain(people.shop.agent.handle);
+    expect(await handles(`tp${run}_shop`, [people.shop.agent.id])).toEqual([]);
+    // Filter syntax in the text is ignored, never interpreted.
+    expect(await handles(`tp${run}_shop),type.eq.personal,handle.ilike.%`)).toEqual([]);
+    expect(await handles("x")).toEqual([]);
+  });
+
   it("groups: admins add a business (never as a member), anyone can remove it", async () => {
     const { businesses, groups } = await lib();
     const made = await groups.createGroup(me(people.admin), { title: "Dinner club", description: "", avatar: "🍕", memberAgentIds: [people.member.agent.id, people.shop.agent.id] });
