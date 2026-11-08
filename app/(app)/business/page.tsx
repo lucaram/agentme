@@ -5,6 +5,9 @@ import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { BusinessInfoForm, SourcesManager, TryIt } from "./BusinessForms";
 import { QuestionsAnswers } from "./QuestionsAnswers";
 import { AddBusinessIntro } from "./AddBusinessIntro";
+import { adminClient } from "@/lib/supabase/admin";
+import { ActionButton } from "@/components/ActionButton";
+import { answerPartnerInviteAction, leavePlacementAction } from "../social-actions";
 import { linkKey, linksIn } from "@/lib/business/extract";
 
 type Info = { about?: string; customers?: string; description?: string; hours?: string; faqs?: { q: string; a: string }[] };
@@ -37,6 +40,19 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   }));
   const readWords = sources.filter((s) => s.status === "ok").reduce((n, s) => n + s.words, 0);
   const faqs = info.faqs ?? [];
+  // Where the business has been placed (RLS: its own placements). The business isn't a
+  // member, so names come from the server.
+  const { data: placementRows } = await supabase.from("business_placements").select("id, conversation_id, community_id, status").order("created_at", { ascending: false });
+  const groupIds = (placementRows ?? []).flatMap((p) => (p.conversation_id ? [p.conversation_id] : []));
+  const communityIds = (placementRows ?? []).flatMap((p) => (p.community_id ? [p.community_id] : []));
+  const [{ data: groupRows }, { data: communityRows }] = await Promise.all([
+    groupIds.length ? adminClient().from("conversations").select("id, title").in("id", groupIds) : Promise.resolve({ data: [] as { id: string; title: string | null }[] }),
+    communityIds.length ? adminClient().from("communities").select("id, name").in("id", communityIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+  ]);
+  const places = (placementRows ?? []).map((p) => ({
+    ...p,
+    name: p.conversation_id ? (groupRows ?? []).find((g) => g.id === p.conversation_id)?.title ?? "A group" : (communityRows ?? []).find((c) => c.id === p.community_id)?.name ?? "A community",
+  }));
 
   return (
     <div className="space-y-6">
@@ -86,6 +102,36 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
         <h2 className="font-semibold">Links your agent reads</h2>
         <SourcesManager sources={sources} />
       </section>
+
+      {places.length > 0 && (
+        <section className="card space-y-2" aria-label="Groups and communities">
+          <h2 className="font-semibold">Groups and communities</h2>
+          <p className="hint">
+            Where people can mention @{agent.handle}. Your agent only sees the messages that mention it, answers from your public information (never
+            “For customers only”) and never posts on its own.
+          </p>
+          <ul className="divide-y divide-border">
+            {places.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center gap-2 py-2" data-testid="placement">
+                <span className="min-w-0 flex-1 text-sm">
+                  {p.conversation_id ? "👥" : "🏟️"} {p.name}
+                  <span className="block text-xs text-muted">
+                    {p.conversation_id ? "Group" : p.status === "invited" ? "Community · invited you to be an official partner" : "Community · official partner"}
+                  </span>
+                </span>
+                {p.status === "invited" ? (
+                  <>
+                    <ActionButton action={answerPartnerInviteAction.bind(null, p.id, true)} label="Accept" variant="btn-primary" />
+                    <ActionButton action={answerPartnerInviteAction.bind(null, p.id, false)} label="Decline" />
+                  </>
+                ) : (
+                  <ActionButton action={leavePlacementAction.bind(null, p.id)} label="Leave" />
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="card space-y-2" aria-label="Questions and answers">
         <h2 className="font-semibold">Questions &amp; answers</h2>

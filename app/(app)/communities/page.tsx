@@ -35,7 +35,7 @@ function List({ rows, counts, roles, toReview }: { rows: Row[]; counts: Map<stri
 }
 
 export default async function CommunitiesPage() {
-  const { user } = await requireAgent();
+  const { user, agent } = await requireAgent();
   const supabase = await createClient();
   const { data: memberships } = await supabase.from("community_members").select("community_id, role").eq("user_id", user.id);
   const mineIds = (memberships ?? []).map((m) => m.community_id);
@@ -69,6 +69,12 @@ export default async function CommunitiesPage() {
         <p className="text-xs text-muted">Bigger spaces around a shared interest, with moderators, rules, Announcements and a General chat.</p>
       </div>
       <Notices area="communities" />
+      {agent.type === "business" && (
+        <p className="card text-sm" data-testid="business-community-hint">
+          🏪 Run a community for your customers: news in Announcements, chat in General. Your business can&apos;t join other communities, but their
+          moderators can invite it as an official partner.
+        </p>
+      )}
       <CreateCommunityForm avatars={COMMUNITY_AVATARS} />
 
       <section aria-label="Your communities">

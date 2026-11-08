@@ -24,6 +24,8 @@ export const LIMITS = {
   businessRereadsPerAgent: { windowSeconds: 3600, max: 20 },
   /** Questions a business agent hands to its team, per asking agent and business. */
   businessHandoffsPerCaller: { windowSeconds: 86400, max: 10 },
+  /** Questions to businesses by @mention in groups and communities. */
+  businessMentionsPerUser: { windowSeconds: 3600, max: 20 },
   /** Businesses a person can add ("Add a business"). */
   businessesPerPerson: { windowSeconds: 86400, max: 10 },
   /** "Ask around" requests (each reaches up to 25 contacts). */

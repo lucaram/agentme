@@ -117,3 +117,52 @@ test("communities: create, join by accepting the rules, Announcements vs General
   await luca.close();
   await eve.close();
 });
+
+test("businesses in groups: an admin adds one, it answers only when mentioned, anyone can remove it", async ({ browser }) => {
+  const name = `Pizza night ${suffix()}`;
+  const luca = await as(browser, "luca");
+  await luca.page.getByRole("navigation").getByRole("link", { name: "Groups" }).click();
+  await luca.page.getByRole("button", { name: "＋ New group" }).click();
+  const form = luca.page.getByRole("form", { name: "New group" });
+  await form.getByLabel("Group name").fill(name);
+  await form.getByRole("combobox", { name: "Search contacts" }).fill("mar");
+  await form.getByRole("option", { name: /Marco/ }).click();
+  await form.getByRole("button", { name: "Create group" }).click();
+  await expect(luca.page.getByRole("heading", { name })).toBeVisible();
+
+  // Added as a business, not as a member.
+  const businesses = luca.page.getByRole("region", { name: "Businesses" });
+  await businesses.getByText("＋ Add a business").click();
+  await businesses.getByLabel("Business @address").fill("trattoria");
+  await businesses.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(businesses.getByTestId("group-business")).toContainText("@trattoria");
+  await expect(luca.page.getByTestId("group-member")).toHaveCount(2);
+  const chatUrl = luca.page.url().replace("/groups/", "/chats/");
+
+  // A message without a mention: the business stays quiet. With one: it answers for everyone.
+  const marco = await as(browser, "marco");
+  await marco.page.goto(chatUrl);
+  await expect(marco.page.getByLabel("Message", { exact: true })).toHaveAttribute("placeholder", /@trattoria to ask the business/);
+  await send(marco.page, "Shall we try that Italian place?");
+  await send(marco.page, "@trattoria do you have vegetarian options?");
+  await expect(marco.page.getByText(/about half the menu is vegetarian/)).toBeVisible();
+  await expect(marco.page.getByText("@trattoria's agent")).toHaveCount(1);
+  await luca.page.goto(chatUrl);
+  await expect(luca.page.getByText(/about half the menu is vegetarian/)).toBeVisible();
+
+  // The business sees where it was added (not the group's messages).
+  const shop = await as(browser, "trattoria");
+  await shop.page.goto("/business");
+  await expect(shop.page.getByTestId("placement").filter({ hasText: name })).toBeVisible();
+  await shop.page.goto(chatUrl);
+  await expect(shop.page.getByText("Shall we try that Italian place?")).toHaveCount(0);
+
+  // Any member can remove it.
+  await marco.page.goto(chatUrl.replace("/chats/", "/groups/"));
+  await marco.page.getByTestId("group-business").getByRole("button", { name: "Remove" }).click();
+  await expect(marco.page.getByTestId("group-business")).toHaveCount(0);
+  await marco.page.goto(chatUrl);
+  await expect(marco.page.getByTestId("system-note").filter({ hasText: "removed" })).toContainText("from the group");
+
+  await Promise.all([luca.close(), marco.close(), shop.close()]);
+});

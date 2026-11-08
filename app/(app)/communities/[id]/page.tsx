@@ -11,10 +11,12 @@ import {
   decideRequestAction,
   deleteCommunityAction,
   dismissReportAction,
+  invitePartnerAction,
   leaveCommunityAction,
   muteMemberAction,
   removeFromCommunityAction,
   removeMessageAction,
+  removePartnerAction,
   revokeCommunityLinkAction,
   setCommunityRoleAction,
   setMutedAction,
@@ -22,6 +24,7 @@ import {
 } from "../../social-actions";
 import { EditCommunityForm } from "../CommunityForm";
 import { JoinCommunity } from "./JoinCommunity";
+import { BusinessHandleForm } from "@/components/social/BusinessHandleForm";
 
 const ROLE_LABEL = { owner: "Owner", moderator: "Moderator", member: "" } as const;
 
@@ -37,6 +40,15 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
     supabase.rpc("community_member_counts", { p_ids: [id] }),
   ]);
   const members = Number(counts?.[0]?.members ?? 0);
+  // Official partners (RLS: active ones for anyone who can see the community; invitations for moderators).
+  const { data: placementRows } = await supabase.from("business_placements").select("id, business_agent_id, status").eq("community_id", id).order("created_at");
+  const { data: partnerAgents } = placementRows?.length
+    ? await supabase.from("agents").select("id, handle, display_name, avatar").in("id", placementRows.map((p) => p.business_agent_id))
+    : { data: [] };
+  const partners = (placementRows ?? [])
+    .map((p) => ({ ...p, agent: (partnerAgents ?? []).find((a) => a.id === p.business_agent_id) }))
+    .filter((p): p is typeof p & { agent: NonNullable<typeof p.agent> } => Boolean(p.agent));
+  const activePartners = partners.filter((p) => p.status === "active");
   const isMod = me?.role === "owner" || me?.role === "moderator";
   const isOwner = me?.role === "owner";
 
@@ -53,6 +65,19 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
         </div>
       </div>
       {community.description && <p className="text-sm">{community.description}</p>}
+      {activePartners.length > 0 && (
+        <div className="space-y-1" data-testid="community-partners">
+          <p className="text-xs font-semibold text-muted">🤝 Official partners</p>
+          <div className="flex flex-wrap gap-2">
+            {activePartners.map((p) => (
+              <Link key={p.id} href={`/u/${p.agent.handle}`} className="rounded-full bg-accent-soft px-3 py-1 text-sm hover:underline">
+                {p.agent.avatar} {p.agent.display_name} <span className="text-muted">@{p.agent.handle}</span>
+              </Link>
+            ))}
+          </div>
+          {me && <p className="hint">Mention a partner in the chats to ask it something. It only sees messages that mention it and never posts on its own.</p>}
+        </div>
+      )}
       {community.rules && (
         <details open={!me}>
           <summary className="cursor-pointer text-sm font-semibold">Rules</summary>
@@ -168,6 +193,27 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
                 <p className="text-sm text-muted">Nothing reported. 🎉</p>
               )}
             </div>
+          </section>
+
+          <section className="card space-y-3" aria-label="Official partners">
+            <div>
+              <h2 className="font-semibold">Official partners</h2>
+              <p className="hint">Invite a local business your members use. Once it accepts, members can mention it in the chats and it answers from its public information.</p>
+            </div>
+            {partners.length > 0 && (
+              <ul className="divide-y divide-border">
+                {partners.map((p) => (
+                  <li key={p.id} className="flex flex-wrap items-center gap-2 py-2" data-testid="partner">
+                    <span className="min-w-0 flex-1 text-sm">
+                      {p.agent.avatar} {p.agent.display_name} <span className="text-muted">@{p.agent.handle}</span>
+                      {p.status === "invited" && <span className="ml-2 text-xs text-muted">invited, waiting for them to accept</span>}
+                    </span>
+                    <ActionButton action={removePartnerAction.bind(null, id, p.agent.id)} label={p.status === "invited" ? "Cancel invitation" : "Remove"} />
+                  </li>
+                ))}
+              </ul>
+            )}
+            <BusinessHandleForm action={invitePartnerAction.bind(null, id)} button="Invite" done="Invitation sent. They'll appear here as a partner once they accept." />
           </section>
 
           <section className="card space-y-2" aria-label="Members">

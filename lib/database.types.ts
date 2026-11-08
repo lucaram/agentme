@@ -117,6 +117,38 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"business_placements": {
+                  Row: {
+                    "added_by": string | null,"business_agent_id": string,"community_id": string | null,"conversation_id": string | null,"created_at": string,"id": string,"status": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "added_by"?: string | null,"business_agent_id": string,"community_id"?: string | null,"conversation_id"?: string | null,"created_at"?: string,"id"?: string,"status"?: string
+                  }
+                  Update: {
+                    "added_by"?: string | null,"business_agent_id"?: string,"community_id"?: string | null,"conversation_id"?: string | null,"created_at"?: string,"id"?: string,"status"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "business_placements_business_agent_id_fkey"
+      columns: ["business_agent_id"]
+isOneToOne: false
+      referencedRelation: "agents"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "business_placements_community_id_fkey"
+      columns: ["community_id"]
+isOneToOne: false
+      referencedRelation: "communities"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "business_placements_conversation_id_fkey"
+      columns: ["conversation_id"]
+isOneToOne: false
+      referencedRelation: "conversations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"business_sources": {
                   Row: {
                     "agent_id": string,"content": string | null,"created_at": string,"error": string | null,"id": string,"kind": string | null,"last_read_at": string | null,"status": string,"url": string,"visibility": string

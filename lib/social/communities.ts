@@ -73,6 +73,8 @@ export async function joinCommunity(id: string, me: Me, opts: { acceptRules: boo
   const community = await loadCommunity(id);
   if (!community) return { ok: false, error: "Not found." };
   if (await communityMembership(id, me.userId)) return { ok: true, status: "member" };
+  // Businesses run their own communities; elsewhere a moderator can invite them as an official partner.
+  if (me.agent.type === "business") return { ok: false, error: "Businesses can't join communities. A moderator can invite your business as an official partner." };
   if (community.rules && !opts.acceptRules) return { ok: false, error: "Please accept the community rules to join." };
   const db = adminClient();
   const { data: ban } = await db.from("community_bans").select("user_id").eq("community_id", id).eq("user_id", me.userId).maybeSingle();

@@ -8,6 +8,7 @@ import { adminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import * as groups from "@/lib/social/groups";
 import * as communities from "@/lib/social/communities";
+import * as businesses from "@/lib/social/businesses";
 import {
   communityMembership,
   createJoinLink,
@@ -252,4 +253,31 @@ export async function markNoticesSeenAction(area: "groups" | "communities"): Pro
   const supabase = await createClient();
   await supabase.rpc("mark_notices_seen", { p_area: area });
   return {};
+}
+
+// ------------------------------------------------------------- businesses in groups and communities
+
+export async function addBusinessToGroupAction(groupId: string, handle: string): Promise<Out> {
+  return done([`/groups/${groupId}`], await businesses.addBusinessToGroup(groupId, await me(), String(handle ?? "")));
+}
+
+export async function removeBusinessFromGroupAction(groupId: string, businessAgentId: string): Promise<Out> {
+  return done([`/groups/${groupId}`], await businesses.removeBusinessFromGroup(groupId, await me(), businessAgentId));
+}
+
+export async function invitePartnerAction(communityId: string, handle: string): Promise<Out> {
+  return done([`/communities/${communityId}`], await businesses.invitePartner(communityId, await me(), String(handle ?? "")));
+}
+
+export async function removePartnerAction(communityId: string, businessAgentId: string): Promise<Out> {
+  return done([`/communities/${communityId}`], await businesses.removePartner(communityId, await me(), businessAgentId));
+}
+
+/** The business's side (My Business): accept or decline a partner invitation, or leave. */
+export async function answerPartnerInviteAction(placementId: string, accept: boolean): Promise<Out> {
+  return done(["/business"], await businesses.answerPartnerInvite(placementId, await me(), Boolean(accept)));
+}
+
+export async function leavePlacementAction(placementId: string): Promise<Out> {
+  return done(["/business"], await businesses.leavePlacement(placementId, await me()));
 }

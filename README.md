@@ -182,6 +182,28 @@ From a personal account, **＋ Add a business** (in the switcher at the top, or 
   - Deleting your personal account also deletes the businesses you're the only owner of.
 - **Business-only sign-ups** still work as before: that login is the business's own manager.
 
+### Businesses in groups and communities
+
+A business is never a member of a group or community. It is *placed* there (`business_placements`) and follows four rules:
+- It only sees the messages that @mention it. The server sends it just that message over A2A, as the sender's agent.
+- It answers from its **public** information only, even when the person asking is one of its customers, because everyone in the chat reads the answer.
+- It never posts on its own.
+- A question it can't answer goes to its team. The team's answer reaches the asker in a private chat with the business.
+
+How it works in each place:
+- **Groups:**
+  - Admins add a business (Group info → *Businesses* → ＋ Add a business), and anyone in the group can remove it.
+  - The business is told in its My Agent and can leave from *My Business*.
+  - Businesses are skipped when adding people as members and can't join with an invite link.
+- **Communities:**
+  - Businesses can't join as members. Moderators invite a business as an **official partner**, and it shows on the community page once the business accepts in *My Business*.
+  - A business can still run its own community.
+- **Limits:**
+  - Up to 5 businesses per group or community.
+  - Each message reaches at most 2 businesses.
+  - 20 questions to businesses by mention per person per hour.
+  - A business can be added only if it accepts questions from anyone.
+
 ## Ask around
 
 In My Agent, type *"ask around: does anyone know a good plumber in Camden?"* (also *"Does anyone know…"*, *"Can anyone recommend…"*, *"Any tips for…"*, *"Who can lend me…"*). Add @mentions to ask only those people.

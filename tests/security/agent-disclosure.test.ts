@@ -275,3 +275,40 @@ describe("questions (always answered by the person)", () => {
     expectNoSecrets(JSON.stringify(res));
   });
 });
+
+describe("businesses in groups and communities: public information only", () => {
+  const CUSTOMERS_ONLY = "Private events: £35 per person";
+  const CUSTOMERS_PAGE = "Staff discount code SOLE10";
+  const shop: RecipientAgent = {
+    id: "s",
+    handle: "trattoria",
+    type: "business",
+    contact_policy: "anyone",
+    display_name: "Trattoria Sole",
+    business_info: { about: "Italian restaurant. Open Tue–Sun.", customers: CUSTOMERS_ONLY },
+  };
+  const sources = [{ url: "https://sole.example/members", visibility: "customers", content: CUSTOMERS_PAGE, last_read_at: null }];
+  const shown = (r: Recorder) => JSON.stringify(r.calls.map((c) => [c.system, c.messages]));
+
+  it("a customer asking directly gets customers-only information", async () => {
+    const r = useRecorder();
+    await respondAsAgent(shop, { callerHandle: "luca", relationship: "accepted", text: "Do you do private events?", data: null }, [], [], { sources, requestHandoff: async () => false });
+    expect(shown(r)).toContain(CUSTOMERS_ONLY);
+  });
+
+  it.each([{ context: "group" }, { audience: "public" }])("the same customer asking in a group (%o) never does", async (data) => {
+    const r = useRecorder();
+    await respondAsAgent(shop, { callerHandle: "luca", relationship: "accepted", text: "@trattoria do you do private events?", data }, [], [], { sources, requestHandoff: async () => false });
+    expect(shown(r)).not.toContain(CUSTOMERS_ONLY);
+    expect(shown(r)).not.toContain(CUSTOMERS_PAGE);
+  });
+
+  it("an unanswered group question says the team replies privately", async () => {
+    useRecorder();
+    const res = await respondAsAgent(shop, { callerHandle: "luca", relationship: "none", text: "Is there a cloakroom?", data: { context: "group" } }, [], [], {
+      sources: [],
+      requestHandoff: async () => true,
+    });
+    expect(res).toMatchObject({ status: "needs_human", text: expect.stringContaining("reply to @luca in a private chat") });
+  });
+});

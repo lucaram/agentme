@@ -254,15 +254,22 @@ export async function draftBusinessAnswer(
 async function answerBusinessQuestion(recipient: RecipientAgent, question: string, incoming: IncomingA2A, business: BusinessContext): Promise<AgentResponse> {
   const trimmed = question.trim().slice(0, 1000);
   if (!trimmed) return refuse("business.faq", "empty_question", "Please ask a question.");
-  // Customers-only information is for the business's contacts.
-  const reply = await draftBusinessAnswer(recipient, trimmed, business.sources, incoming.relationship === "accepted" ? "customers" : "public");
+  // Customers-only information is for the business's contacts, asking directly.
+  // In a group or community everyone reads the answer: public information only
+  // (the caller can only ever narrow this, never widen it).
+  const context = (incoming.data ?? {}) as { audience?: unknown; context?: unknown };
+  const inGroup = context.context === "group" || context.audience === "public";
+  const audience = incoming.relationship === "accepted" && !inGroup ? "customers" : "public";
+  const reply = await draftBusinessAnswer(recipient, trimmed, business.sources, audience);
 
   // Not in the business's information: its team answers instead (never a guess).
   if (reply.needs_team && incoming.callerHandle && (await business.requestHandoff())) {
     return {
       status: "needs_human",
       skill: "business.faq",
-      text: "I don't have that in my information yet, so I've asked the team. They'll reply here.",
+      text: inGroup
+        ? `I don't have that in my information yet, so I've asked the team. They'll reply to @${incoming.callerHandle} in a private chat.`
+        : "I don't have that in my information yet, so I've asked the team. They'll reply here.",
       disclosed: [],
       inbox: { kind: "question", question: trimmed, business: true },
     };

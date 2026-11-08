@@ -35,6 +35,18 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
   ]);
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));
   const byOwner = new Map((agents ?? []).map((a) => [a.owner_id, a]));
+  // Businesses placed in this group or community, to mention (RLS: members see them).
+  const placed =
+    conv.kind === "group" || (conv.kind === "channel" && conv.community_id)
+      ? (
+          await supabase
+            .from("business_placements")
+            .select("business_agent_id")
+            .eq(conv.kind === "group" ? "conversation_id" : "community_id", conv.kind === "group" ? id : conv.community_id!)
+            .eq("status", "active")
+        ).data ?? []
+      : [];
+  const mentionable = placed.map((p) => byId.get(p.business_agent_id)?.handle).filter(Boolean);
 
   const metas = (messages ?? []).map((m) => m.metadata as { task_id?: string; proposal_id?: string; step_id?: string });
   const taskIds = [...new Set(metas.map((m) => m.task_id).filter(Boolean) as string[])];
@@ -299,7 +311,9 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
               ? `Ask @${target?.handle ?? "agent"} a question`
               : !posting.ok
                 ? "@agent … (only you see it)"
-                : "Message — or @agent to ask your agent (only you see it)"
+                : mentionable.length
+                  ? `Message — @${mentionable[0]} to ask the business, or @agent to ask yours`
+                  : "Message — or @agent to ask your agent (only you see it)"
         }
         thinkingLabel={conv.kind === "dm" || conv.kind === "group" || conv.kind === "channel" ? undefined : "Agent is thinking…"}
         examples={examples}

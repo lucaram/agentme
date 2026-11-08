@@ -33,6 +33,7 @@ import { sendContactRequest } from "@/lib/people/requests";
 import { tellOwner } from "@/lib/requests/notify";
 import { canPost, type ConvRow } from "@/lib/social/shared";
 import { handOverIfOwnerLeft } from "@/lib/social/groups";
+import { answerMentions } from "@/lib/social/businesses";
 import { businessesOnlyOwnedBy, forgetPerson, realPerson, signInAs } from "@/lib/identities";
 
 const Id = z.uuid();
@@ -75,6 +76,10 @@ export async function sendMessage(conversationId: string, text: string): Promise
       await handleAgentCommand({ userId: user.id, agent, conversation: conv, text: content });
     } else {
       await postMessage({ conversationId, from: "human", userId: user.id, content });
+      // Businesses placed in this group or community answer when @mentioned (after the reply is sent).
+      if (conv.kind === "group" || conv.kind === "channel") {
+        after(() => withUsageContext({ userId: user.id, agentId: agent.id }, () => answerMentions({ conversation: conv, userId: user.id, agent, text: content })));
+      }
     }
   });
   revalidatePath(`/chats/${conversationId}`);
