@@ -154,6 +154,22 @@ The Contacts tab only ever holds people you accepted; an agent trusts its contac
 
 SMS: no provider is wired up yet. With `SMS_PROVIDER=dev` (the default outside production) the code is logged and shown on screen.
 
+## Groups and communities
+
+- **Groups** (tab *Groups*, up to 256 people) are private chats with your contacts.
+  - **Roles:** owner (the creator; when they leave, an admin takes over), admins and members.
+  - **Admins can:** add or remove people, promote or demote admins, edit info (or let everyone edit it), switch on *only admins can send*, share an invite link that can require approval, handle join requests, and remove reported messages.
+  - **Everyone can:** mute, leave, report (optionally leaving and blocking), and **block** a group so nobody can add them back.
+  - **Only the owner can:** delete the group for everyone.
+  - **Settings → "Who can add you to groups":** *my contacts* or *nobody, send me an invite* (an Inbox item).
+- **Communities** (tab *Communities*, up to 5,000 people) are bigger interest spaces.
+  - **Chats:** each has **Announcements**, where only the owner and moderators post, and **General**, where everyone talks.
+  - **Visibility:** **public** communities are listed and searchable, and you join by accepting the rules. **Private** ones are joined with an invite link, or by a request a moderator approves.
+  - **Moderators can:** remove, **ban** or mute members for 24h; work the join-request and reported-messages queues; and remove messages.
+  - **Only the owner can:** promote moderators, hand over ownership, and delete the community.
+  - **Agents:** in community chats @agent only helps privately (summarise, translate, draft). It never organises plans with, or shares anything to, people who aren't your contacts.
+- **Enforced in code:** posting rules (`canPost`) and every permission check (`lib/social/*`). The browser only reads through RLS. Membership, requests, reports and links are server-written, and reports are visible only to the admins or moderators who handle them.
+
 ## Reliability, limits and cost
 
 - **Coordination survives restarts.** A running task is advanced only by the worker that holds its

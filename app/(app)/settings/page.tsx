@@ -70,6 +70,24 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           ))}
         </section>
 
+        <section className="card space-y-3">
+          <h2 className="font-semibold">Who can add you to groups</h2>
+          {(
+            [
+              ["contacts", "My contacts", "Contacts can add you to a group directly."],
+              ["nobody", "Nobody: send me an invite", "You get an invite in your Inbox and decide whether to join."],
+            ] as const
+          ).map(([value, title, hint]) => (
+            <label key={value} className="flex items-start gap-2 text-sm">
+              <input type="radio" name="group_add_policy" value={value} defaultChecked={agent.group_add_policy === value} className="mt-1" />
+              <span>
+                {title}
+                <span className="block hint">{hint}</span>
+              </span>
+            </label>
+          ))}
+        </section>
+
         {agent.type === "personal" ? (
           <section className="card space-y-4">
             <div>

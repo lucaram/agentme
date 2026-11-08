@@ -26,11 +26,12 @@ import { continueWithoutWaiting } from "@/lib/plans/engine";
 import { answerInboxItem, declineInboxItem } from "@/lib/plans/inbox";
 import { claimItem, closePollStep, respondRsvp, unclaimItem, votePoll } from "@/lib/plans/participation";
 import { changePlan, type ChangeInputT } from "@/lib/plans/change";
-import { MAX_PLAN_PEOPLE } from "@/lib/plans/types";
 import { withUsageContext } from "@/lib/usage/context";
 import { isAgentCommand } from "@/lib/agents/commands";
 import { handleAgentCommand } from "@/lib/agents/in-chat";
 import { sendContactRequest } from "@/lib/people/requests";
+import { canPost, type ConvRow } from "@/lib/social/shared";
+import { handOverIfOwnerLeft } from "@/lib/social/groups";
 
 const Id = z.uuid();
 
@@ -47,8 +48,13 @@ export async function sendMessage(conversationId: string, text: string): Promise
     return { error: "The other person left this chat. Message them again from Contacts." };
   }
 
-  // "@agent ..." in a group or DM summons the sender's own agent (privately).
-  const summoned = (conv.kind === "group" || conv.kind === "dm") && isAgentCommand(content);
+  // "@agent ..." in a group, DM or community chat summons the sender's own agent (privately).
+  const summoned = (conv.kind === "group" || conv.kind === "dm" || conv.kind === "channel") && isAgentCommand(content);
+  // Private @agent help is always fine; posting for everyone follows the chat's rules.
+  if (!summoned) {
+    const allowed = await canPost(conv as unknown as ConvRow, user.id);
+    if (!allowed.ok) return { error: allowed.error };
+  }
   const talksToAgent = conv.kind === "my_agent" || conv.kind === "agent_chat" || summoned;
   if (talksToAgent) {
     // Every message to an agent costs AI time: cap the rate per user.
@@ -291,27 +297,14 @@ export async function openMyAgent() {
   redirect(`/chats/${conv.id}`);
 }
 
-export async function createGroup(form: FormData) {
-  const { user, agent } = await requireAgent();
-  const title = String(form.get("title") ?? "").trim().slice(0, 80) || "New group";
-  const agentIds = form.getAll("members").map(String).filter((id) => Id.safeParse(id).success);
-  const memberIds: string[] = [];
-  for (const id of agentIds) {
-    const other = await getAgentById(id);
-    if (other && (await getContactRow(agent.id, other.id))?.status === "accepted") memberIds.push(other.owner_id);
-  }
-  if (!memberIds.length) redirect("/chats?error=group");
-  if (memberIds.length + 1 > MAX_PLAN_PEOPLE) redirect("/chats?error=group-size");
-  const conv = await createConversation({ kind: "group", title, createdBy: user.id, memberIds });
-  await postMessage({ conversationId: conv.id, from: "system", content: `${agent.display_name} created the group.` });
-  redirect(`/chats/${conv.id}`);
-}
-
 export async function leaveConversation(conversationId: string) {
   const { user, agent } = await requireAgent();
   const db = adminClient();
+  const { data: kind } = await db.from("conversations").select("kind, community_id").eq("id", conversationId).maybeSingle();
+  // Community chats are left from the community's page (you leave both of its chats).
+  if (kind?.kind === "channel" && kind.community_id) redirect(`/communities/${kind.community_id}`);
   // Only an actual member can leave (and so announce it).
-  const { data: left } = await db.from("conversation_members").delete().eq("conversation_id", conversationId).eq("user_id", user.id).select("user_id");
+  const { data: left } = await db.from("conversation_members").delete().eq("conversation_id", conversationId).eq("user_id", user.id).select("user_id, role");
   if (!left?.length) redirect("/chats");
   const { count } = await db.from("conversation_members").select("*", { count: "exact", head: true }).eq("conversation_id", conversationId);
   if (!count) {
@@ -327,6 +320,7 @@ export async function leaveConversation(conversationId: string) {
     if (conv?.kind === "group" || conv?.kind === "dm") {
       await postMessage({ conversationId, from: "system", content: `${agent.display_name} left the chat.` });
     }
+    if (conv?.kind === "group") await handOverIfOwnerLeft(conversationId, user.id, left[0].role === "owner");
   }
   redirect("/chats");
 }
@@ -339,11 +333,13 @@ export async function saveSettings(form: FormData) {
   const { agent } = await requireAgent();
   const db = adminClient();
   const policy = z.enum(["contacts_only", "anyone", "nobody"]).safeParse(form.get("contact_policy"));
+  const groupPolicy = z.enum(["contacts", "nobody"]).safeParse(form.get("group_add_policy"));
   const displayName = String(form.get("display_name") ?? "").trim().slice(0, 60);
   await db
     .from("agents")
     .update({
       ...(policy.success ? { contact_policy: policy.data } : {}),
+      ...(groupPolicy.success ? { group_add_policy: groupPolicy.data } : {}),
       ...(displayName ? { display_name: displayName } : {}),
     })
     .eq("id", agent.id);

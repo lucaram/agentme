@@ -40,7 +40,12 @@ export async function createConversation(opts: {
     .select("*")
     .single();
   if (error) throw error;
-  const members = [...new Set([opts.createdBy, ...opts.memberIds])].map((user_id) => ({ conversation_id: conv.id, user_id }));
+  // The creator of a group owns it (plans' groups too: the organiser).
+  const members = [...new Set([opts.createdBy, ...opts.memberIds])].map((user_id) => ({
+    conversation_id: conv.id,
+    user_id,
+    role: opts.kind === "group" && user_id === opts.createdBy ? "owner" : "member",
+  }));
   const { error: memberError } = await db.from("conversation_members").insert(members);
   if (memberError) throw memberError;
   return conv;

@@ -10,6 +10,8 @@ const NAV = [
   ["/chats", "Chats"],
   ["/inbox", "Inbox"],
   ["/contacts", "Contacts"],
+  ["/groups", "Groups"],
+  ["/communities", "Communities"],
   ["/discover", "Discover"],
   ["/history", "History"],
   ["/settings", "Settings"],
@@ -23,7 +25,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     supabase.from("inbox_items").select("*", { count: "exact", head: true }).eq("status", "open"),
     supabase.rpc("unread_counts"),
   ]);
-  const unreadTotal = (unreadRows ?? []).reduce((n, r) => n + Number(r.unread), 0);
+  // Muted chats keep their own counter but don't add to the tab total.
+  const unreadTotal = (unreadRows ?? []).filter((r) => !r.muted).reduce((n, r) => n + Number(r.unread), 0);
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col">

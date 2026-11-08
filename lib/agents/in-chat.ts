@@ -1,4 +1,5 @@
 import "server-only";
+import { canPost, type ConvRow } from "@/lib/social/shared";
 import { adminClient } from "@/lib/supabase/admin";
 import { llm, LLMError } from "@/lib/llm";
 import type { AgentRow } from "@/lib/data/agents";
@@ -91,6 +92,12 @@ ${summary}`);
       return reply(`✍️ Draft reply (only you can see this):\n${draft}`, { kind: "draft", draft });
     }
     case "plan": {
+      // Communities are full of strangers: the agent only helps privately there.
+      if (conversation.kind === "channel") {
+        return reply("In communities I can only help you privately (summarise, translate, draft). To organise something, ask me in My Agent or in a group with your contacts.");
+      }
+      const allowed = await canPost(conversation as unknown as ConvRow, userId);
+      if (!allowed.ok) return reply(allowed.error);
       // Everyone in this chat is a participant; the result is posted in this chat.
       const others = (agents ?? []).filter((a) => a.owner_id !== userId).map((a) => a.handle);
       const myAgentChat = await getOrCreateMyAgentConversation(userId);

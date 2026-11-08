@@ -13,7 +13,7 @@ async function fetchTotal(): Promise<number | null> {
   if (!session.session) return null;
   const { data, error } = await supabase.rpc("unread_counts");
   if (error) return null;
-  return (data ?? []).reduce((n, r) => n + Number(r.unread), 0);
+  return (data ?? []).filter((r) => !r.muted).reduce((n, r) => n + Number(r.unread), 0);
 }
 
 /**

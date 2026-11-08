@@ -6,6 +6,7 @@ import { inboxPayloadOf } from "@/lib/plans/inbox";
 import { InboxItemForm, type InboxField } from "./InboxItemForm";
 import { QuestionForm } from "./QuestionForm";
 import { IntroductionForm } from "./IntroductionForm";
+import { GroupInviteForm } from "./GroupInviteForm";
 import type { IntroductionPayload } from "@/lib/people/introductions";
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
@@ -39,6 +40,19 @@ export default async function InboxPage() {
         {open.map((item) => {
           const from = item.from_agent ? byId.get(item.from_agent) : undefined;
           const who = from ? `${from.avatar} @${from.handle}` : "Someone";
+
+          if (item.kind === "group_invite") {
+            const invite = item.payload as { title?: string };
+            return (
+              <li key={item.id} className="card space-y-3" data-testid="inbox-item">
+                <p className="text-sm">
+                  👥 <b>{from?.display_name ?? "Someone"}</b> wants to add you to the group <b>“{invite.title ?? "a group"}”</b>.
+                </p>
+                <p className="hint">{fmt(item.created_at)} · You chose to approve group invites yourself (Settings).</p>
+                <GroupInviteForm itemId={item.id} />
+              </li>
+            );
+          }
 
           if (item.kind === "introduction") {
             const intro = item.payload as unknown as IntroductionPayload;
@@ -109,14 +123,16 @@ export default async function InboxPage() {
           <ul className="divide-y divide-border rounded-2xl border border-border bg-surface text-sm">
             {closed.map((item) => {
               const from = item.from_agent ? byId.get(item.from_agent) : undefined;
-              const isIntro = item.kind === "introduction";
+              const isIntro = item.kind === "introduction" || item.kind === "group_invite";
               const label = (
                 isIntro
                   ? { answered: "You said yes", declined: "You declined", withdrawn: "No longer available" }
                   : { answered: "You answered", declined: "You declined", withdrawn: "No longer needed" }
               )[item.status as "answered" | "declined" | "withdrawn"];
               const payload = isIntro ? null : inboxPayloadOf(item);
-              const what = isIntro
+              const what = item.kind === "group_invite"
+                ? `group invite: “${(item.payload as { title?: string }).title ?? "a group"}”`
+                : isIntro
                 ? `introduction to @${byId.get((item.payload as unknown as IntroductionPayload).other_agent)?.handle ?? "someone"}`
                 : payload?.kind === "question"
                   ? `“${payload.question}”`
