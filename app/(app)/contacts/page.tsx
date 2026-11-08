@@ -166,7 +166,7 @@ function Row({ agent, children }: { agent: { avatar: string; display_name: strin
     <li className="flex flex-wrap items-center gap-3 px-4 py-3">
       <AgentName agent={agent} className="text-2xl">{agent.avatar}</AgentName>
       <span className="min-w-0 flex-1">
-        <AgentName agent={agent} className="block font-medium">{agent.display_name}</AgentName>
+        <AgentName agent={agent} className="block font-medium" pageHint>{agent.display_name}</AgentName>
         <span className="block text-xs text-muted">@{agent.handle}{agent.type === "business" ? " · Business" : ""}</span>
       </span>
       <span className="flex gap-2">{children}</span>

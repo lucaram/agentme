@@ -103,7 +103,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/discove
             <li key={a.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
               <AgentName agent={a} className="text-2xl">{a.avatar}</AgentName>
               <span className="min-w-0 flex-1">
-                <AgentName agent={a} className="block font-medium">{a.display_name}</AgentName>
+                <AgentName agent={a} className="block font-medium" pageHint>{a.display_name}</AgentName>
                 <span className="block text-xs text-muted">@{a.handle}{a.type === "business" ? ` · Business${a.bio ? ` · ${a.bio}` : ""}` : ""}</span>
               </span>
               <span className="flex gap-2">
