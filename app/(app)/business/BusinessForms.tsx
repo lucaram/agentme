@@ -23,7 +23,8 @@ export function BusinessInfoForm({ about, customers }: { about: string; customer
         />
         <p className="hint mt-1">
           Write it like you&apos;d tell a new staff member: hours, address, what you offer, prices, policies. Anyone&apos;s agent can get this. Web
-          addresses you write here (e.g. your menu) are added to the links your agent reads.
+          addresses you write here (e.g. your menu) are also read by your agent (see Links below), so customers can get the address and
+          what&apos;s on the page.
         </p>
       </div>
       <div>
@@ -46,7 +47,7 @@ export function BusinessInfoForm({ about, customers }: { about: string; customer
   );
 }
 
-type Source = { id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; last_read_at: string | null; words: number; preview: string };
+type Source = { fromText: boolean; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; last_read_at: string | null; words: number; preview: string };
 
 const KIND: Record<string, string> = { page: "web page", pdf: "PDF", image: "photo", text: "text" };
 
@@ -94,6 +95,11 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
                   <span className="text-danger">⚠️ Couldn&apos;t read it: {s.error}</span>
                 ) : (
                   <span className="text-muted">⏳ Reading…</span>
+                )}
+                {s.fromText && (
+                  <span className="text-muted" data-testid="source-from-text" title="This address is also written in your text above, so your agent can give it to customers too.">
+                    {" "}· 📝 from your text above
+                  </span>
                 )}
               </p>
               {s.preview && (

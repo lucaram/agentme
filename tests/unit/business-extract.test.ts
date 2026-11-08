@@ -35,3 +35,16 @@ describe("reading a business's own pages safely", () => {
     expect(text).not.toContain(".x{}");
   });
 });
+
+describe("links written in the text", () => {
+  it("finds addresses, drops trailing punctuation and repeats", async () => {
+    const { linksIn, linkKey } = await import("@/lib/business/extract");
+    expect(linksIn("Menu: https://pasta.example/menu. Again https://pasta.example/menu, and (http://x.example/a)")).toEqual([
+      "https://pasta.example/menu",
+      "http://x.example/a",
+    ]);
+    // Matches the stored link even when written slightly differently.
+    expect(linkKey("HTTPS://Pasta.Example")).toBe(linkKey("https://pasta.example/"));
+    expect(linkKey("not a url")).toBeNull();
+  });
+});

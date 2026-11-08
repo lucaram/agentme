@@ -4,6 +4,20 @@
  * HTML-to-text. No network or server code here, so they're unit-tested.
  */
 
+/** Web addresses written in the text ("our menu: https://…"), to add as links the agent reads. */
+export function linksIn(text: string): string[] {
+  return [...new Set((text.match(/https?:\/\/[^\s<>"')]+/gi) ?? []).map((u) => u.replace(/[.,;:!?]+$/, "")))];
+}
+
+/** The same address as stored for a link (normalised), or null if it isn't a valid URL. */
+export function linkKey(raw: string): string | null {
+  try {
+    return new URL(raw.trim()).toString();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Only plain http(s) links to a hostname, no credentials, standard ports.
  * allowLocal (development/tests only) also lets localhost use any port.
