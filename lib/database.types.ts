@@ -63,6 +63,52 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"agent_thread_tasks": {
+                  Row: {
+                    "task_id": string,"thread_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "task_id": string,"thread_id": string
+                  }
+                  Update: {
+                    "task_id"?: string,"thread_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "agent_thread_tasks_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: true
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "agent_thread_tasks_thread_id_fkey"
+      columns: ["thread_id"]
+isOneToOne: false
+      referencedRelation: "agent_threads"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"agent_threads": {
+                  Row: {
+                    "conversation_id": string,"created_at": string,"id": string,"kind": string,"last_activity_at": string,"last_read_at": string,"owner_id": string,"renamed": boolean,"title": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "conversation_id": string,"created_at"?: string,"id"?: string,"kind"?: string,"last_activity_at"?: string,"last_read_at"?: string,"owner_id": string,"renamed"?: boolean,"title"?: string
+                  }
+                  Update: {
+                    "conversation_id"?: string,"created_at"?: string,"id"?: string,"kind"?: string,"last_activity_at"?: string,"last_read_at"?: string,"owner_id"?: string,"renamed"?: boolean,"title"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "agent_threads_conversation_id_fkey"
+      columns: ["conversation_id"]
+isOneToOne: false
+      referencedRelation: "conversations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"agent_tips": {
                   Row: {
                     "agent_id": string,"created_at": string,"id": string,"tip": string,"topic": string
@@ -517,14 +563,14 @@ isOneToOne: false
                   ]
                 },"messages": {
                   Row: {
-                    "content": string,"conversation_id": string,"created_at": string,"id": string,"is_ai_generated": boolean,"metadata": NonNullable<Json>,"removed_at": string | null,"removed_by": string | null,"sender_agent_id": string | null,"sender_user_id": string | null,"visible_to": string | null
+                    "content": string,"conversation_id": string,"created_at": string,"id": string,"is_ai_generated": boolean,"metadata": NonNullable<Json>,"removed_at": string | null,"removed_by": string | null,"sender_agent_id": string | null,"sender_user_id": string | null,"thread_id": string | null,"visible_to": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "content": string,"conversation_id": string,"created_at"?: string,"id"?: string,"is_ai_generated": boolean,"metadata"?: NonNullable<Json>,"removed_at"?: string | null,"removed_by"?: string | null,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"visible_to"?: string | null
+                    "content": string,"conversation_id": string,"created_at"?: string,"id"?: string,"is_ai_generated": boolean,"metadata"?: NonNullable<Json>,"removed_at"?: string | null,"removed_by"?: string | null,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"thread_id"?: string | null,"visible_to"?: string | null
                   }
                   Update: {
-                    "content"?: string,"conversation_id"?: string,"created_at"?: string,"id"?: string,"is_ai_generated"?: boolean,"metadata"?: NonNullable<Json>,"removed_at"?: string | null,"removed_by"?: string | null,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"visible_to"?: string | null
+                    "content"?: string,"conversation_id"?: string,"created_at"?: string,"id"?: string,"is_ai_generated"?: boolean,"metadata"?: NonNullable<Json>,"removed_at"?: string | null,"removed_by"?: string | null,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"thread_id"?: string | null,"visible_to"?: string | null
                   }
                   Relationships: [
                     {
@@ -538,6 +584,12 @@ isOneToOne: false
       columns: ["sender_agent_id"]
 isOneToOne: false
       referencedRelation: "agents"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "messages_thread_id_fkey"
+      columns: ["thread_id"]
+isOneToOne: false
+      referencedRelation: "agent_threads"
       referencedColumns: ["id"]
     }
                   ]
@@ -884,8 +936,16 @@ isOneToOne: false
 "mark_notices_seen":
 { Args: { "p_area": string }; Returns: undefined
                            },
+"mark_thread_read":
+{ Args: { "p_thread": string }; Returns: undefined
+                           },
 "my_agent_id":
 { Args: Record<PropertyKey, never>; Returns: string
+                           },
+"my_agent_threads":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "id": string,"kind": string,"last_activity_at": string,"preview": string,"task_id": string,"task_status": string,"title": string,"unread": number
+            }[]
                            },
 "rate_limit_hit":
 { Args: { "p_key": string,"p_max": number,"p_window_seconds": number }; Returns: {
@@ -894,6 +954,9 @@ isOneToOne: false
                            },
 "renew_task_lease":
 { Args: { "p_lease_seconds": number,"p_task": string,"p_token": string }; Returns: boolean
+                           },
+"task_thread_title":
+{ Args: { "p_task": string }; Returns: string
                            },
 "unread_counts":
 { Args: Record<PropertyKey, never>; Returns: {

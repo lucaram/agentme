@@ -16,13 +16,17 @@ import { LocalTime } from "@/components/LocalTime";
 import { InviteLink } from "./InviteLink";
 import { MessageActions } from "./MessageActions";
 import { OpenRequests } from "@/components/requests/OpenRequests";
+import { MyAgentHome } from "./MyAgentHome";
+import { ThreadTitle } from "./ThreadTitle";
+import type { Database } from "@/lib/database.types";
 import { AgentName } from "@/components/AgentName";
 import { adminClient } from "@/lib/supabase/admin";
 import { waysOf } from "@/lib/business/booking";
 import { canPost, communityMembership, groupRole, isGroupAdmin, isModerator, type ConvRow } from "@/lib/social/shared";
 
-export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
+export default async function ChatPage({ params, searchParams }: PageProps<"/chats/[id]">) {
   const { id } = await params;
+  const { t } = await searchParams;
   const { user, agent } = await requireAgent();
   const supabase = await createClient();
 
@@ -32,8 +36,20 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
   // Seen now (database clock). The client also re-marks when new messages arrive while open.
   await supabase.rpc("mark_conversation_read", { p_conversation: id });
 
+  // My Agent: the list of requests (no ?t), one request's thread (?t=<id>), or a new request (?t=new).
+  const isMyAgent = conv.kind === "my_agent";
+  const threadParam = isMyAgent && typeof t === "string" ? t : null;
+  const { data: thread } =
+    threadParam && threadParam !== "new" && /^[0-9a-f-]{36}$/i.test(threadParam)
+      ? await supabase.from("agent_threads").select("id, title, kind").eq("id", threadParam).maybeSingle()
+      : { data: null };
+  const showMessages = !isMyAgent || Boolean(thread);
   const [{ data: messages }, { data: agents }] = await Promise.all([
-    supabase.from("messages").select("*").eq("conversation_id", id).order("created_at").limit(200),
+    showMessages
+      ? (thread ? supabase.from("messages").select("*").eq("conversation_id", id).eq("thread_id", thread.id) : supabase.from("messages").select("*").eq("conversation_id", id))
+          .order("created_at")
+          .limit(200)
+      : Promise.resolve({ data: [] as Database["public"]["Tables"]["messages"]["Row"][] }),
     supabase.from("agents").select("id, owner_id, handle, display_name, avatar, type"),
   ]);
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));
@@ -113,6 +129,8 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
       { label: "💬 Question", text: `Ask ${a} if they can help me move on Sunday` },
       { label: "📣 Announcement", text: `Tell ${both}: the trip is tomorrow, bring lunch` },
     ];
+    // The list of requests (or an unknown thread): My Agent's home.
+    if (!threadParam || (threadParam !== "new" && !thread)) return <MyAgentHome conversationId={id} examples={examples} now={Date.parse(new Date().toISOString())} />;
   }
   const others = conv.conversation_members.filter((m) => m.user_id !== user.id).map((m) => byOwner.get(m.user_id));
   // The other person left this direct message: keep it readable, but closed.
@@ -125,7 +143,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
     conv.kind === "group" ? isGroupAdmin(await groupRole(id, user.id)) : community ? isModerator((await communityMembership(community.id, user.id))?.role) : false;
   const title =
     conv.kind === "my_agent"
-      ? "My Agent"
+      ? thread?.title ?? "New request"
       : conv.kind === "agent_chat"
         ? `${target?.avatar ?? ""} ${target?.display_name ?? "Agent"} (@${target?.handle})`
         : conv.kind === "channel"
@@ -133,7 +151,9 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
           : conv.title ?? others.map((o) => o?.display_name).join(", ");
   const subtitle =
     conv.kind === "my_agent"
-      ? "Ask your agent to organise something with your contacts. It always asks before contacting anyone."
+      ? thread?.kind === "updates"
+        ? "Notes from your agent and things others asked you."
+        : "Ask your agent to organise something with your contacts. It always asks before contacting anyone."
       : conv.kind === "agent_chat"
         ? "You're talking to an AI agent over A2A. It answers only from information its owner published."
         : conv.kind === "channel"
@@ -151,15 +171,18 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
   return (
     <div className="flex flex-1 flex-col">
       {/* Seeing the chat (including messages that arrive while it is open) clears its unread counter. */}
-      <MarkRead conversationId={id} latestMessageId={(messages ?? []).at(-1)?.id ?? null} />
+      <MarkRead conversationId={id} latestMessageId={(messages ?? []).at(-1)?.id ?? null} threadId={thread?.id} />
       <RealtimeRefresh
         channel={`conv-${id}`}
         tables={["messages", "tasks", "task_exchanges", "proposals", "plan_steps", "step_responses", "item_claims", "inbox_items"]}
         filter={`conversation_id=eq.${id}`}
       />
+      {isMyAgent && (
+        <Link href={`/chats/${id}`} className="mb-1 text-sm text-accent" data-testid="back-to-my-agent">‹ My Agent</Link>
+      )}
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">{title}</h1>
+          {thread && thread.kind === "request" ? <ThreadTitle threadId={thread.id} title={title} /> : <h1 className="text-lg font-semibold">{title}</h1>}
           <p className="text-xs text-muted">{subtitle}</p>
         </div>
         {conv.kind === "group" ? (
@@ -180,7 +203,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
         </div>
       )}
 
-      {conv.kind === "my_agent" && (
+      {thread?.kind === "updates" && (
         <div className="mb-4">
           <OpenRequests title="Needs your answer" kinds={["info_request", "question"]} hint="Only you can decide these. Nothing is shared until you choose." />
         </div>
@@ -312,6 +335,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
       ) : (
       <Composer
         conversationId={id}
+        threadId={isMyAgent ? (thread && thread.kind === "request" ? thread.id : "new") : undefined}
         placeholder={
           conv.kind === "my_agent"
             ? "e.g. Arrange dinner with @marco and @paul on Saturday evening"
@@ -324,7 +348,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
                   : "Message — or @agent to ask your agent (only you see it)"
         }
         thinkingLabel={conv.kind === "dm" || conv.kind === "group" || conv.kind === "channel" ? undefined : "Agent is thinking…"}
-        examples={examples}
+        examples={thread ? undefined : examples}
       />
       )}
     </div>

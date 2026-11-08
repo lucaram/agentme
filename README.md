@@ -232,6 +232,25 @@ The tab bar is **Chats · Contacts · Groups · Communities · Settings**.
 - **Updates** cover: you were removed or banned; a group or community was deleted; your join request was approved or declined; a moderator muted you; you were made admin or moderator. They clear from the badge once seen, and each group or community row shows "N to review" for admins and moderators.
 - **Activity** (formerly History) is inside Settings.
 
+### My Agent: one thread per request
+
+My Agent opens on a list of your requests, one line each, like a list of recent chats.
+- **Groups:**
+  - **Needs you:** plan waiting for approval, or plan ready.
+  - **In progress:** working, or waiting for answers.
+  - **Recent:** done, shared, cancelled, or no plan.
+  - **Older:** inactive for 7+ days, collapsed.
+- **Inside a group:** newest activity first. Each line shows the title, a status from its latest plan, a preview of the last message, and its own unread badge.
+- **Needs your answer** stays at the top.
+- **＋ New request**, or typing in the box below the list, starts a new thread and opens it. A thread shows only that request's messages, and follow-ups typed in it stay there. The agent's chat memory is that thread only.
+- **Titles** come from the plan (*"Dinner with @marco, @paul · Saturday evening"*, no AI call). Until a plan exists, the title is the first words you typed. You can rename a thread.
+- **Filed by the database** (`agent_threads`, trigger `file_agent_message`), so no message is left out:
+  - **A plan's messages** (`metadata.task_id`) go to that plan's thread. A plan started elsewhere (e.g. `@agent` in a group) gets its own thread.
+  - **Messages sent in a thread** stay there.
+  - **Everything else** goes to **📬 From your agent**: notes and others' requests, including notes about someone else's plan.
+- **Badges:** My Agent's badge in Chats counts **requests with something new**, not messages, and opening a thread clears its badge.
+- **Existing history:** each past plan became a thread, together with the request that started it; anything else went to *Earlier messages*.
+
 ## Groups and communities
 
 - **Groups** (tab *Groups*, up to 256 people) are private chats with your contacts.

@@ -18,6 +18,7 @@ import { parseAskAround } from "@/lib/people/askAround";
 import { stepWords } from "@/lib/plans/wording";
 import { describeRetry, hit } from "@/lib/limits";
 import { displayClock } from "./heuristics";
+import { threadFor } from "@/lib/agents/thread-context";
 import { waysOf, waysText, type Way } from "@/lib/business/booking";
 import type { Proposal } from "./schemas";
 
@@ -288,8 +289,11 @@ export async function updateDraft(taskId: string, userId: string, draft: PlanDra
 /** Direct reply from the owner's own agent, with Recall of the plans the owner can see. */
 async function replyToOwner(agent: AgentRow, userId: string, conversationId: string, text: string) {
   const db = adminClient();
+  // Only this request's thread: a new request starts with a clean slate.
+  const thread = threadFor(conversationId);
+  const historyQuery = db.from("messages").select("content, sender_agent_id").eq("conversation_id", conversationId);
   const [{ data: history }, recall] = await Promise.all([
-    db.from("messages").select("content, sender_agent_id").eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(10),
+    (thread ? historyQuery.eq("thread_id", thread) : historyQuery).order("created_at", { ascending: false }).limit(10),
     buildRecall(userId),
   ]);
   const turns = (history ?? []).reverse().map((m) => ({
@@ -349,7 +353,7 @@ export async function cancelTask(taskId: string, userId: string) {
   if (changed) {
     // Nobody should be asked to answer for a plan that no longer exists.
     await withdrawInboxForTask(taskId);
-    await postMessage({ conversationId: task.conversation_id, from: "agent", agentId: task.initiator_agent, content: "Stopped. I won't contact anyone else for this." });
+    await postMessage({ conversationId: task.conversation_id, from: "agent", agentId: task.initiator_agent, content: "Stopped. I won't contact anyone else for this.", metadata: { kind: "info", task_id: task.id } });
   }
 }
 
@@ -378,7 +382,7 @@ export async function decideProposal(proposalId: string, userId: string, decisio
     await db.from("proposals").update({ status: "rejected" }).eq("id", proposalId);
     await completeProposalStep(task.id, { proposalId, decision: "rejected" });
     await setTaskStatus(task.id, "rejected");
-    await postMessage({ conversationId: task.conversation_id, from: "agent", agentId: task.initiator_agent, content: "OK, I've dropped that plan. Nothing was sent to anyone." });
+    await postMessage({ conversationId: task.conversation_id, from: "agent", agentId: task.initiator_agent, content: "OK, I've dropped that plan. Nothing was sent to anyone.", metadata: { kind: "info", task_id: task.id } });
     return false;
   }
 
@@ -395,7 +399,7 @@ export async function decideProposal(proposalId: string, userId: string, decisio
     content: `Proposed plan: ${content.title}, ${content.day} at ${displayClock(content.time)}. ${content.disclaimer}`,
     metadata: { kind: "proposal", proposal_id: proposalId, task_id: task.id },
   });
-  await postMessage({ conversationId: task.conversation_id, from: "agent", agentId: task.initiator_agent, content: "Shared the plan with everyone in a group chat. They can say if they're in there." });
+  await postMessage({ conversationId: task.conversation_id, from: "agent", agentId: task.initiator_agent, content: "Shared the plan with everyone in a group chat. They can say if they're in there.", metadata: { kind: "info", task_id: task.id } });
   // Continue the plan (RSVP step) in the engine.
   return setTaskStatus(task.id, "running", undefined, ["proposal_ready"]);
 }
