@@ -7,6 +7,8 @@ import { LocalTime } from "@/components/LocalTime";
 import { liveQr, personalLink } from "@/lib/people/links";
 import { ShareLink } from "./ShareLink";
 import { IntroduceForm } from "./IntroduceForm";
+import { PeopleTabs } from "@/components/PeopleTabs";
+import { OpenRequests } from "@/components/requests/OpenRequests";
 
 export default async function ContactsPage() {
   const { agent } = await requireAgent();
@@ -31,6 +33,8 @@ export default async function ContactsPage() {
 
   return (
     <div className="space-y-6">
+      <PeopleTabs active="contacts" />
+      <OpenRequests title="Introductions" kinds={["introduction"]} hint="A friend thinks you should meet. You're connected only if you both say yes." />
       {incoming.length > 0 && (
         <Section title="Requests">
           {incoming.map((r) => (
@@ -91,7 +95,7 @@ export default async function ContactsPage() {
         <section className="card space-y-3" aria-label="Introduce">
           <div>
             <h2 className="font-semibold">🤝 Introduce two friends</h2>
-            <p className="hint">They each get your introduction in their Inbox and are connected only if both say yes.</p>
+            <p className="hint">Their agents ask each of them, and they&apos;re connected only if both say yes.</p>
           </div>
           <IntroduceForm people={accepted.map((r) => r.other)} />
         </section>

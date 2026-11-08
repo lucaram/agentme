@@ -30,6 +30,7 @@ import { withUsageContext } from "@/lib/usage/context";
 import { isAgentCommand } from "@/lib/agents/commands";
 import { handleAgentCommand } from "@/lib/agents/in-chat";
 import { sendContactRequest } from "@/lib/people/requests";
+import { tellOwner } from "@/lib/requests/notify";
 import { canPost, type ConvRow } from "@/lib/social/shared";
 import { handOverIfOwnerLeft } from "@/lib/social/groups";
 
@@ -141,17 +142,19 @@ export async function answerInboxAction(itemId: string, answers: Record<string, 
   if (!result.ok) return { error: result.error };
   const wake = result.wake;
   if (wake) after(() => runTask(wake));
-  revalidatePath("/inbox");
+  await tellOwner(user.id, agent.id, "✅ Done: I sent your answer, marked as answered by you personally.");
+  revalidatePath("/chats", "layout");
   return {};
 }
 
 export async function declineInboxAction(itemId: string): Promise<{ error?: string }> {
-  const { user } = await requireAgent();
+  const { user, agent } = await requireAgent();
   const result = await declineInboxItem(itemId, user.id);
   if (!result.ok) return { error: result.error };
   const wake = result.wake;
   if (wake) after(() => runTask(wake));
-  revalidatePath("/inbox");
+  await tellOwner(user.id, agent.id, "🙅 OK: I didn't answer. Nothing was shared.");
+  revalidatePath("/chats", "layout");
   return {};
 }
 

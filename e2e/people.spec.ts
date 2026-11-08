@@ -50,7 +50,7 @@ test("an introduction connects two friends only when both say yes", async ({ bro
   await luca.page.goto("/chats");
   await luca.page.getByRole("link", { name: /My Agent/ }).click();
   await send(luca.page, "introduce @eve to @marco - you both love climbing");
-  await expect(luca.page.getByText(/will each see your introduction in their Inbox/)).toBeVisible();
+  await expect(luca.page.getByText(/will each be asked by their own agent/)).toBeVisible();
 
   const eve = await as(browser, "eve");
   await eve.page.goto("/inbox");
@@ -148,5 +148,21 @@ test("search in Chats finds your groups and contacts and opens them", async ({ b
   await expect(luca.page.getByRole("option").first()).toContainText("My Agent");
   await search.press("Enter");
   await expect(luca.page.getByRole("heading", { name: "My Agent" })).toBeVisible();
+  await luca.close();
+});
+
+test("the tab bar is simple: requests live in My Agent, Find people in Contacts, Activity in Settings", async ({ browser }) => {
+  const luca = await as(browser, "luca");
+  const nav = luca.page.getByRole("navigation").first();
+  await expect(nav.getByRole("link")).toHaveText([/^Chats/, "Contacts", "Groups", "Communities", "Settings"]);
+  // Old Inbox links open My Agent.
+  await luca.page.goto("/inbox");
+  await expect(luca.page.getByRole("heading", { name: "My Agent" })).toBeVisible();
+  await nav.getByRole("link", { name: "Contacts" }).click();
+  await luca.page.getByRole("link", { name: "Find people" }).click();
+  await expect(luca.page).toHaveURL(/\/discover/);
+  await nav.getByRole("link", { name: "Settings" }).click();
+  await luca.page.getByTestId("activity-link").click();
+  await expect(luca.page.getByRole("heading", { name: "Activity" })).toBeVisible();
   await luca.close();
 });

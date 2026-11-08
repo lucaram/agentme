@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { answerIntroductionAction } from "../people-actions";
+import { answerIntroductionAction } from "@/app/(app)/people-actions";
 
 export function IntroductionForm({ itemId, name }: { itemId: string; name: string }) {
   const [error, setError] = useState<string | null>(null);

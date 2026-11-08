@@ -11,6 +11,7 @@ import { normaliseCountryCode, normaliseEmail } from "@/lib/people/normalise";
 import { confirmPhone, registerAccountEmail, removePhone, startPhoneVerification } from "@/lib/people/matching";
 import { createContactList, discardContactList, listedAgentIds, type RawContact } from "@/lib/people/imports";
 import { sendContactRequest } from "@/lib/people/requests";
+import { tellOwner } from "@/lib/requests/notify";
 import { verifyLiveConnectToken } from "@/lib/people/crypto";
 import { connectPeople, openDmWithNote } from "@/lib/people/connect";
 import { answerIntroduction, createIntroduction } from "@/lib/people/introductions";
@@ -98,13 +99,14 @@ export async function introduceAction(a: string, b: string, note: string): Promi
 }
 
 export async function answerIntroductionAction(itemId: string, accept: boolean): Promise<Out> {
-  const { user } = await requireAgent();
+  const { user, agent } = await requireAgent();
   if (!z.uuid().safeParse(itemId).success) return { error: "Not found." };
   const result = await answerIntroduction(itemId, user.id, Boolean(accept));
-  revalidatePath("/inbox");
+  revalidatePath("/chats", "layout");
   revalidatePath("/contacts");
   if (!result.ok) return { error: result.error };
   if (result.chatId) redirect(`/chats/${result.chatId}`);
+  await tellOwner(user.id, agent.id, accept ? "👍 You said yes to the introduction. You'll be connected as soon as they say yes too." : "OK: you declined the introduction. Nobody is told why.");
   return {};
 }
 

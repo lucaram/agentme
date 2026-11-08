@@ -1,4 +1,5 @@
 import "server-only";
+import { NEEDS_ANSWER, tellOwner } from "@/lib/requests/notify";
 import { adminClient } from "@/lib/supabase/admin";
 import { asJson } from "@/lib/data/json";
 import { getAgentById, getAgentForUser, getContactRow, type AgentRow } from "@/lib/data/agents";
@@ -55,6 +56,7 @@ async function addPeople(groupId: string, groupTitle: string, me: Me, agentIds: 
         kind: "group_invite",
         payload: asJson({ kind: "group_invite", conversation_id: groupId, title: groupTitle }),
       });
+      await tellOwner(other.owner_id, other.id, `🔔 ${me.agent.display_name} wants to add you to the group “${groupTitle}”. ${NEEDS_ANSWER}`);
       invited.push(other);
       continue;
     }

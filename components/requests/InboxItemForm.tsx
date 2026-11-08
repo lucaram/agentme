@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { answerInboxAction, declineInboxAction } from "../actions";
+import { answerInboxAction, declineInboxAction } from "@/app/(app)/actions";
 
 export type InboxField = { category: string; label: string; value: string; alreadyShared: boolean; required: boolean };
 

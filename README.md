@@ -72,7 +72,7 @@ official A2A client, so the protocol path is always exercised, and external A2A 
 | RLS on every table. Browsers can only read their own data and can't write directly. | `supabase/migrations` |
 | Deleting an account cascades: agent, facts, contacts, private chats, tasks, audit. | `app/(app)/actions.ts` |
 
-## Plans, blocks and the "ask my human" inbox (V2)
+## Plans, blocks and "ask my human" (V2)
 
 - **Plans are made of steps (blocks)** run by the plan engine (`lib/plans/engine.ts`). Each block has its own handler in
   `lib/plans/blocks/`. Milestone 1 implements `collect` (availability + preferences) and `proposal`. More blocks
@@ -81,10 +81,10 @@ official A2A client, so the protocol path is always exercised, and external A2A 
   when someone answers. Resuming reuses everything that already happened.
 - **Ask my human.** When a *contact's* agent asks for something essential that your agent may not share (for
   example, your availability is private), your agent doesn't guess and doesn't go silent:
-  - The request goes to your **Inbox**, prefilled from your own info.
+  - Your agent asks you in **My Agent**: the request waits, prefilled from your own info, under **Needs your answer**, a strip pinned at the top. A note also arrives in the chat, so the Chats badge shows it.
   - You can **share**, **share and remember** (a standing permission), or **decline**.
   - The organiser sees "asked @you personally" and then "answered by @you personally".
-  - Strangers can never reach your inbox, and no AI runs until you answer.
+  - Strangers can never reach you this way, and no AI runs until you answer.
 - The organiser can **Continue without waiting**, or **Stop**. Either way, open requests are withdrawn.
 - **Beta limit:** at most 20 people per plan or group, including the organiser.
 
@@ -94,7 +94,7 @@ Milestone 2 blocks, all started from **My Agent** and approved before anything i
 | --- | --- | --- |
 | **RSVP v2** | (after sharing a plan) | Three states (waiting, in, can't make it), changeable any time. Each change is a neutral event line in the group. |
 | **Poll** | `Ask @marco and @paul to vote: Italian, Thai or Indian` | Options are fixed once the organiser approves. Everyone votes themselves. A voter's own agent may *suggest* an option, from that voter's own preferences only, and the human decides. Votes are counted by code. The poll closes when everyone has voted, or when the organiser closes it. |
-| **Question** | `Ask @marco if he can help me move on Sunday` | Only contacts can ask. The question goes to the person's Inbox, and their agent never answers on their behalf. The answer is relayed as "answered personally". |
+| **Question** | `Ask @marco if he can help me move on Sunday` | Only contacts can ask. The question waits for the person under Needs your answer in My Agent, and their agent never answers on their behalf. The answer is relayed as "answered personally". |
 | **Recall** | `What time did we agree for dinner?` | My Agent answers only from plans you can already see: times agreed, who's in, who hasn't replied, poll results, and answers. |
 
 Milestone 3 blocks. Each plan gets its own group, named after it:
@@ -149,10 +149,17 @@ The Contacts tab only ever holds people you accepted; an agent trusts its contac
 
 - **Find people you know (Discover):** two options, **Contacts → Connect** and **Type or paste**, each ending in a **list you tick from**; nobody is added automatically. *Connect* picks the best source on the device without asking. In the native app it reads the phone's contacts (a `window.AgentmeNative.pickContacts()` bridge). In a phone browser with a contact picker (Chrome on Android) it reads the phone's contacts. Everywhere else it reads the contacts of the **email you registered with**: Gmail/Google Workspace or Outlook/Hotmail/Microsoft 365. Company domains are recognised from their mail servers (MX). It uses read-only OAuth with `login_hint`, a one-time read, and the token is not stored. Domains whose contacts apps can't read (iCloud, Yahoo, self-hosted) fall back to Type or paste. The list shows `Name (address)`. People on AGENTME (who haven't switched off *Let people who have my email or phone number find me* in Settings) can be ticked and sent a contact request. Everyone else gets an **Invite** button that opens your own email or SMS app; AGENTME sends nothing. The list is kept server-side only until Done, and for at most 30 minutes (`contact_imports`, pruned by the sweeper). Numbers without a country code are completed from the device's time zone or language. To be findable you need a verified identifier: your confirmed account email (registered at login, onboarding and seed), and optionally a phone number proven with a code (Settings). Identifiers are stored as keyed hashes plus a masked hint. Without Google/Microsoft keys, development simulates the provider with the demo accounts (see `.env.example`).
 - **Personal link and live QR (Contacts):** `/u/<handle>` sends a contact request. The QR code on screen carries a signed token that is valid for 10 minutes, so scanning it in person connects you instantly and opens the chat. A photo of the code can't be reused later.
-- **Introductions:** a friend of both picks two contacts (Contacts → Introduce, or "introduce @a to @b" in My Agent). Each person gets it in their Inbox, and they connect only if both say yes. If they are already connected or blocked, nothing is sent, and the introducer can't tell the difference.
+- **Introductions:** a friend of both picks two contacts (Contacts → Introduce, or "introduce @a to @b" in My Agent). Each person is asked by their agent in My Agent (also shown in Contacts), and they connect only if both say yes. If they are already connected or blocked, nothing is sent, and the introducer can't tell the difference.
 - **Invite links for plans:** the organiser of a plan gets "🔗 Invite by link" in the plan's group and shares it themselves (WhatsApp, SMS, email), so AGENTME never stores the invitee's number. Opening it shows the plan, and you can join in seconds **as a guest** with just a name and address (an anonymous account, `enable_anonymous_sign_ins = true` in `supabase/config.toml`), or log in. Joining adds you to the plan, its open polls and sign-up lists, and its group, and connects you with the organiser. Links last 14 days and can be turned off. Guests can save their account with an email and password in Settings.
 
 SMS: no provider is wired up yet. With `SMS_PROVIDER=dev` (the default outside production) the code is logged and shown on screen.
+
+## Navigation
+
+The tab bar is **Chats · Contacts · Groups · Communities · Settings**.
+- **Waiting for your decision:** these live in **My Agent**, under **Needs your answer**. There is no separate Inbox, and `/inbox` redirects to My Agent.
+- **Find people** (formerly Discover) is inside Contacts.
+- **Activity** (formerly History) is inside Settings.
 
 ## Groups and communities
 
@@ -161,7 +168,7 @@ SMS: no provider is wired up yet. With `SMS_PROVIDER=dev` (the default outside p
   - **Admins can:** add or remove people, promote or demote admins, edit info (or let everyone edit it), switch on *only admins can send*, share an invite link that can require approval, handle join requests, and remove reported messages.
   - **Everyone can:** mute, leave, report (optionally leaving and blocking), and **block** a group so nobody can add them back.
   - **Only the owner can:** delete the group for everyone.
-  - **Settings → "Who can add you to groups":** *my contacts* or *nobody, send me an invite* (an Inbox item).
+  - **Settings → "Who can add you to groups":** *my contacts* or *nobody, send me an invite*. The invite is shown in My Agent and in Groups.
 - **Communities** (tab *Communities*, up to 5,000 people) are bigger interest spaces.
   - **Chats:** each has **Announcements**, where only the owner and moderators post, and **General**, where everyone talks.
   - **Visibility:** **public** communities are listed and searchable, and you join by accepting the rules. **Private** ones are joined with an invite link, or by a request a moderator approves.

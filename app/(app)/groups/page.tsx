@@ -3,6 +3,7 @@ import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { GROUP_AVATARS } from "@/lib/social/shared";
 import { CreateGroupForm } from "./CreateGroupForm";
+import { OpenRequests } from "@/components/requests/OpenRequests";
 
 const ROLE_LABEL = { owner: "Owner", admin: "Admin", member: "" } as const;
 
@@ -31,6 +32,7 @@ export default async function GroupsPage() {
           <p className="text-xs text-muted">Private chats with people you know. Admins manage members and settings.</p>
         </div>
       </div>
+      <OpenRequests title="Group invites" kinds={["group_invite"]} />
       <CreateGroupForm contacts={people} avatars={GROUP_AVATARS} />
 
       {groups?.length ? (

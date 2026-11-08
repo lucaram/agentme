@@ -48,7 +48,7 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
       from: "agent",
       agentId: agent.id,
       content: result.ok
-        ? `🤝 Done. @${intro.a} and @${intro.b} will each see your introduction in their Inbox, and they'll be connected only if both say yes.`
+        ? `🤝 Done. @${intro.a} and @${intro.b} will each be asked by their own agent, and they'll be connected only if both say yes.`
         : result.error,
     });
   }

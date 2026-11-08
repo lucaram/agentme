@@ -1,4 +1,5 @@
 import "server-only";
+import { NEEDS_ANSWER, tellOwner } from "@/lib/requests/notify";
 import { adminClient } from "@/lib/supabase/admin";
 import { asJson } from "@/lib/data/json";
 import { getAgentByHandle, getAgentById, getContactRow, type AgentRow } from "@/lib/data/agents";
@@ -60,6 +61,8 @@ export async function createIntroduction(introducer: AgentRow, aHandle: string, 
     payload: asJson({ kind: "introduction", introduction_id: intro.id, other_agent: other.id, note: cleanNote } satisfies IntroductionPayload),
   });
   await db.from("inbox_items").insert([item(a, b), item(b, a)]);
+  await tellOwner(a.owner_id, a.id, `🔔 ${introducer.display_name} wants to introduce you to ${b.display_name}. ${NEEDS_ANSWER}`);
+  await tellOwner(b.owner_id, b.id, `🔔 ${introducer.display_name} wants to introduce you to ${a.display_name}. ${NEEDS_ANSWER}`);
   return { ok: true };
 }
 

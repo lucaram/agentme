@@ -1,4 +1,5 @@
 import "server-only";
+import { NEEDS_ANSWER, tellOwner } from "@/lib/requests/notify";
 import {
   A2A_VERSION_HEADER,
   AgentCard,
@@ -238,18 +239,29 @@ async function recordExchange(
   if (response.status === "needs_human" && exchangeId) {
     // Hand the request to the recipient's owner. Prefill: what the agent could share
     // anyway; the owner's private values are added only when the owner opens the item.
-    await db.from("inbox_items").upsert(
-      {
-        owner_id: recipient.owner_id,
-        agent_id: recipient.id,
-        from_agent: caller.agent?.id ?? null,
-        task_id: caller.taskId ?? null,
-        exchange_id: exchangeId,
-        kind: response.inbox.kind,
-        payload: asJson(response.inbox),
-      },
-      { onConflict: "exchange_id", ignoreDuplicates: true },
-    );
+    const { data: created } = await db
+      .from("inbox_items")
+      .upsert(
+        {
+          owner_id: recipient.owner_id,
+          agent_id: recipient.id,
+          from_agent: caller.agent?.id ?? null,
+          task_id: caller.taskId ?? null,
+          exchange_id: exchangeId,
+          kind: response.inbox.kind,
+          payload: asJson(response.inbox),
+        },
+        { onConflict: "exchange_id", ignoreDuplicates: true },
+      )
+      .select("id");
+    if (created?.length) {
+      const from = caller.agent ? `@${caller.agent.handle}` : "Someone";
+      const what =
+        response.inbox.kind === "question"
+          ? `🔔 ${from} asks you: “${response.inbox.question}”.`
+          : `🔔 ${from}'s agent is organising ${response.inbox.event} and needs something only you can share.`;
+      await tellOwner(recipient.owner_id, recipient.id, `${what} ${NEEDS_ANSWER}`);
+    }
   }
 }
 

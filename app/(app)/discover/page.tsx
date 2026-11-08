@@ -4,6 +4,7 @@ import { ActionButton } from "@/components/ActionButton";
 import { openAgentChat, requestContact } from "../actions";
 import Link from "next/link";
 import { FindPeople } from "./FindPeople";
+import { PeopleTabs } from "@/components/PeopleTabs";
 import { ContactList } from "./ContactList";
 import { loadContactList } from "@/lib/people/imports";
 import { personalLink } from "@/lib/people/links";
@@ -46,6 +47,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/discove
 
   return (
     <div className="space-y-4">
+      <PeopleTabs active="find" />
       {!agent.guest && (
         <section className="card" aria-label="Find people you know">
           <h2 className="text-lg font-semibold">Find people you know</h2>

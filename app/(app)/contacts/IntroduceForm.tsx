@@ -27,7 +27,7 @@ export function IntroduceForm({ people }: { people: Person[] }) {
           if (result.error) setMessage({ ok: false, text: result.error });
           else {
             const name = (h: string) => people.find((p) => p.handle === h)?.display_name ?? h;
-            setMessage({ ok: true, text: `Sent. ${name(a)} and ${name(b)} will each see it in their Inbox.` });
+            setMessage({ ok: true, text: `Sent. ${name(a)} and ${name(b)} will each be asked by their agent.` });
             setA("");
             setB("");
             setNote("");

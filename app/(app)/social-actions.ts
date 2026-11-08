@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireAgent } from "@/lib/auth";
 import { adminClient } from "@/lib/supabase/admin";
 import * as groups from "@/lib/social/groups";
+import { tellOwner } from "@/lib/requests/notify";
 import * as communities from "@/lib/social/communities";
 import {
   communityMembership,
@@ -116,10 +117,13 @@ export async function revokeGroupLinkAction(groupId: string): Promise<Out> {
 }
 
 export async function answerGroupInviteAction(itemId: string, accept: boolean): Promise<Out> {
-  const result = await groups.answerGroupInvite(itemId, await me(), Boolean(accept));
-  revalidatePath("/inbox");
+  const who = await me();
+  const result = await groups.answerGroupInvite(itemId, who, Boolean(accept));
+  revalidatePath("/chats", "layout");
+  revalidatePath("/groups");
   if (!result.ok) return { error: result.error };
   if (result.id) redirect(`/chats/${result.id}`);
+  if (!accept) await tellOwner(who.userId, who.agent.id, "OK: you declined the group invite.");
   return {};
 }
 

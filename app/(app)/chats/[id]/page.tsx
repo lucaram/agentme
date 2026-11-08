@@ -15,6 +15,7 @@ import { RichText } from "@/components/RichText";
 import { LocalTime } from "@/components/LocalTime";
 import { InviteLink } from "./InviteLink";
 import { MessageActions } from "./MessageActions";
+import { OpenRequests } from "@/components/requests/OpenRequests";
 import { canPost, communityMembership, groupRole, isGroupAdmin, isModerator, type ConvRow } from "@/lib/social/shared";
 
 export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
@@ -134,7 +135,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
       <MarkRead conversationId={id} latestMessageId={(messages ?? []).at(-1)?.id ?? null} />
       <RealtimeRefresh
         channel={`conv-${id}`}
-        tables={["messages", "tasks", "task_exchanges", "proposals", "plan_steps", "step_responses", "item_claims"]}
+        tables={["messages", "tasks", "task_exchanges", "proposals", "plan_steps", "step_responses", "item_claims", "inbox_items"]}
         filter={`conversation_id=eq.${id}`}
       />
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -157,6 +158,12 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
       {ownPlan && (
         <div className="mb-3 flex justify-end">
           <InviteLink taskId={ownPlan.id} title={title} />
+        </div>
+      )}
+
+      {conv.kind === "my_agent" && (
+        <div className="mb-4">
+          <OpenRequests title="Needs your answer" hint="Only you can decide these. Nothing is shared until you choose." />
         </div>
       )}
 
