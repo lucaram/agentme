@@ -37,6 +37,15 @@ describe.skipIf(!up)("RLS isolation (live)", () => {
     expect(exchanges?.every((e) => e.disclosed_categories.length === 0)).toBe(true);
   });
 
+  it("sees businesses' names but never their private columns (e.g. “For customers only”)", async () => {
+    const { data } = await eve.from("agents").select("handle, display_name, type").eq("handle", "trattoria");
+    expect(data).toEqual([{ handle: "trattoria", display_name: expect.any(String), type: "business" }]);
+    for (const column of ["business_info", "contact_sources", "discoverable", "recommendations_ok", "group_add_policy", "*"]) {
+      const { error } = await eve.from("agents").select(column).limit(1);
+      expect(error?.message, column).toContain("permission denied");
+    }
+  });
+
   it("cannot write directly, even to her own rows", async () => {
     const { data: agent } = await eve.from("agents").select("id").eq("handle", "eve").single();
     const insertFact = await eve.from("agent_facts").insert({ agent_id: agent!.id, category: "food", value: "x", disclosure: "contacts" });
