@@ -99,3 +99,42 @@ describe("redirects after sign-in", () => {
     expect(safeNext(null, "")).toBe("");
   });
 });
+
+describe("country code for numbers saved without one", async () => {
+  const { codeFromLanguage, codeFromTimeZone } = await import("@/lib/people/country");
+  it("comes from where the device is (time zone), then its language", () => {
+    expect(codeFromTimeZone("Europe/London")).toBe("+44");
+    expect(codeFromTimeZone("America/Chicago")).toBe("+1");
+    expect(codeFromTimeZone("Australia/Sydney")).toBe("+61");
+    expect(codeFromTimeZone("Antarctica/Troll")).toBeNull();
+    expect(codeFromLanguage("en-GB")).toBe("+44");
+    expect(codeFromLanguage("it-IT")).toBe("+39");
+    expect(codeFromLanguage("en")).toBeNull();
+  });
+});
+
+describe("email contacts (Gmail / Outlook)", async () => {
+  const { entriesFromGoogle, entriesFromGraph, providerForEmail } = await import("@/lib/people/providers");
+  it("keeps only emails and phone numbers, preferring Google's international form", () => {
+    expect(
+      entriesFromGoogle({
+        connections: [
+          { emailAddresses: [{ value: "marco@gmail.com" }], phoneNumbers: [{ value: "07700 900123", canonicalForm: "+447700900123" }] },
+          { phoneNumbers: [{ value: "+39 347 123 4567" }] },
+          {},
+        ],
+      }),
+    ).toEqual(["marco@gmail.com", "+447700900123", "+39 347 123 4567"]);
+    expect(
+      entriesFromGraph({
+        value: [{ emailAddresses: [{ address: "paul@outlook.com" }], mobilePhone: "+44 7700 900456", homePhones: [], businessPhones: ["+44 20 7946 0000"] }, { mobilePhone: null }],
+      }),
+    ).toEqual(["paul@outlook.com", "+44 7700 900456", "+44 20 7946 0000"]);
+  });
+  it("suggests the provider that matches your email", () => {
+    expect(providerForEmail("luca@gmail.com")).toBe("google");
+    expect(providerForEmail("luca_ram@hotmail.com")).toBe("microsoft");
+    expect(providerForEmail("luca@outlook.it")).toBe("microsoft");
+    expect(providerForEmail("luca@agentme.test")).toBeNull();
+  });
+});
