@@ -36,6 +36,16 @@ Our menu: ${baseURL}/demo/trattoria-menu.html`);
   await shop.page.getByRole("button", { name: "See the answer" }).click();
   await expect(shop.page.getByTestId("try-answer")).toContainText("Panna cotta");
 
+  // Questions & answers can be added by hand; the agent uses them straight away.
+  await shop.page.getByRole("button", { name: "＋ Add a question" }).click();
+  await shop.page.getByLabel("Question", { exact: true }).fill("Is there a kids menu?");
+  await shop.page.getByLabel("Answer", { exact: true }).fill("Yes: small pasta and pizzas for £6.");
+  await shop.page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(shop.page.getByTestId("faq-list")).toContainText("Is there a kids menu?");
+  await shop.page.getByLabel("Test question").fill("Do you have a kids menu?");
+  await shop.page.getByRole("button", { name: "See the answer" }).click();
+  await expect(shop.page.getByTestId("try-answer")).toContainText("small pasta and pizzas");
+
   // A visitor asks something that isn't there: the agent says it asked the team.
   const luca = await as(browser, "luca");
   await luca.page.goto("/discover?q=tratt");

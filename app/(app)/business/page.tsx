@@ -2,9 +2,8 @@ import Link from "next/link";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
-import { ActionButton } from "@/components/ActionButton";
 import { BusinessInfoForm, SourcesManager, TryIt } from "./BusinessForms";
-import { removeFaqAction } from "./actions";
+import { QuestionsAnswers } from "./QuestionsAnswers";
 
 type Info = { about?: string; customers?: string; description?: string; hours?: string; faqs?: { q: string; a: string }[] };
 const words = (s: string | null | undefined) => (s ?? "").split(/\s+/).filter(Boolean).length;
@@ -74,23 +73,11 @@ export default async function MyBusinessPage() {
         <SourcesManager sources={sources} />
       </section>
 
-      {faqs.length > 0 && (
-        <section className="card space-y-2" aria-label="Questions and answers">
-          <h2 className="font-semibold">Questions &amp; answers</h2>
-          <p className="hint">Including answers you gave when your agent didn&apos;t know. It answers these by itself now.</p>
-          <ul className="divide-y divide-border">
-            {faqs.map((f, i) => (
-              <li key={i} className="flex items-start gap-2 py-2 text-sm">
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium">{f.q}</span>
-                  <span className="block text-muted">{f.a}</span>
-                </span>
-                <ActionButton action={removeFaqAction.bind(null, i)} label="Remove" />
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <section className="card space-y-2" aria-label="Questions and answers">
+        <h2 className="font-semibold">Questions &amp; answers</h2>
+        <p className="hint">Common questions and your answers. Your agent answers these by itself. Answers you give when it didn&apos;t know can be added here too.</p>
+        <QuestionsAnswers faqs={faqs} />
+      </section>
     </div>
   );
 }

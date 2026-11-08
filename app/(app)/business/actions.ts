@@ -136,3 +136,33 @@ export async function tryQuestionAction(question: string, asCustomer: boolean): 
   );
   return { answer: reply.answer, needsTeam: reply.needs_team };
 }
+
+const MAX_FAQS = 50;
+
+/** Add a question & answer your agent can use. */
+export async function addFaqAction(question: string, answer: string): Promise<Out> {
+  const { agent } = await requireBusiness();
+  const q = String(question ?? "").trim().slice(0, 300);
+  const a = String(answer ?? "").trim().slice(0, 1000);
+  if (!q || !a) return { error: "Write both the question and the answer." };
+  const info = (agent.business_info ?? {}) as Info;
+  const faqs = info.faqs ?? [];
+  if (faqs.length >= MAX_FAQS) return { error: `You can keep up to ${MAX_FAQS} questions.` };
+  await adminClient().from("agents").update({ business_info: asJson({ ...info, faqs: [...faqs, { q, a }] }) }).eq("id", agent.id);
+  revalidatePath("/business");
+  return {};
+}
+
+export async function updateFaqAction(index: number, question: string, answer: string): Promise<Out> {
+  const { agent } = await requireBusiness();
+  const q = String(question ?? "").trim().slice(0, 300);
+  const a = String(answer ?? "").trim().slice(0, 1000);
+  if (!q || !a) return { error: "Write both the question and the answer." };
+  const info = (agent.business_info ?? {}) as Info;
+  const faqs = [...(info.faqs ?? [])];
+  if (!Number.isInteger(index) || !faqs[index]) return { error: "Not found." };
+  faqs[index] = { q, a };
+  await adminClient().from("agents").update({ business_info: asJson({ ...info, faqs }) }).eq("id", agent.id);
+  revalidatePath("/business");
+  return {};
+}
