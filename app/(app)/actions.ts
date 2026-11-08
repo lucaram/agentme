@@ -241,6 +241,7 @@ export async function requestContact(handle: string) {
   await adminClient().from("contacts").insert({ requester_agent: agent.id, addressee_agent: other.id });
   revalidatePath("/contacts");
   revalidatePath("/discover");
+  revalidatePath(`/u/${other.handle}`);
   return { ok: true };
 }
 

@@ -1,0 +1,101 @@
+import { describe, expect, it } from "vitest";
+import { extractEntries, maskEmail, maskPhone, normaliseCountryCode, normaliseEmail, normalisePhone, toIdentifier } from "@/lib/people/normalise";
+import { parseIntroduceCommand } from "@/lib/people/introductions";
+import { safeNext } from "@/lib/next-path";
+
+process.env.A2A_SIGNING_SECRET ??= "unit-test-secret-unit-test-secret-unit-test";
+const { identifierHash, liveConnectToken, verifyLiveConnectToken, LIVE_CONNECT_SECONDS } = await import("@/lib/people/crypto");
+
+describe("normalising what people type or export", () => {
+  it("emails: trimmed, lower-cased, mailto: removed, invalid ones dropped", () => {
+    expect(normaliseEmail("  Marco@Example.COM ")).toBe("marco@example.com");
+    expect(normaliseEmail("mailto:eve@agentme.test")).toBe("eve@agentme.test");
+    expect(normaliseEmail("not an email")).toBeNull();
+    expect(normaliseEmail("a@b")).toBeNull();
+  });
+
+  it("phones: international format, with the default country for local numbers", () => {
+    expect(normalisePhone("+44 7700 900123")).toBe("+447700900123");
+    expect(normalisePhone("0044 (7700) 900-123")).toBe("+447700900123");
+    expect(normalisePhone("07700 900123", "+44")).toBe("+447700900123");
+    expect(normalisePhone("347 123 4567", "39")).toBe("+393471234567");
+    expect(normalisePhone("07700 900123")).toBeNull(); // no country known
+    expect(normalisePhone("+44 12")).toBeNull(); // too short
+    expect(normalisePhone("call me")).toBeNull();
+  });
+
+  it("country codes", () => {
+    expect(normaliseCountryCode("44")).toBe("+44");
+    expect(normaliseCountryCode("+353")).toBe("+353");
+    expect(normaliseCountryCode("0044")).toBe("+44");
+    expect(normaliseCountryCode("")).toBeNull();
+    expect(normaliseCountryCode("12345")).toBeNull();
+  });
+
+  it("the same person matches however their details were written", () => {
+    expect(identifierHash(toIdentifier("MARCO@example.com")!)).toBe(identifierHash(toIdentifier("marco@example.com ")!));
+    expect(identifierHash(toIdentifier("07700 900123", "+44")!)).toBe(identifierHash(toIdentifier("+447700900123")!));
+    // An email and a phone never collide.
+    expect(toIdentifier("+447700900123")?.kind).toBe("phone");
+  });
+
+  it("owners only see masked versions of their own details", () => {
+    expect(maskEmail("luca_ram@hotmail.com")).toBe("l•••@hotmail.com");
+    expect(maskPhone("+447700900123")).toBe("+44 ••• 0123");
+  });
+});
+
+describe("reading an address book", () => {
+  it("vCard (.vcf): only emails and phone numbers, names ignored, folded lines handled", () => {
+    const vcf = [
+      "BEGIN:VCARD",
+      "VERSION:3.0",
+      "FN:Marco Rossi",
+      "TEL;TYPE=CELL:+39 347 123 4567",
+      "item1.EMAIL;TYPE=INTERNET:marco@example.com",
+      "NOTE:likes pizza",
+      "END:VCARD",
+      "BEGIN:VCARD",
+      "FN:Paul",
+      "EMAIL:paul@exa",
+      " mple.com",
+      "END:VCARD",
+    ].join("\r\n");
+    expect(extractEntries(vcf).sort()).toEqual(["+39 347 123 4567", "marco@example.com", "paul@example.com"]);
+  });
+
+  it("pasted text or CSV", () => {
+    const text = "Marco, marco@example.com, +44 7700 900123\nEve <eve@agentme.test>\n07700 900456";
+    expect(extractEntries(text).sort()).toEqual(["+44 7700 900123", "07700 900456", "eve@agentme.test", "marco@example.com"]);
+  });
+});
+
+describe("live QR codes", () => {
+  it("connect only for the agent they were made for, and only for 10 minutes", () => {
+    const now = Date.UTC(2026, 10, 8, 9, 0);
+    const { token } = liveConnectToken("agent-a", now);
+    expect(verifyLiveConnectToken("agent-a", token, now + 60_000)).toBe(true);
+    expect(verifyLiveConnectToken("agent-b", token, now)).toBe(false);
+    expect(verifyLiveConnectToken("agent-a", token, now + (LIVE_CONNECT_SECONDS + 1) * 1000)).toBe(false);
+    expect(verifyLiveConnectToken("agent-a", token.replace(/.$/, (c) => (c === "A" ? "B" : "A")), now)).toBe(false);
+    expect(verifyLiveConnectToken("agent-a", "garbage", now)).toBe(false);
+  });
+});
+
+describe("introduce command", () => {
+  it("understands to / and / with, plus an optional note", () => {
+    expect(parseIntroduceCommand("introduce @eve to @marco")).toEqual({ a: "eve", b: "marco", note: null });
+    expect(parseIntroduceCommand("Introduce @Eve and @Marco - you both love climbing")).toEqual({ a: "eve", b: "marco", note: "you both love climbing" });
+    expect(parseIntroduceCommand("dinner with @eve and @marco")).toBeNull();
+  });
+});
+
+describe("redirects after sign-in", () => {
+  it("only same-site paths", () => {
+    expect(safeNext("/join/abc")).toBe("/join/abc");
+    expect(safeNext("//evil.com")).toBe("/chats");
+    expect(safeNext("/\\evil.com")).toBe("/chats");
+    expect(safeNext("https://evil.com")).toBe("/chats");
+    expect(safeNext(null, "")).toBe("");
+  });
+});

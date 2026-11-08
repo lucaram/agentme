@@ -43,7 +43,7 @@ export function AuthForm({
       </form>
       <p className="text-sm text-muted">
         {isLogin ? "New here? " : "Already have an agent? "}
-        <Link className="text-accent underline" href={isLogin ? "/signup" : "/login"}>
+        <Link className="text-accent underline" href={`${isLogin ? "/signup" : "/login"}${next ? `?next=${encodeURIComponent(next)}` : ""}`}>
           {isLogin ? "Create your agent" : "Log in"}
         </Link>
       </p>

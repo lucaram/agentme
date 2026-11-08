@@ -16,6 +16,14 @@ export const LIMITS = {
   tasksPerUser: { windowSeconds: 3600, max: 20 },
   /** Contact requests an agent may send (anti-spam). */
   contactRequestsPerAgent: { windowSeconds: 3600, max: 30 },
+  /** Address-book syncs (each compares up to 5,000 entries). */
+  contactSyncsPerAgent: { windowSeconds: 86400, max: 20 },
+  /** Phone verification codes sent. */
+  phoneCodesPerAgent: { windowSeconds: 3600, max: 5 },
+  /** Introductions an agent may make. */
+  introductionsPerAgent: { windowSeconds: 3600, max: 20 },
+  /** Guest accounts created from plan invite links, per invite. */
+  guestJoinsPerInvite: { windowSeconds: 3600, max: 20 },
 } as const;
 
 export type LimitName = keyof typeof LIMITS;
