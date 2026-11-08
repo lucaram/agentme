@@ -8,20 +8,24 @@ import { LocalTime } from "@/components/LocalTime";
 import { GROUP_AVATARS, MAX_GROUP_PEOPLE } from "@/lib/social/shared";
 import { leaveConversation } from "../../actions";
 import {
+  addBusinessToGroupAction,
   addMembersAction,
   blockGroupAction,
   decideRequestAction,
   deleteGroupAction,
   dismissReportAction,
   groupLinkAction,
+  removeBusinessFromGroupAction,
   removeMemberAction,
   removeMessageAction,
   reportGroupAction,
+  searchBusinessesAction,
   revokeGroupLinkAction,
   setGroupRoleAction,
   setMutedAction,
 } from "../../social-actions";
 import { GroupInfoForm, GroupSettings } from "./GroupForms";
+import { BusinessHandleForm } from "@/components/social/BusinessHandleForm";
 
 const ROLE_LABEL = { owner: "Owner", admin: "Admin", member: "" } as const;
 
@@ -32,10 +36,11 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
   // RLS: members only.
   const { data: group } = await supabase.from("conversations").select("*").eq("id", id).eq("kind", "group").maybeSingle();
   if (!group) notFound();
-  const [{ data: members }, { data: agents }, { data: contacts }] = await Promise.all([
+  const [{ data: members }, { data: agents }, { data: contacts }, { data: placements }] = await Promise.all([
     supabase.from("conversation_members").select("user_id, role, muted, joined_at").eq("conversation_id", id),
-    supabase.from("agents").select("id, owner_id, handle, display_name, avatar"),
+    supabase.from("agents").select("id, owner_id, handle, display_name, avatar, type"),
     supabase.from("contacts").select("requester_agent, addressee_agent").eq("status", "accepted"),
+    supabase.from("business_placements").select("business_agent_id").eq("conversation_id", id).order("created_at"),
   ]);
   const me = (members ?? []).find((m) => m.user_id === user.id);
   if (!me) notFound();
@@ -46,8 +51,10 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
   const memberIds = new Set((members ?? []).map((m) => m.user_id));
   const addable = (contacts ?? [])
     .map((c) => byId.get(c.requester_agent === agent.id ? c.addressee_agent : c.requester_agent))
-    .filter((a) => a !== undefined && !memberIds.has(a.owner_id))
+    // Businesses are added below as businesses, never as members.
+    .filter((a) => a !== undefined && a.type !== "business" && !memberIds.has(a.owner_id))
     .map((a) => a!);
+  const businesses = (placements ?? []).map((p) => byId.get(p.business_agent_id)).filter((a) => a !== undefined);
   const sorted = [...(members ?? [])].sort(
     (a, b) => ["owner", "admin", "member"].indexOf(a.role) - ["owner", "admin", "member"].indexOf(b.role) || (byOwner.get(a.user_id)?.display_name ?? "").localeCompare(byOwner.get(b.user_id)?.display_name ?? ""),
   );
@@ -127,6 +134,46 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
               <MemberPicker people={addable} action={addMembersAction.bind(null, id)} />
             </div>
           </details>
+        )}
+      </section>
+
+      <section className="card space-y-3" aria-label="Businesses">
+        <div>
+          <h2 className="font-semibold">Businesses</h2>
+          <p className="hint">
+            Mention a business in the chat (e.g. @{businesses[0]?.handle ?? "trattoria"}) to ask it something. It only sees messages that mention it,
+            answers from its public information and never posts on its own. Anyone in the group can remove it.
+          </p>
+        </div>
+        {businesses.length > 0 && (
+          <ul className="divide-y divide-border">
+            {businesses.map((b) => (
+              <li key={b.id} className="flex flex-wrap items-center gap-3 py-2" data-testid="group-business">
+                <span className="text-xl">{b.avatar}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium">{b.display_name}</span>
+                  <span className="block text-xs text-muted">@{b.handle} · Business</span>
+                </span>
+                <ActionButton action={removeBusinessFromGroupAction.bind(null, id, b.id)} label="Remove" />
+              </li>
+            ))}
+          </ul>
+        )}
+        {isAdmin ? (
+          <details>
+            <summary className="cursor-pointer text-sm font-medium text-accent">＋ Add a business</summary>
+            <div className="mt-2">
+              <BusinessHandleForm
+                action={addBusinessToGroupAction.bind(null, id)}
+                search={searchBusinessesAction}
+                exclude={businesses.map((b) => b.id)}
+                button="Add"
+                done="added. Mention it in the chat to ask it something."
+              />
+            </div>
+          </details>
+        ) : (
+          businesses.length === 0 && <p className="text-sm text-muted">No businesses yet. Group admins can add one.</p>
         )}
       </section>
 

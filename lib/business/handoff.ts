@@ -2,7 +2,7 @@ import "server-only";
 import { adminClient } from "@/lib/supabase/admin";
 import { asJson } from "@/lib/data/json";
 import { getAgentById } from "@/lib/data/agents";
-import { findConversation, postMessage } from "@/lib/data/chat";
+import { createConversation, findConversation, postMessage } from "@/lib/data/chat";
 
 /**
  * A question the business agent couldn't answer was handed to the business's
@@ -15,8 +15,10 @@ export async function relayTeamAnswer(item: { exchange_id: string | null; agent_
   const { data: exchange } = await db.from("task_exchanges").select("from_agent").eq("id", item.exchange_id).maybeSingle();
   const [asker, business] = await Promise.all([exchange?.from_agent ? getAgentById(exchange.from_agent) : null, getAgentById(item.agent_id)]);
   if (!asker || !business) return;
-  const conv = await findConversation("agent_chat", [asker.owner_id], business.id);
-  if (!conv) return;
+  // Asked from a group or community: the answer arrives in a private chat with the business.
+  const conv =
+    (await findConversation("agent_chat", [asker.owner_id], business.id)) ??
+    (await createConversation({ kind: "agent_chat", title: business.display_name, createdBy: asker.owner_id, memberIds: [], targetAgent: business.id }));
   await postMessage({
     conversationId: conv.id,
     from: "agent",

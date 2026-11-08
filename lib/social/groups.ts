@@ -39,6 +39,11 @@ async function addPeople(groupId: string, groupTitle: string, me: Me, agentIds: 
   for (const id of [...new Set(agentIds)].slice(0, MAX_GROUP_PEOPLE)) {
     const other = await getAgentById(id);
     if (!other || other.id === me.agent.id || inGroup.has(other.owner_id)) continue;
+    // Businesses are never members: admins add them as a business (see lib/social/businesses.ts).
+    if (other.type === "business") {
+      skipped++;
+      continue;
+    }
     if ((await getContactRow(me.agent.id, other.id))?.status !== "accepted" || blocked.has(other.owner_id)) {
       skipped++;
       continue;
@@ -205,6 +210,7 @@ export async function joinGroupWithLink(token: string, me: Me): Promise<Result<{
   if (!group) return { ok: false, error: "This group no longer exists." };
   const db = adminClient();
   if (await groupRole(group.id, me.userId)) return { ok: true, status: "member", id: group.id };
+  if (me.agent.type === "business") return { ok: false, error: "Businesses can't join groups. A group admin can add your business instead." };
   if ((await memberCount(group.id)) >= MAX_GROUP_PEOPLE) return { ok: false, error: "This group is full." };
   // Choosing to join by link lifts your own earlier block.
   await db.from("conversation_blocks").delete().eq("conversation_id", group.id).eq("user_id", me.userId);
