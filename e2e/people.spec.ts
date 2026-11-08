@@ -101,7 +101,8 @@ test("an invite link lets someone without AGENTME join a plan as a guest", async
   await task.getByRole("button", { name: "Approve" }).click();
   await expect(task.getByTestId("task-status")).toHaveText("Waiting for people to answer");
   await luca.page.goto("/chats");
-  await luca.page.getByRole("link", { name: /📊/ }).first().click();
+  // The newest poll group (groups start with 👥; My Agent's preview can also mention 📊).
+  await luca.page.getByRole("link", { name: /^👥 📊/ }).first().click();
   await luca.page.getByRole("button", { name: "🔗 Invite by link" }).click();
   const url = await luca.page.getByTestId("invite-url").textContent();
   expect(url).toMatch(/\/join\/[\w-]{20,}$/);
