@@ -575,6 +575,11 @@ isOneToOne: false
         isOneToOne: false
         isSetofReturn: true
       } },
+"confirmed_users_by_email":
+{ Args: { "p_emails": (string)[] }; Returns: {
+              "email": string,"user_id": string
+            }[]
+                           },
 "increment_invite_uses":
 { Args: { "p_token": string }; Returns: undefined
                            },

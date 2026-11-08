@@ -45,9 +45,22 @@ export async function createContactList(agent: AgentRow, source: ContactSource, 
   const hashes = [...byHash.keys()];
   const db = adminClient();
   const owners = new Map<string, string>(); // hash -> agent id
+  // Verified phone numbers (and emails registered before) by keyed hash…
   for (let i = 0; i < hashes.length; i += 300) {
     const { data } = await db.from("agent_identifiers").select("hash, agent_id").in("hash", hashes.slice(i, i + 300));
     for (const row of data ?? []) owners.set(row.hash, row.agent_id);
+  }
+  // …and anyone's confirmed account email, so everyone is findable from the start.
+  const emails = [...new Set(people.flatMap((p) => p.ids.filter(({ id }) => id.kind === "email").map(({ id }) => id.value)))];
+  for (let i = 0; i < emails.length; i += 500) {
+    const { data: users } = await db.rpc("confirmed_users_by_email", { p_emails: emails.slice(i, i + 500) });
+    if (!users?.length) continue;
+    const { data: agents } = await db.from("agents").select("id, owner_id").in("owner_id", users.map((u) => u.user_id));
+    const agentOf = new Map((agents ?? []).map((a) => [a.owner_id, a.id]));
+    for (const u of users) {
+      const id = agentOf.get(u.user_id);
+      if (id) owners.set(identifierHash({ kind: "email", value: u.email }), id);
+    }
   }
   const candidateIds = [...new Set(owners.values())].filter((id) => id !== agent.id);
   const { data: findable } = candidateIds.length
