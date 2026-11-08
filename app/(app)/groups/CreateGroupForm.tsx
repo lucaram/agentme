@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { createGroupAction } from "../social-actions";
 import { AvatarPicker } from "@/components/social/Controls";
-import { ContactSearch } from "./ContactSearch";
+import { ContactSearch } from "@/components/social/ContactSearch";
 
 type Person = { id: string; avatar: string; display_name: string; handle: string };
 
