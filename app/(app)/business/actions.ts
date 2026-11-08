@@ -6,7 +6,7 @@ import { z } from "zod";
 import { requireAgent } from "@/lib/auth";
 import { adminClient } from "@/lib/supabase/admin";
 import { asJson } from "@/lib/data/json";
-import { checkUrl } from "@/lib/business/extract";
+import { checkUrl, linksIn } from "@/lib/business/extract";
 import { businessSources, readSource } from "@/lib/business/sources";
 import { allowLocal } from "@/lib/business/fetch";
 import { draftBusinessAnswer } from "@/lib/agents/respond";
@@ -25,10 +25,6 @@ async function requireBusiness() {
 type Info = { about?: string; customers?: string; description?: string; hours?: string; faqs?: { q: string; a: string }[] };
 
 /** "About your business" (public) and "For customers only", in plain language. */
-/** Web addresses written in the text ("our menu: https://…"), to add as links the agent reads. */
-function linksIn(text: string): string[] {
-  return [...new Set((text.match(/https?:\/\/[^\s<>"')]+/gi) ?? []).map((u) => u.replace(/[.,;:!?]+$/, "")))];
-}
 
 export async function saveBusinessInfoAction(_prev: Out | undefined, form: FormData): Promise<Out & { saved?: boolean; addedLinks?: number }> {
   const { agent } = await requireBusiness();
