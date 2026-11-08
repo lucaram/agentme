@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
+import { ChatsBadge } from "@/components/ChatsBadge";
 import { signOut } from "../(auth)/actions";
 
 const NAV = [
@@ -43,11 +44,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           {NAV.map(([href, label]) => (
             <Link key={href} href={href} className="flex items-center gap-1 rounded-full px-3 py-1 hover:bg-accent-soft">
               {label}
-              {href === "/chats" && unreadTotal > 0 && (
-                <span className="rounded-full bg-accent px-1.5 text-[10px] font-semibold text-white dark:text-black" data-testid="chats-badge" aria-label={`${unreadTotal} unread`}>
-                  {unreadTotal > 99 ? "99+" : unreadTotal}
-                </span>
-              )}
+              {href === "/chats" && <ChatsBadge initial={unreadTotal} />}
               {href === "/inbox" && Boolean(inboxCount) && (
                 <span className="rounded-full bg-danger px-1.5 text-[10px] font-semibold text-white" data-testid="inbox-badge" aria-label={`${inboxCount} open`}>
                   {inboxCount}
