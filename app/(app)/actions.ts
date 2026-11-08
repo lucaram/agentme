@@ -33,6 +33,7 @@ import { sendContactRequest } from "@/lib/people/requests";
 import { tellOwner } from "@/lib/requests/notify";
 import { canPost, type ConvRow } from "@/lib/social/shared";
 import { handOverIfOwnerLeft } from "@/lib/social/groups";
+import { businessesOnlyOwnedBy, forgetPerson, realPerson, signInAs } from "@/lib/identities";
 
 const Id = z.uuid();
 
@@ -371,11 +372,28 @@ export async function saveSettings(form: FormData) {
 export async function deleteAccount(form: FormData) {
   const { user, agent } = await requireAgent();
   if (String(form.get("confirm") ?? "").trim().toLowerCase() !== agent.handle) redirect("/settings?error=confirm");
+  const person = await realPerson(user, agent);
+  const db = adminClient();
+  const removeLogin = async (userId: string) => {
+    // Private conversations go entirely; shared ones keep other members' history.
+    await db.from("conversations").delete().eq("created_by", userId).in("kind", ["my_agent", "agent_chat"]);
+    // Cascades: agent, facts, contacts, memberships, tasks, exchanges, proposals.
+    await db.auth.admin.deleteUser(userId);
+  };
+
+  // Deleting a business you switched into: back to your personal account.
+  if (agent.type === "business" && person && person !== user.id) {
+    await removeLogin(user.id);
+    await forgetPerson();
+    if (await signInAs(person)) redirect("/chats?business_deleted=1");
+    redirect("/login");
+  }
+
   const supabase = await createClient();
   await supabase.auth.signOut();
-  // Private conversations go entirely; shared ones keep other members' history.
-  await adminClient().from("conversations").delete().eq("created_by", user.id).in("kind", ["my_agent", "agent_chat"]);
-  // Cascades: agent, facts, contacts, memberships, tasks, exchanges, proposals.
-  await adminClient().auth.admin.deleteUser(user.id);
+  await forgetPerson();
+  // Businesses only you own go with you (shared ones stay with their other owners).
+  for (const biz of await businessesOnlyOwnedBy(user.id)) await removeLogin(biz.ownerId);
+  await removeLogin(user.id);
   redirect("/?deleted=1");
 }

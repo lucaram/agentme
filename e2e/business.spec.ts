@@ -86,3 +86,63 @@ test("a business's permanent QR code: printable poster, and scanning it lets any
   await shop.close();
   await luca.close();
 });
+
+test("add a business from a personal account and switch between the two", async ({ browser }) => {
+  const id = Date.now().toString(36).slice(-6);
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto("/signup");
+  await page.getByLabel("Email").fill(`owner${id}@agentme.test`);
+  await page.getByLabel("Password").fill("a-good-password");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByLabel("Your name").fill("Gina");
+  await page.getByLabel("Agent address").fill(`gina${id}`);
+  await page.getByRole("button", { name: "Create my agent" }).click();
+  await expect(page.getByText(`I'm @gina${id}, your agent`)).toBeVisible();
+
+  // From the switcher at the top: add a business.
+  const switcher = page.getByTestId("identity-switcher");
+  await expect(switcher).toContainText("Personal");
+  await switcher.click();
+  await page.getByTestId("add-business-link").click();
+  const form = page.getByRole("form", { name: "Add a business" });
+  await form.getByLabel("Business name").fill(`Gina Bakery ${id}`);
+  // The address is suggested from the name.
+  await expect(form.getByLabel("Agent address")).toHaveValue(`gina_bakery_${id}`);
+  await expect(form.getByText(`@gina_bakery_${id} is available.`)).toBeVisible();
+  await form.getByRole("button", { name: "Picture ☕" }).click();
+  await form.getByLabel(/In a few words/).fill("Sourdough and pastries in Hackney. Open daily 7–15.");
+  await form.getByRole("button", { name: "Create business" }).click();
+
+  // Now acting as the business, on My Business.
+  await expect(page.getByTestId("business-welcome")).toContainText(`live at @gina_bakery_${id}`);
+  await expect(switcher).toContainText("Business");
+  await expect(page.getByRole("navigation").first().getByRole("link", { name: "My Business" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: /About your business/ })).toHaveValue(/Sourdough and pastries/);
+
+  // A visitor asks something the business didn't say: it waits for the business, not for Gina's personal account.
+  const luca = await as(browser, "luca");
+  await luca.page.goto(`/u/gina_bakery_${id}`);
+  await luca.page.getByRole("button", { name: /Ask us anything/ }).click();
+  await send(luca.page, "Do you make birthday cakes?");
+  await expect(luca.page.getByText("I've asked the team")).toBeVisible();
+
+  // Back to the personal account: separate chats, and a badge for what's waiting in the business.
+  await switcher.click();
+  await page.getByTestId(`identity-gina${id}`).click();
+  await expect(switcher).toContainText("Personal");
+  await expect(page.getByRole("navigation").first().getByRole("link", { name: "My Business" })).toHaveCount(0);
+  await expect(page.getByTestId("identity-waiting")).toBeVisible();
+  await page.goto("/chats");
+  await expect(page.getByText("Do you make birthday cakes?")).toHaveCount(0);
+
+  // And into the business again: the question is waiting there.
+  await switcher.click();
+  await page.getByTestId(`identity-gina_bakery_${id}`).click();
+  await expect(switcher).toContainText("Business");
+  await page.getByTestId("my-agent-card").click();
+  await expect(page.getByTestId("inbox-item").filter({ hasText: "birthday cakes" })).toBeVisible();
+
+  await luca.close();
+  await context.close();
+});

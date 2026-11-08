@@ -4,23 +4,17 @@ import { createClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { BusinessInfoForm, SourcesManager, TryIt } from "./BusinessForms";
 import { QuestionsAnswers } from "./QuestionsAnswers";
+import { AddBusinessIntro } from "./AddBusinessIntro";
 import { linkKey, linksIn } from "@/lib/business/extract";
 
 type Info = { about?: string; customers?: string; description?: string; hours?: string; faqs?: { q: string; a: string }[] };
 const words = (s: string | null | undefined) => (s ?? "").split(/\s+/).filter(Boolean).length;
 
 /** My Business: everything your business agent knows, in your own words and from your links. */
-export default async function MyBusinessPage() {
+export default async function MyBusinessPage({ searchParams }: PageProps<"/business">) {
   const { user, agent } = await requireAgent();
-  if (agent.type !== "business") {
-    return (
-      <div className="card space-y-2">
-        <h1 className="text-lg font-semibold">My Business</h1>
-        <p className="text-sm text-muted">This page is for business accounts. Adding a business to your personal account is coming soon.</p>
-        <Link href="/chats" className="text-sm text-accent underline">Back to Chats</Link>
-      </div>
-    );
-  }
+  if (agent.type !== "business") return <AddBusinessIntro guest={agent.guest} />;
+  const { welcome } = await searchParams;
   const supabase = await createClient();
   const info = (agent.business_info ?? {}) as Info;
   const about = info.about ?? [info.description, info.hours && `Opening hours: ${info.hours}`].filter(Boolean).join("\n");
@@ -47,6 +41,12 @@ export default async function MyBusinessPage() {
   return (
     <div className="space-y-6">
       <RealtimeRefresh channel={`business-${user.id}`} tables={["business_sources"]} />
+      {welcome && (
+        <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status" data-testid="business-welcome">
+          🎉 {agent.display_name} is live at @{agent.handle}. You&apos;re now acting as your business: tap its name at the top to switch back to
+          you. Tell your agent about your business below, then print your QR code.
+        </p>
+      )}
       <div>
         <h1 className="text-lg font-semibold">My Business</h1>
         <p className="text-xs text-muted">

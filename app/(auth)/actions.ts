@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { safeNext } from "@/lib/next-path";
 import { getAgentForUser } from "@/lib/data/agents";
 import { registerAccountEmail } from "@/lib/people/matching";
+import { forgetPerson } from "@/lib/identities";
 
 export type AuthState = { error?: string } | undefined;
 
@@ -34,6 +35,8 @@ export async function signIn(_prev: AuthState, form: FormData): Promise<AuthStat
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) return { error: "Wrong email or password." };
+  // A fresh login is a fresh person: forget any identity switched into before.
+  await forgetPerson();
   // Keep the verified email matchable for "People you know" (only ever mutual).
   const agent = await getAgentForUser(data.user.id);
   if (agent) await registerAccountEmail(agent.id, { email: data.user.email ?? null, emailConfirmed: Boolean(data.user.email_confirmed_at) });
@@ -43,5 +46,6 @@ export async function signIn(_prev: AuthState, form: FormData): Promise<AuthStat
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
+  await forgetPerson();
   redirect("/login");
 }

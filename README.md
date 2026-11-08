@@ -167,6 +167,21 @@ A **My Business** tab, shown to business accounts, holds everything the business
 
 There are two visibility levels, not an "internal" one: anything given to the AI could be coaxed out by a clever question, so information that must never be shared is simply not given to it.
 
+### One person, several identities
+
+From a personal account, **＋ Add a business** (in the switcher at the top, or `/business/new`) creates the business as a **separate identity**, with its own chats, contacts, inbox and badges. Nothing is mixed with the person's own.
+- **Switcher:** the header shows who you're acting as (🦊 Personal ⇄ 🍝 Business). Other identities show a badge when something is waiting (`identity_badge()`, server-only: unread messages from others plus open requests).
+- **How it works** (`lib/identities.ts`):
+  - Each added business has its own internal login (`…@business.agentme.app`) that nobody types.
+  - `business_managers` links the business to the people who manage it. The role is `owner` for now; `staff` comes later.
+  - Switching signs the browser in as that identity on the server (admin magic-link token, verified immediately, no email sent). A signed, httpOnly `agentme_person` cookie remembers the person, so they can switch back. Every switch re-checks `business_managers`.
+  - Logging in or out clears the cookie.
+- **Limits:** up to 5 businesses per person, and 10 creation attempts a day.
+- **Deleting:**
+  - Deleting a business you switched into deletes only the business and switches you back to yourself.
+  - Deleting your personal account also deletes the businesses you're the only owner of.
+- **Business-only sign-ups** still work as before: that login is the business's own manager.
+
 ## Ask around
 
 In My Agent, type *"ask around: does anyone know a good plumber in Camden?"* (also *"Does anyone know…"*, *"Can anyone recommend…"*, *"Any tips for…"*, *"Who can lend me…"*). Add @mentions to ask only those people.

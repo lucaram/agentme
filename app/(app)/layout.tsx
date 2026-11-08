@@ -6,6 +6,9 @@ import { ChatsBadge } from "@/components/ChatsBadge";
 import { TabBadge } from "@/components/TabBadge";
 import { ChatSearch } from "@/components/ChatSearch";
 import { signOut } from "../(auth)/actions";
+import { IdentitySwitcher } from "@/components/IdentitySwitcher";
+import { listIdentities } from "@/lib/identities";
+import { switchIdentityAction } from "./identity-actions";
 
 // Requests that need your answer live in My Agent; Find people is inside Contacts; Activity inside Settings.
 const NAV = [
@@ -19,7 +22,11 @@ const NAV = [
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const { user, agent } = await requireAgent();
   const supabase = await createClient();
-  const [{ data: unreadRows }, { data: actionRows }] = await Promise.all([supabase.rpc("unread_counts"), supabase.rpc("action_counts")]);
+  const [{ data: unreadRows }, { data: actionRows }, identities] = await Promise.all([
+    supabase.rpc("unread_counts"),
+    supabase.rpc("action_counts"),
+    listIdentities(user, agent),
+  ]);
   const actions = actionRows?.[0];
   // Muted chats keep their own counter but don't add to the tab total.
   const unreadTotal = (unreadRows ?? []).filter((r) => !r.muted).reduce((n, r) => n + Number(r.unread), 0);
@@ -29,13 +36,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <RealtimeRefresh channel={`badges-${user.id}`} tables={["inbox_items", "messages"]} />
       <header className="sticky top-0 z-10 border-b border-border bg-background/90 px-4 pt-3 backdrop-blur">
         <div className="flex items-center justify-between">
-          <Link href="/chats" className="flex items-center gap-2 font-semibold">
-            <span className="text-2xl">{agent.avatar}</span>
-            <span>@{agent.handle}</span>
-            <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-normal text-accent">
-              {agent.type === "business" ? "Business" : "Personal"}
-            </span>
-          </Link>
+          {/* Personal ⇄ businesses you manage: each its own chats, contacts and inbox. */}
+          <IdentitySwitcher identities={identities} canAddBusiness={!agent.guest && !user.isAnonymous && identities.some((i) => i.type === "personal")} switchAction={switchIdentityAction} />
           <form action={signOut}>
             <button className="text-sm text-muted hover:underline">Log out</button>
           </form>
