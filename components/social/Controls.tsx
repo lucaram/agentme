@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ShareLink } from "@/app/(app)/contacts/ShareLink";
+import { ContactSearch } from "./ContactSearch";
 
 type Out = { error?: string } | undefined | void;
 
@@ -151,50 +152,34 @@ export function ReportForm({ action, withLeave, label = "Report" }: { action: (r
 
 type Person = { id: string; avatar: string; display_name: string; handle: string };
 
-/** Tick contacts to add. */
-export function MemberPicker({ people, action, button = "Add" }: { people: Person[]; action: (ids: string[]) => Promise<{ error?: string; note?: string }>; button?: string }) {
+/** Find contacts by name or @handle, pick them, then add them all at once. */
+export function MemberPicker({ people, action, button = "Add to group" }: { people: Person[]; action: (ids: string[]) => Promise<{ error?: string; note?: string }>; button?: string }) {
   const router = useRouter();
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [round, setRound] = useState(0); // remounts the search (clears the chips) after adding
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
   if (!people.length) return <p className="text-sm text-muted">All your contacts are already here.</p>;
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
-        {people.map((p) => (
-          <label key={p.id} className="flex cursor-pointer items-center gap-1 rounded-full border border-border px-3 py-1 text-sm">
-            <input
-              type="checkbox"
-              checked={picked.has(p.id)}
-              onChange={() =>
-                setPicked((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(p.id)) next.delete(p.id);
-                  else next.add(p.id);
-                  return next;
-                })
-              }
-            />
-            {p.avatar} {p.display_name}
-          </label>
-        ))}
-      </div>
-      <button
-        type="button"
-        className="btn-primary"
-        disabled={pending || picked.size === 0}
-        onClick={() =>
-          start(async () => {
-            const result = await action([...picked]);
-            setPicked(new Set());
-            setMessage(result.error ? { ok: false, text: result.error } : { ok: true, text: result.note || "Done." });
-            router.refresh();
-          })
+    <form
+      className="space-y-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const ids = new FormData(e.currentTarget).getAll("members").map(String);
+        if (!ids.length) {
+          setMessage({ ok: false, text: "Search and pick someone first." });
+          return;
         }
-      >
-        {button}
-      </button>
+        start(async () => {
+          const result = await action(ids);
+          setRound((r) => r + 1);
+          setMessage(result.error ? { ok: false, text: result.error } : { ok: true, text: result.note || "Done." });
+          router.refresh();
+        });
+      }}
+    >
+      <ContactSearch key={round} contacts={people} />
+      <button className="btn-primary" disabled={pending}>{pending ? "Adding…" : button}</button>
       {message && <p className={`text-sm ${message.ok ? "text-muted" : "text-danger"}`} role="status">{message.text}</p>}
-    </div>
+    </form>
   );
 }
