@@ -135,7 +135,7 @@ test("connecting contacts shows a list to tick: add who you want, invite the res
 
 test("search in Chats finds your groups and contacts and opens them", async ({ browser }) => {
   const luca = await as(browser, "luca");
-  const search = luca.page.getByRole("combobox", { name: "Search chats and contacts" });
+  const search = luca.page.getByRole("combobox", { name: "Search chats, contacts and businesses" });
 
   await search.fill("which option");
   await luca.page.getByRole("option").filter({ hasText: "Which option do you prefer?" }).first().click();
@@ -173,7 +173,7 @@ test("the tab bar is simple: requests live in My Agent, Find people in Contacts,
 test("the header search follows the tab: contacts on Contacts, your groups on Groups", async ({ browser }) => {
   const luca = await as(browser, "luca");
   await luca.page.goto("/contacts");
-  const contacts = luca.page.getByRole("combobox", { name: "Search your contacts" });
+  const contacts = luca.page.getByRole("combobox", { name: "Search your contacts and businesses" });
   await contacts.fill("@pau");
   await expect(luca.page.getByRole("option").first()).toContainText("@paul");
   await luca.page.goto("/groups");
@@ -218,4 +218,19 @@ test("ask around: a saved tip answers by itself, a friend answers personally, th
   await luca.close();
   await marco.close();
   await paul.close();
+});
+
+test("the header search finds businesses too: tap one to open its page", async ({ browser }) => {
+  const eve = await as(browser, "eve");
+  const search = eve.page.getByRole("combobox", { name: "Search chats, contacts and businesses" });
+  await search.fill("tratt");
+  const business = eve.page.getByRole("option", { name: /Trattoria Sole/ });
+  await expect(business).toContainText("Page ›");
+  await business.click();
+  await expect(eve.page).toHaveURL(/\/u\/trattoria$/);
+  await expect(eve.page.getByRole("heading", { name: "Trattoria Sole" })).toBeVisible();
+  // People who aren't your contacts never show up here.
+  await search.fill("marc");
+  await expect(eve.page.getByRole("option", { name: /Marco/ })).toHaveCount(0);
+  await eve.close();
 });

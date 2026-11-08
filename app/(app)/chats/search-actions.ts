@@ -2,6 +2,7 @@
 
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { searchBusinesses } from "@/lib/social/businesses";
 
 /** One result: a page to open, or a contact to start a chat with. */
 export type SearchHit = { key: string; name: string; icon: string; detail: string; href?: string; openDmWith?: string };
@@ -84,8 +85,24 @@ export async function searchAction(scope: SearchScope, raw: string): Promise<Sea
         return { key: o.id, name: o.display_name, icon: o.avatar, detail: `@${o.handle}`, ...(chatId ? { href: `/chats/${chatId}` } : { openDmWith: o.id }) };
       });
 
+  // Any business that answers anyone (not only ones you know): tap to open its page.
+  // People never appear here: finding people stays mutual and private.
+  const businessSection = async (alreadyListed: string[]): Promise<SearchSection> => ({
+    title: "Businesses",
+    hits: (await searchBusinesses(q, alreadyListed)).map((b) => ({
+      key: `business-${b.id}`,
+      name: b.display_name,
+      icon: b.avatar,
+      detail: `@${b.handle}${b.bio ? ` · ${b.bio}` : ""} · Page ›`,
+      href: `/u/${b.handle}`,
+    })),
+  });
+
   // ---------------- contacts
-  if (scope === "contacts") return [{ title: "Contacts", hits: contactHits(new Set()) }].filter((s) => s.hits.length);
+  if (scope === "contacts") {
+    const contactsFound = contactHits(new Set());
+    return [{ title: "Contacts", hits: contactsFound }, await businessSection(contactsFound.map((h) => h.key))].filter((s) => s.hits.length);
+  }
 
   // ---------------- groups: by name, description or a member's name/@handle
   if (scope === "groups") {
@@ -142,8 +159,10 @@ export async function searchAction(scope: SearchScope, raw: string): Promise<Sea
   const shown = chats.slice(0, LIMIT);
   // Contacts whose chat is already listed above aren't repeated.
   const listedDms = new Set([...dmWith.entries()].filter(([, chatId]) => shown.some((c) => c.key === chatId)).map(([agentId]) => agentId));
+  const contactsFound = contactHits(listedDms);
   return [
     { title: "Chats", hits: shown.map((h) => ({ key: h.key, name: h.name, icon: h.icon, detail: h.detail, href: h.href })) },
-    { title: "Contacts", hits: contactHits(listedDms).map((h) => ({ ...h, detail: `${h.detail} · Contact` })) },
+    { title: "Contacts", hits: contactsFound.map((h) => ({ ...h, detail: `${h.detail} · Contact` })) },
+    await businessSection(contactsFound.map((h) => h.key)),
   ].filter((s) => s.hits.length);
 }

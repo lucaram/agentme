@@ -92,7 +92,11 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
           <span className="block font-semibold">Your QR code for customers</span>
           <span className="block text-xs text-muted">Use it anywhere you meet customers: in your shop, on your website or on social media. One scan and they can ask your agent anything.</span>
         </span>
-        <Link href="/print/qr" className="btn-primary">🖨️ Print poster</Link>
+        <span className="flex flex-wrap gap-2">
+          {/* What customers see when they scan the code or tap your name in AGENTME. */}
+          <Link href={`/u/${agent.handle}`} className="btn-ghost" data-testid="see-your-page">👁️ See your page</Link>
+          <Link href="/print/qr" className="btn-primary">🖨️ Print poster</Link>
+        </span>
       </section>
 
       <section className="card space-y-3" aria-label="Book or order">
