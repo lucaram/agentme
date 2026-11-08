@@ -5,13 +5,6 @@ import { useRouter } from "next/navigation";
 import { addFromListAction, discardListAction } from "../people-actions";
 import type { ContactListView } from "@/lib/people/imports";
 
-const SOURCE_LABEL: Record<ContactListView["source"], string> = {
-  google: "Gmail contacts",
-  microsoft: "Outlook contacts",
-  phone: "phone contacts",
-  typed: "contacts",
-};
-
 const label = (p: { name: string | null; address: string }) => (p.name ? `${p.name} (${p.address})` : p.address);
 
 function inviteHref(address: string, name: string | null, myLink: string, myName: string) {
@@ -54,7 +47,7 @@ export function ContactList({ list, myLink, myName }: { list: ContactListView; m
     <div className="space-y-5" data-testid="contact-list">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="font-medium">
-          Your {SOURCE_LABEL[list.source]}: {list.onAgentme.length} on AGENTME · {list.others.length} not yet
+          Your contacts: {list.onAgentme.length} on AGENTME · {list.others.length} not yet
         </p>
         <button
           type="button"

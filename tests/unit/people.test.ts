@@ -114,7 +114,7 @@ describe("country code for numbers saved without one", async () => {
 });
 
 describe("email contacts (Gmail / Outlook)", async () => {
-  const { contactsFromGoogle, contactsFromGraph, providerForEmail } = await import("@/lib/people/providers");
+  const { contactsFromGoogle, contactsFromGraph, providerForEmail, providerFromMx } = await import("@/lib/people/providers");
   it("keeps only names, emails and phone numbers, preferring Google's international form", () => {
     expect(
       contactsFromGoogle({
@@ -138,6 +138,13 @@ describe("email contacts (Gmail / Outlook)", async () => {
     expect(providerForEmail("luca_ram@hotmail.com")).toBe("microsoft");
     expect(providerForEmail("luca@outlook.it")).toBe("microsoft");
     expect(providerForEmail("luca@agentme.test")).toBeNull();
+  });
+  it("recognises work and company domains from their mail servers", () => {
+    expect(providerFromMx(["aspmx.l.google.com.", "alt1.aspmx.l.google.com"])).toBe("google");
+    expect(providerFromMx(["acme-co-uk.mail.protection.outlook.com"])).toBe("microsoft");
+    expect(providerFromMx(["mx01.mail.icloud.com"])).toBeNull();
+    expect(providerFromMx(["mx.acme.example"])).toBeNull();
+    expect(providerFromMx([])).toBeNull();
   });
 });
 

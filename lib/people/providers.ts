@@ -1,4 +1,5 @@
 import "server-only";
+import { resolveMx } from "node:dns/promises";
 import { env } from "@/lib/env";
 import type { RawContact } from "./imports";
 
@@ -31,12 +32,49 @@ export function providerMode(p: Provider): "real" | "simulated" | "off" {
   return simulate === "dev" ? "simulated" : "off";
 }
 
-/** Which provider fits an email address (to highlight it). */
+/** Well-known consumer domains, without a DNS lookup. */
 export function providerForEmail(email: string | null): Provider | null {
   const domain = email?.split("@")[1]?.toLowerCase() ?? "";
   if (["gmail.com", "googlemail.com"].includes(domain)) return "google";
   if (/^(hotmail|outlook|live|msn)\./.test(domain)) return "microsoft";
   return null;
+}
+
+/** Who runs a domain's email, from its mail servers (MX): Google Workspace or Microsoft 365. */
+export function providerFromMx(hosts: string[]): Provider | null {
+  const all = hosts.map((h) => h.toLowerCase().replace(/\.$/, ""));
+  if (all.some((h) => h.endsWith(".google.com") || h.endsWith(".googlemail.com"))) return "google";
+  if (all.some((h) => h.endsWith(".outlook.com") || h.endsWith(".outlook.cn"))) return "microsoft";
+  return null;
+}
+
+const mxCache = new Map<string, { provider: Provider | null; at: number }>();
+
+/**
+ * The contacts provider for the email someone registered with, whatever the
+ * domain: consumer addresses directly, work/company domains from their MX
+ * records. Null when the domain's contacts can't be read by apps (iCloud,
+ * Yahoo, self-hosted, …).
+ */
+export async function detectProvider(email: string | null): Promise<Provider | null> {
+  const known = providerForEmail(email);
+  if (known) return known;
+  const domain = email?.split("@")[1]?.toLowerCase();
+  if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) return null;
+  const cached = mxCache.get(domain);
+  if (cached && Date.now() - cached.at < 3600_000) return cached.provider;
+  let provider: Provider | null = null;
+  try {
+    const records = await Promise.race([
+      resolveMx(domain),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("dns timeout")), 3000)),
+    ]);
+    provider = providerFromMx(records.map((r) => r.exchange));
+  } catch {
+    provider = null;
+  }
+  mxCache.set(domain, { provider, at: Date.now() });
+  return provider;
 }
 
 const redirectUri = (p: Provider) => `${env.appUrl.replace(/\/$/, "")}/api/contacts/${p}/callback`;

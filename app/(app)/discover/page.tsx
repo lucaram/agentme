@@ -3,11 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { ActionButton } from "@/components/ActionButton";
 import { openAgentChat, requestContact } from "../actions";
 import Link from "next/link";
-import { FindPeople, type EmailOption } from "./FindPeople";
+import { FindPeople } from "./FindPeople";
 import { ContactList } from "./ContactList";
 import { loadContactList } from "@/lib/people/imports";
 import { personalLink } from "@/lib/people/links";
-import { providerForEmail, providerMode } from "@/lib/people/providers";
 
 /** Problems coming back from Gmail / Outlook. */
 function syncNotice(synced: unknown): string | null {
@@ -15,16 +14,6 @@ function syncNotice(synced: unknown): string | null {
   if (synced === "limit") return "You've checked a lot of contacts today. Try again tomorrow.";
   if (synced === "error") return "We couldn't read your contacts. Please try again.";
   return null;
-}
-
-/** The single "Connect" for the email the person registered with. */
-function emailOption(email: string | null): EmailOption {
-  const provider = providerForEmail(email);
-  const mode = provider ? providerMode(provider) : providerMode("google");
-  if (provider && mode !== "off") return { email: email ?? "", href: `/api/contacts/${provider}`, simulated: mode === "simulated" };
-  // Other providers (or demo addresses): only simulated in development.
-  if (!provider && mode === "simulated") return { email: email ?? "", href: "/api/contacts/google", simulated: true };
-  return { email: email ?? "", href: null, simulated: false };
 }
 
 export default async function DiscoverPage({ searchParams }: PageProps<"/discover">) {
@@ -69,7 +58,10 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/discove
             {list ? (
               <ContactList list={list} myLink={personalLink(agent.handle)} myName={agent.display_name} />
             ) : (
-              <FindPeople sources={(agent.contact_sources ?? {}) as Record<string, string>} email={emailOption(user.email)} />
+              <FindPeople
+                sources={(agent.contact_sources ?? {}) as Record<string, string>}
+                unsupported={synced === "unsupported" ? (user.email?.split("@")[1] ?? "your email") : null}
+              />
             )}
           </div>
           <div className="mt-4 border-t border-border pt-4">
