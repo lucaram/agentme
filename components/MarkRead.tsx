@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { markReadAction } from "@/app/(app)/actions";
 import { READ_EVENT } from "./ChatsBadge";
+import { scheduleRefresh } from "@/lib/refresh";
 
 /**
  * Marks the open conversation as read once it is on screen, and again whenever
@@ -15,7 +16,7 @@ export function MarkRead({ conversationId, latestMessageId }: { conversationId: 
   useEffect(() => {
     markReadAction(conversationId).then(() => {
       window.dispatchEvent(new Event(READ_EVENT)); // the Chats tab total reloads itself
-      router.refresh();
+      scheduleRefresh(() => router.refresh()); // shared with live updates: one render, not several
     });
   }, [conversationId, latestMessageId, router]);
   return null;
