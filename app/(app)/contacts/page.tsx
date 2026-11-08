@@ -7,6 +7,8 @@ import { LocalTime } from "@/components/LocalTime";
 import { liveQr, personalLink } from "@/lib/people/links";
 import { ShareLink } from "./ShareLink";
 import { IntroduceForm } from "./IntroduceForm";
+import { PeopleTabs } from "@/components/PeopleTabs";
+import { OpenRequests } from "@/components/requests/OpenRequests";
 
 export default async function ContactsPage() {
   const { agent } = await requireAgent();
@@ -26,11 +28,28 @@ export default async function ContactsPage() {
   const outgoing = rows.filter((r) => r.status === "pending" && !r.incoming);
   const accepted = rows.filter((r) => r.status === "accepted");
   const blocked = rows.filter((r) => r.status === "blocked" && r.blocked_by === agent.id);
+  // Introductions you said yes to, still waiting for the other person (RLS: ones you're in).
+  const { data: intros } = await supabase.from("introductions").select("*").eq("status", "pending");
+  const waitingIntros = (intros ?? [])
+    .filter((i) => (i.a_agent === agent.id && i.a_answer === "accepted") || (i.b_agent === agent.id && i.b_answer === "accepted"))
+    .map((i) => ({ id: i.id, other: byId.get(i.a_agent === agent.id ? i.b_agent : i.a_agent), introducer: byId.get(i.introducer_agent) }));
   const link = personalLink(agent.handle);
   const qr = await liveQr(agent.id, agent.handle);
 
   return (
     <div className="space-y-6">
+      <PeopleTabs active="contacts" />
+      <OpenRequests title="Introductions" kinds={["introduction"]} hint="A friend thinks you should meet. You're connected only if you both say yes." />
+      {waitingIntros.length > 0 && (
+        <section className="card space-y-1" aria-label="Waiting introductions">
+          {waitingIntros.map((i) => (
+            <p key={i.id} className="text-sm text-muted" data-testid="intro-waiting">
+              👍 You said yes to meeting {i.other?.avatar} {i.other?.display_name}
+              {i.introducer ? ` (introduced by ${i.introducer.display_name})` : ""}. Waiting for them to say yes too.
+            </p>
+          ))}
+        </section>
+      )}
       {incoming.length > 0 && (
         <Section title="Requests">
           {incoming.map((r) => (
@@ -91,7 +110,7 @@ export default async function ContactsPage() {
         <section className="card space-y-3" aria-label="Introduce">
           <div>
             <h2 className="font-semibold">🤝 Introduce two friends</h2>
-            <p className="hint">They each get your introduction in their Inbox and are connected only if both say yes.</p>
+            <p className="hint">Their agents ask each of them, and they&apos;re connected only if both say yes.</p>
           </div>
           <IntroduceForm people={accepted.map((r) => r.other)} />
         </section>

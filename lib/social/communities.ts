@@ -2,7 +2,7 @@ import "server-only";
 import { adminClient } from "@/lib/supabase/admin";
 import { getAgentForUser, type AgentRow } from "@/lib/data/agents";
 import { createConversation, postMessage } from "@/lib/data/chat";
-import { COMMUNITY_AVATARS, MAX_COMMUNITY_PEOPLE, communityMembership, isModerator, loadJoinLink, type Result } from "./shared";
+import { COMMUNITY_AVATARS, MAX_COMMUNITY_PEOPLE, communityMembership, isModerator, loadJoinLink, notify, type Result } from "./shared";
 
 type Me = { userId: string; agent: AgentRow };
 export type CommunityInput = { name: string; description: string; rules: string; avatar: string; visibility: "public" | "private" };
@@ -109,6 +109,10 @@ export async function setCommunityRole(id: string, me: Me, userId: string, role:
     return { ok: true };
   }
   await db.from("community_members").update({ role }).eq("community_id", id).eq("user_id", userId);
+  if (role === "moderator") {
+    const community = await loadCommunity(id);
+    await notify([userId], "communities", `⭐ You're now a moderator of ${community?.name ?? "a community"}.`, `/communities/${id}`);
+  }
   return { ok: true };
 }
 
@@ -119,6 +123,12 @@ export async function removeFromCommunity(id: string, me: Me, userId: string, ba
   if (!isModerator(mine?.role) || !theirs || userId === me.userId) return { ok: false, error: "Not allowed." };
   if (theirs.role === "owner" || (theirs.role === "moderator" && mine?.role !== "owner")) return { ok: false, error: "Only the owner can remove a moderator." };
   await dropMember(id, userId);
+  const community = await loadCommunity(id);
+  await notify(
+    [userId],
+    "communities",
+    ban ? `⛔ You were removed from ${community?.name ?? "a community"} by a moderator and can't rejoin.` : `🚪 You were removed from ${community?.name ?? "a community"} by a moderator.`,
+  );
   if (ban) {
     await adminClient().from("community_bans").upsert({ community_id: id, user_id: userId, banned_by: me.userId, reason: reason.trim().slice(0, 300) || null }, { onConflict: "community_id,user_id" });
   }
@@ -138,6 +148,10 @@ export async function muteInCommunity(id: string, me: Me, userId: string, hours:
   if (!isModerator(mine?.role) || !theirs || isModerator(theirs.role)) return { ok: false, error: "Not allowed." };
   const until = hours > 0 ? new Date(Date.now() + Math.min(hours, 24 * 30) * 3600_000).toISOString() : null;
   await adminClient().from("community_members").update({ muted_until: until }).eq("community_id", id).eq("user_id", userId);
+  if (until) {
+    const community = await loadCommunity(id);
+    await notify([userId], "communities", `🔇 A moderator muted you in ${community?.name ?? "a community"} for ${hours} hours. You can still read.`, `/communities/${id}`);
+  }
   return { ok: true };
 }
 
@@ -155,7 +169,10 @@ export async function updateCommunity(id: string, me: Me, input: CommunityInput)
 
 export async function deleteCommunity(id: string, me: Me): Promise<Result> {
   if ((await communityMembership(id, me.userId))?.role !== "owner") return { ok: false, error: "Only the owner can delete the community." };
+  const community = await loadCommunity(id);
+  const { data: members } = await adminClient().from("community_members").select("user_id").eq("community_id", id).neq("user_id", me.userId);
   await adminClient().from("communities").delete().eq("id", id); // its chats and messages go too
+  await notify((members ?? []).map((m) => m.user_id), "communities", `🗑️ ${community?.name ?? "A community"} was deleted by its owner.`);
   return { ok: true };
 }
 
@@ -170,6 +187,13 @@ export async function decideCommunityRequest(requestId: string, me: Me, approve:
     if ((await size(req.community_id)) >= MAX_COMMUNITY_PEOPLE) return { ok: false, error: "The community is full." };
     await addMember(req.community_id, req.user_id);
   }
+  const community = await loadCommunity(req.community_id);
+  await notify(
+    [req.user_id],
+    "communities",
+    approve ? `✅ Welcome! You're now a member of ${community?.name ?? "the community"}.` : `Your request to join ${community?.name ?? "a community"} was declined.`,
+    approve ? `/communities/${req.community_id}` : null,
+  );
   return { ok: true };
 }
 

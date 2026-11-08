@@ -81,7 +81,7 @@ export default async function ChatsPage() {
 
   return (
     <div className="space-y-6">
-      <RealtimeRefresh channel={`chats-${user.id}`} tables={["messages"]} />
+      <RealtimeRefresh channel={`chats-${user.id}`} tables={["messages", "inbox_items"]} />
       {!rows.some((r) => r.kind === "my_agent") && (
         <form action={openMyAgent}><button className="btn-primary">Talk to your agent</button></form>
       )}

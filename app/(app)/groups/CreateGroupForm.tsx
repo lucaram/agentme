@@ -38,7 +38,7 @@ export function CreateGroupForm({ contacts, avatars }: { contacts: Person[]; ava
         <button className="btn-primary" disabled={pending || !contacts.length}>{pending ? "Creating…" : "Create group"}</button>
         <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
       </div>
-      <p className="hint">You&apos;ll be the group&apos;s owner. People who only accept group invites get one in their Inbox.</p>
+      <p className="hint">You&apos;ll be the group&apos;s owner. People who approve group invites themselves are asked by their agent first.</p>
     </form>
   );
 }

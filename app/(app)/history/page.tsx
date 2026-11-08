@@ -42,6 +42,11 @@ export default async function HistoryPage() {
 
   return (
     <div className="space-y-8">
+      <div>
+        <Link href="/settings" className="text-sm text-accent">‹ Settings</Link>
+        <h1 className="mt-1 text-lg font-semibold">Activity</h1>
+        <p className="text-xs text-muted">Everything your agent did for you: plans, who it asked, and exactly what it shared.</p>
+      </div>
       <section className="card" aria-label="AI usage">
         <h2 className="font-semibold">AI usage (last 30 days)</h2>
         <dl className="mt-2 grid grid-cols-3 gap-2 text-sm">
@@ -105,7 +110,7 @@ export default async function HistoryPage() {
                       ? `Shared: ${e.disclosed_categories.map(label).join(", ")}${e.answered_by === "human" ? " (you answered personally)" : ""}`
                       : "Shared nothing"
                     : e.status === "waiting_human"
-                      ? "Asked you in your Inbox — nothing shared yet"
+                      ? "Waiting for your answer in My Agent: nothing shared yet"
                       : `${e.status}${e.error ? ` (${e.error})` : ""} — nothing shared`}
                 </p>
               </li>

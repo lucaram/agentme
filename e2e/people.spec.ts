@@ -50,17 +50,20 @@ test("an introduction connects two friends only when both say yes", async ({ bro
   await luca.page.goto("/chats");
   await luca.page.getByRole("link", { name: /My Agent/ }).click();
   await send(luca.page, "introduce @eve to @marco - you both love climbing");
-  await expect(luca.page.getByText(/will each see your introduction in their Inbox/)).toBeVisible();
+  await expect(luca.page.getByText(/will each be asked by their own agent/)).toBeVisible();
 
   const eve = await as(browser, "eve");
-  await eve.page.goto("/inbox");
+  // It waits in Contacts, and the Contacts tab shows a badge.
+  await expect(eve.page.getByTestId("contacts-badge")).toHaveText("1");
+  await eve.page.getByRole("navigation").first().getByRole("link", { name: /^Contacts/ }).click();
   const card = eve.page.getByTestId("inbox-item").filter({ hasText: "wants to introduce you to" });
   await expect(card).toContainText("you both love climbing");
   await card.getByRole("button", { name: "Connect with Marco" }).click();
-  await expect(eve.page.getByText("You said yes")).toBeVisible();
+  await expect(eve.page.getByTestId("intro-waiting")).toContainText("Waiting for them to say yes too");
+  await expect(eve.page.getByTestId("contacts-badge")).toHaveCount(0);
 
   const marco = await as(browser, "marco");
-  await marco.page.goto("/inbox");
+  await marco.page.goto("/contacts");
   await marco.page.getByTestId("inbox-item").filter({ hasText: "wants to introduce you to" }).getByRole("button", { name: "Connect with Eve" }).click();
   await expect(marco.page).toHaveURL(/\/chats\/[0-9a-f-]+$/);
   await expect(marco.page.getByText("Luca introduced you. Say hi!")).toBeVisible();
@@ -77,7 +80,7 @@ test("an invite link lets someone without AGENTME join a plan as a guest", async
   await send(luca.page, "Ask @marco to vote: pizza or sushi");
   const task = luca.page.getByRole("region", { name: "Agent task" }).last();
   await task.getByRole("button", { name: "Approve" }).click();
-  await expect(task.getByTestId("task-status")).toHaveText("Waiting for people to answer");
+  await expect(task.getByTestId("task-status")).toHaveText("Waiting for @marco to answer");
   await luca.page.goto("/chats");
   // The newest poll group (groups start with 👥; My Agent's preview can also mention 📊).
   await luca.page.getByRole("link", { name: /^👥 📊/ }).first().click();
@@ -148,5 +151,21 @@ test("search in Chats finds your groups and contacts and opens them", async ({ b
   await expect(luca.page.getByRole("option").first()).toContainText("My Agent");
   await search.press("Enter");
   await expect(luca.page.getByRole("heading", { name: "My Agent" })).toBeVisible();
+  await luca.close();
+});
+
+test("the tab bar is simple: requests live in My Agent, Find people in Contacts, Activity in Settings", async ({ browser }) => {
+  const luca = await as(browser, "luca");
+  const nav = luca.page.getByRole("navigation").first();
+  await expect(nav.getByRole("link")).toHaveText([/^Chats/, /^Contacts/, /^Groups/, /^Communities/, "Settings"]);
+  // Old Inbox links open My Agent.
+  await luca.page.goto("/inbox");
+  await expect(luca.page.getByRole("heading", { name: "My Agent" })).toBeVisible();
+  await nav.getByRole("link", { name: /^Contacts/ }).click();
+  await luca.page.getByRole("link", { name: "Find people" }).click();
+  await expect(luca.page).toHaveURL(/\/discover/);
+  await nav.getByRole("link", { name: "Settings" }).click();
+  await luca.page.getByTestId("activity-link").click();
+  await expect(luca.page.getByRole("heading", { name: "Activity" })).toBeVisible();
   await luca.close();
 });

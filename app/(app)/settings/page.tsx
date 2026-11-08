@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { CATEGORY_LABELS, FACT_CATEGORIES } from "@/lib/policy/disclosure";
@@ -75,7 +76,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           {(
             [
               ["contacts", "My contacts", "Contacts can add you to a group directly."],
-              ["nobody", "Nobody: send me an invite", "You get an invite in your Inbox and decide whether to join."],
+              ["nobody", "Nobody: send me an invite", "Your agent asks you in My Agent and you decide whether to join."],
             ] as const
           ).map(([value, title, hint]) => (
             <label key={value} className="flex items-start gap-2 text-sm">
@@ -128,6 +129,14 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         )}
         <button className="btn-primary">Save</button>
       </form>
+
+      <Link href="/history" className="card flex items-center justify-between hover:bg-accent-soft" data-testid="activity-link">
+        <span>
+          <span className="block font-semibold">Activity</span>
+          <span className="block text-xs text-muted">Everything your agent did: plans, what it asked and what it shared.</span>
+        </span>
+        <span className="text-accent">›</span>
+      </Link>
 
       <section className="card space-y-3 border-danger">
         <h2 className="font-semibold text-danger">Delete account</h2>

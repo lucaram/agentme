@@ -3,28 +3,24 @@ import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { ChatsBadge } from "@/components/ChatsBadge";
+import { TabBadge } from "@/components/TabBadge";
 import { ChatSearch } from "@/components/ChatSearch";
 import { signOut } from "../(auth)/actions";
 
+// Requests that need your answer live in My Agent; Find people is inside Contacts; Activity inside Settings.
 const NAV = [
   ["/chats", "Chats"],
-  ["/inbox", "Inbox"],
   ["/contacts", "Contacts"],
   ["/groups", "Groups"],
   ["/communities", "Communities"],
-  ["/discover", "Discover"],
-  ["/history", "History"],
   ["/settings", "Settings"],
 ] as const;
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const { user, agent } = await requireAgent();
   const supabase = await createClient();
-  // RLS: counts only this user's own open requests.
-  const [{ count: inboxCount }, { data: unreadRows }] = await Promise.all([
-    supabase.from("inbox_items").select("*", { count: "exact", head: true }).eq("status", "open"),
-    supabase.rpc("unread_counts"),
-  ]);
+  const [{ data: unreadRows }, { data: actionRows }] = await Promise.all([supabase.rpc("unread_counts"), supabase.rpc("action_counts")]);
+  const actions = actionRows?.[0];
   // Muted chats keep their own counter but don't add to the tab total.
   const unreadTotal = (unreadRows ?? []).filter((r) => !r.muted).reduce((n, r) => n + Number(r.unread), 0);
 
@@ -50,11 +46,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             <Link key={href} href={href} className="flex items-center gap-1 rounded-full px-3 py-1 hover:bg-accent-soft">
               {label}
               {href === "/chats" && <ChatsBadge initial={unreadTotal} />}
-              {href === "/inbox" && Boolean(inboxCount) && (
-                <span className="rounded-full bg-danger px-1.5 text-[10px] font-semibold text-white" data-testid="inbox-badge" aria-label={`${inboxCount} open`}>
-                  {inboxCount}
-                </span>
-              )}
+              {href === "/contacts" && <TabBadge tab="contacts" initial={Number(actions?.contacts ?? 0)} />}
+              {href === "/groups" && <TabBadge tab="groups" initial={Number(actions?.groups ?? 0)} />}
+              {href === "/communities" && <TabBadge tab="communities" initial={Number(actions?.communities ?? 0)} />}
             </Link>
           ))}
         </nav>

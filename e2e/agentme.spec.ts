@@ -229,18 +229,22 @@ test("an agent asks its human when it may not share, and the plan continues with
     await send(luca.page, "Arrange drinks with @paul on Saturday evening");
     const task = luca.page.getByRole("region", { name: "Agent task" }).last();
     await task.getByRole("button", { name: "Approve" }).click();
-    await expect(task.getByTestId("task-status")).toHaveText("Waiting for people to answer");
+    await expect(task.getByTestId("task-status")).toHaveText("Waiting for @paul to answer");
     await expect(task.getByTestId("exchange")).toContainText("asked @paul personally");
 
-    // Paul sees it in his Inbox, prefilled from his own (private) info, and chooses to share.
+    // Paul's agent tells him in My Agent (unread), where it waits under "Needs your answer",
+    // prefilled from his own (private) info; he chooses to share.
     const paul = await as(browser, "paul");
-    await expect(paul.page.getByTestId("inbox-badge")).toHaveText("1");
-    await paul.page.getByRole("link", { name: /Inbox/ }).click();
+    const myAgent = paul.page.getByRole("link", { name: /My Agent/ });
+    await expect(myAgent.getByTestId("unread-badge")).toBeVisible();
+    await myAgent.click();
+    await expect(paul.page.getByTestId("open-requests")).toContainText("Needs your answer");
     const item = paul.page.getByTestId("inbox-item");
     await expect(item).toContainText("@luca's agent");
     await expect(item.getByLabel("Availability")).toHaveValue("Saturdays after 6 PM");
     await item.getByRole("button", { name: "Share answer" }).click();
-    await expect(paul.page.getByText("Nothing needs your answer right now.")).toBeVisible();
+    await expect(paul.page.getByTestId("inbox-item")).toHaveCount(0);
+    await expect(paul.page.getByText(/I sent your answer/)).toBeVisible();
 
     // Luca's plan continues on its own, and shows that Paul answered personally.
     await expect(task.getByTestId("exchange")).toContainText("answered by @paul personally");
@@ -294,16 +298,15 @@ test("a question is answered personally and relayed to whoever asked", async ({ 
   const task = luca.page.getByRole("region", { name: "Agent task" }).last();
   await expect(task).toContainText("“Can you help me move on Sunday?”");
   await task.getByRole("button", { name: "Approve" }).click();
-  await expect(task.getByTestId("task-status")).toHaveText("Waiting for people to answer");
+  await expect(task.getByTestId("task-status")).toHaveText("Waiting for @marco to answer");
 
   const marco = await as(browser, "marco");
-  await expect(marco.page.getByTestId("inbox-badge")).toHaveText("1");
-  await marco.page.getByRole("link", { name: /Inbox/ }).click();
+  await marco.page.getByRole("link", { name: /My Agent/ }).click();
   const item = marco.page.getByTestId("inbox-item");
   await expect(item).toContainText("“Can you help me move on Sunday?”");
   await item.getByLabel("Your answer").fill("Yes, from 10am!");
   await item.getByRole("button", { name: "Reply" }).click();
-  await expect(marco.page.getByText("Nothing needs your answer right now.")).toBeVisible();
+  await expect(marco.page.getByTestId("inbox-item")).toHaveCount(0);
 
   await expect(luca.page.getByText("💬 @marco answered personally: “Yes, from 10am!”")).toBeVisible();
   await expect(task.getByTestId("task-status")).toHaveText("Done");

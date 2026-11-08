@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAgent } from "@/lib/auth";
 import { adminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import * as groups from "@/lib/social/groups";
 import * as communities from "@/lib/social/communities";
 import {
@@ -116,8 +117,10 @@ export async function revokeGroupLinkAction(groupId: string): Promise<Out> {
 }
 
 export async function answerGroupInviteAction(itemId: string, accept: boolean): Promise<Out> {
-  const result = await groups.answerGroupInvite(itemId, await me(), Boolean(accept));
-  revalidatePath("/inbox");
+  const who = await me();
+  const result = await groups.answerGroupInvite(itemId, who, Boolean(accept));
+  revalidatePath("/chats", "layout");
+  revalidatePath("/groups");
   if (!result.ok) return { error: result.error };
   if (result.id) redirect(`/chats/${result.id}`);
   return {};
@@ -238,4 +241,15 @@ export async function joinWithLinkAction(token: string, acceptRules: boolean): P
   const result = await communities.joinCommunity(link.community_id!, who, { acceptRules: Boolean(acceptRules), viaLink: token });
   if (!result.ok) return { error: result.error };
   redirect(`/communities/${link.community_id}`);
+}
+
+// ------------------------------------------------------------- updates (tab badges)
+
+/** The person opened Groups/Communities: their updates there are seen (database clock, own rows only). */
+export async function markNoticesSeenAction(area: "groups" | "communities"): Promise<Out> {
+  await requireAgent();
+  if (area !== "groups" && area !== "communities") return {};
+  const supabase = await createClient();
+  await supabase.rpc("mark_notices_seen", { p_area: area });
+  return {};
 }

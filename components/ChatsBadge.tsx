@@ -51,7 +51,11 @@ export function ChatsBadge({ initial }: { initial: number }) {
     };
     window.addEventListener(READ_EVENT, reload);
     const supabase = browserClient();
-    const channel = supabase.channel("chats-badge").on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, reload);
+    // New messages, and requests waiting in My Agent being created or answered.
+    const channel = supabase
+      .channel("chats-badge")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, reload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "inbox_items" }, reload);
     supabase.auth.getSession().then(async ({ data }) => {
       if (!live) return;
       if (data.session) await supabase.realtime.setAuth(data.session.access_token);

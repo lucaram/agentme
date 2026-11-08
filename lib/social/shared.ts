@@ -152,3 +152,14 @@ export async function dismissReport(reportId: string, userId: string): Promise<R
 export function stillMuted(until: string | null | undefined): boolean {
   return Boolean(until && new Date(until).getTime() > Date.now());
 }
+
+/** An update shown in the Groups/Communities tab (and counted in its badge until seen). */
+export async function notify(userIds: string[], area: "groups" | "communities", text: string, link: string | null = null) {
+  const rows = [...new Set(userIds)].map((user_id) => ({ user_id, area, text: text.slice(0, 300), link }));
+  for (let i = 0; i < rows.length; i += 500) await adminClient().from("notices").insert(rows.slice(i, i + 500));
+}
+
+/** "N days ago" as an ISO timestamp (kept out of components: reading the clock isn't pure). */
+export function daysAgo(days: number): string {
+  return new Date(Date.now() - days * 24 * 3600_000).toISOString();
+}

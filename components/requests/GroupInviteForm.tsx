@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { answerGroupInviteAction } from "../social-actions";
+import { answerGroupInviteAction } from "@/app/(app)/social-actions";
 
 export function GroupInviteForm({ itemId }: { itemId: string }) {
   const [error, setError] = useState<string | null>(null);

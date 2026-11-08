@@ -101,7 +101,7 @@ export async function answerIntroductionAction(itemId: string, accept: boolean):
   const { user } = await requireAgent();
   if (!z.uuid().safeParse(itemId).success) return { error: "Not found." };
   const result = await answerIntroduction(itemId, user.id, Boolean(accept));
-  revalidatePath("/inbox");
+  revalidatePath("/chats", "layout");
   revalidatePath("/contacts");
   if (!result.ok) return { error: result.error };
   if (result.chatId) redirect(`/chats/${result.chatId}`);

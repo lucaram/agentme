@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { answerInboxAction, declineInboxAction } from "../actions";
+import { answerInboxAction, declineInboxAction } from "@/app/(app)/actions";
 
 export function QuestionForm({ itemId }: { itemId: string }) {
   const [answer, setAnswer] = useState("");
