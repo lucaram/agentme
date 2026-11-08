@@ -90,9 +90,11 @@ test("communities: create, join by accepting the rules, Announcements vs General
   // Eve finds it in Discover communities and joins after accepting the rules.
   const eve = await as(browser, "eve");
   await eve.page.goto("/communities");
-  await eve.page.getByLabel("Search communities").fill(name);
-  await eve.page.getByRole("button", { name: "Search" }).click();
-  await eve.page.getByTestId("community-row").filter({ hasText: name }).click();
+  // The header search on the Communities tab finds public communities to join.
+  await eve.page.getByRole("combobox", { name: "Search communities" }).fill(name);
+  await expect(eve.page.getByRole("option", { name: new RegExp(name) })).toContainText("Public · 1 member");
+  await eve.page.getByRole("option", { name: new RegExp(name) }).click();
+  await expect(eve.page).toHaveURL(/\/communities\/[0-9a-f-]+$/);
   await expect(eve.page.getByRole("button", { name: "Join community" })).toBeDisabled();
   await eve.page.getByLabel("I accept the rules").check();
   await eve.page.getByRole("button", { name: "Join community" }).click();
