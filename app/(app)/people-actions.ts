@@ -6,9 +6,11 @@ import { z } from "zod";
 import { requireAgent } from "@/lib/auth";
 import { adminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { getAgentByHandle } from "@/lib/data/agents";
+import { getAgentByHandle, getAgentById } from "@/lib/data/agents";
 import { normaliseCountryCode, normaliseEmail } from "@/lib/people/normalise";
-import { clearAddressBook, confirmPhone, registerAccountEmail, removePhone, startPhoneVerification, syncAddressBook } from "@/lib/people/matching";
+import { confirmPhone, registerAccountEmail, removePhone, startPhoneVerification } from "@/lib/people/matching";
+import { createContactList, discardContactList, listedAgentIds, type RawContact } from "@/lib/people/imports";
+import { sendContactRequest } from "@/lib/people/requests";
 import { verifyLiveConnectToken } from "@/lib/people/crypto";
 import { connectPeople, openDmWithNote } from "@/lib/people/connect";
 import { answerIntroduction, createIntroduction } from "@/lib/people/introductions";
@@ -18,25 +20,49 @@ type Out = { error?: string };
 
 // ------------------------------------------------------------- people you know
 
-/** Compare an address book (emails/phones only, read on the device) and forget it. */
-export async function syncContactsAction(entries: string[], countryCode: string | null, source: "phone" | "typed"): Promise<Out & { checked?: number }> {
+/** Phone contacts or typed addresses -> the list to tick from (nothing is added yet). */
+export async function createListAction(contacts: RawContact[], countryCode: string | null, source: "phone" | "typed"): Promise<Out & { total?: number }> {
   const { user, agent } = await requireAgent();
-  if (!Array.isArray(entries)) return { error: "Nothing to check." };
-  // Syncing also makes you findable by your own verified email (mutual matches only).
+  if (!Array.isArray(contacts)) return { error: "Nothing to check." };
   await registerAccountEmail(agent.id, user);
-  const result = await syncAddressBook(
-    agent,
-    entries.filter((e) => typeof e === "string"),
-    normaliseCountryCode(countryCode),
-    source === "phone" ? "phone" : "typed",
-  );
+  const result = await createContactList(agent, source === "phone" ? "phone" : "typed", contacts, normaliseCountryCode(countryCode));
   revalidatePath("/discover");
-  return result.ok ? { checked: result.checked } : { error: result.error };
+  return result.ok ? { total: result.total } : { error: result.error };
 }
 
-export async function clearContactsAction(): Promise<Out> {
+/** Sends contact requests to the people ticked in the list (only people from your own list). */
+export async function addFromListAction(agentIds: string[]): Promise<Out & { added?: number }> {
   const { agent } = await requireAgent();
-  await clearAddressBook(agent.id);
+  const listed = await listedAgentIds(agent.id);
+  let added = 0;
+  for (const id of (Array.isArray(agentIds) ? agentIds : []).slice(0, 50)) {
+    if (typeof id !== "string" || !listed.has(id)) continue;
+    const other = await getAgentById(id);
+    if (!other) continue;
+    const result = await sendContactRequest(agent, other);
+    if ("error" in result) {
+      revalidatePath("/discover");
+      return { added, error: result.error };
+    }
+    added++;
+  }
+  revalidatePath("/discover");
+  revalidatePath("/contacts");
+  return { added };
+}
+
+export async function discardListAction(): Promise<Out> {
+  const { agent } = await requireAgent();
+  await discardContactList(agent.id);
+  revalidatePath("/discover");
+  return {};
+}
+
+/** "Let people who have my email or number find me". */
+export async function setDiscoverableAction(on: boolean): Promise<Out> {
+  const { agent } = await requireAgent();
+  await adminClient().from("agents").update({ discoverable: Boolean(on) }).eq("id", agent.id);
+  revalidatePath("/settings");
   revalidatePath("/discover");
   return {};
 }

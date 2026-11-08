@@ -114,27 +114,45 @@ describe("country code for numbers saved without one", async () => {
 });
 
 describe("email contacts (Gmail / Outlook)", async () => {
-  const { entriesFromGoogle, entriesFromGraph, providerForEmail } = await import("@/lib/people/providers");
-  it("keeps only emails and phone numbers, preferring Google's international form", () => {
+  const { contactsFromGoogle, contactsFromGraph, providerForEmail, providerFromMx } = await import("@/lib/people/providers");
+  it("keeps only names, emails and phone numbers, preferring Google's international form", () => {
     expect(
-      entriesFromGoogle({
+      contactsFromGoogle({
         connections: [
-          { emailAddresses: [{ value: "marco@gmail.com" }], phoneNumbers: [{ value: "07700 900123", canonicalForm: "+447700900123" }] },
+          { names: [{ displayName: "Marco Rossi" }], emailAddresses: [{ value: "marco@gmail.com" }], phoneNumbers: [{ value: "07700 900123", canonicalForm: "+447700900123" }] },
           { phoneNumbers: [{ value: "+39 347 123 4567" }] },
-          {},
         ],
       }),
-    ).toEqual(["marco@gmail.com", "+447700900123", "+39 347 123 4567"]);
+    ).toEqual([
+      { name: "Marco Rossi", addresses: ["marco@gmail.com", "+447700900123"] },
+      { name: null, addresses: ["+39 347 123 4567"] },
+    ]);
     expect(
-      entriesFromGraph({
-        value: [{ emailAddresses: [{ address: "paul@outlook.com" }], mobilePhone: "+44 7700 900456", homePhones: [], businessPhones: ["+44 20 7946 0000"] }, { mobilePhone: null }],
+      contactsFromGraph({
+        value: [{ displayName: "Paul", emailAddresses: [{ address: "paul@outlook.com" }], mobilePhone: "+44 7700 900456", homePhones: [], businessPhones: ["+44 20 7946 0000"] }],
       }),
-    ).toEqual(["paul@outlook.com", "+44 7700 900456", "+44 20 7946 0000"]);
+    ).toEqual([{ name: "Paul", addresses: ["paul@outlook.com", "+44 7700 900456", "+44 20 7946 0000"] }]);
   });
   it("suggests the provider that matches your email", () => {
     expect(providerForEmail("luca@gmail.com")).toBe("google");
     expect(providerForEmail("luca_ram@hotmail.com")).toBe("microsoft");
     expect(providerForEmail("luca@outlook.it")).toBe("microsoft");
     expect(providerForEmail("luca@agentme.test")).toBeNull();
+  });
+  it("recognises work and company domains from their mail servers", () => {
+    expect(providerFromMx(["aspmx.l.google.com.", "alt1.aspmx.l.google.com"])).toBe("google");
+    expect(providerFromMx(["acme-co-uk.mail.protection.outlook.com"])).toBe("microsoft");
+    expect(providerFromMx(["mx01.mail.icloud.com"])).toBeNull();
+    expect(providerFromMx(["mx.acme.example"])).toBeNull();
+    expect(providerFromMx([])).toBeNull();
+  });
+});
+
+describe("demo seed", () => {
+  it("hashes emails exactly like the app, so demo accounts are findable", async () => {
+    const { createHmac } = await import("node:crypto");
+    const key = createHmac("sha256", process.env.A2A_SIGNING_SECRET!).update("agentme:identifier:v1").digest();
+    const seeded = createHmac("sha256", key).update("email:marco@agentme.test").digest("base64url");
+    expect(seeded).toBe(identifierHash({ kind: "email", value: "marco@agentme.test" }));
   });
 });
