@@ -21,21 +21,25 @@ async function send(page: Page, text: string) {
   await page.getByRole("button", { name: "Send" }).click();
 }
 
-async function syncContacts(page: Page, text: string) {
+async function typeContacts(page: Page, text: string) {
   await page.goto("/discover");
-  await page.getByText("…or paste emails and phone numbers").click();
+  await page.getByRole("listitem").filter({ hasText: "Type or paste" }).getByRole("button", { name: "Add" }).click();
   await page.getByLabel("Emails and phone numbers").fill(text);
   await page.getByRole("button", { name: "Find people" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Checked" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Checked 1 contacts" })).toBeVisible();
 }
 
 test("people you know: only shown when both have each other", async ({ browser }) => {
   const eve = await as(browser, "eve");
-  await syncContacts(eve.page, "Marco <marco@agentme.test>");
+  await typeContacts(eve.page, "Marco <marco@agentme.test>");
   await expect(eve.page.getByTestId("suggestion")).toHaveCount(0); // Marco doesn't have Eve (yet)
+  await expect(eve.page.getByTestId("findable-email")).toContainText("e•••@agentme.test ✓");
 
+  // Marco connects his email contacts (simulated in development: the demo accounts).
   const marco = await as(browser, "marco");
-  await syncContacts(marco.page, "eve@agentme.test");
+  await marco.page.goto("/discover");
+  await marco.page.getByRole("link", { name: "Connect Gmail" }).click();
+  await expect(marco.page.getByRole("status").filter({ hasText: "Gmail contacts" })).toBeVisible();
   await expect(marco.page.getByTestId("suggestion").filter({ hasText: "@eve" })).toBeVisible();
   await eve.page.reload();
   await expect(eve.page.getByTestId("suggestion").filter({ hasText: "@marco" })).toContainText("You're in each other's contacts");

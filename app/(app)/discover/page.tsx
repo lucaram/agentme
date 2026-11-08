@@ -5,10 +5,24 @@ import { openAgentChat, requestContact } from "../actions";
 import Link from "next/link";
 import { mutualSuggestions } from "@/lib/people/matching";
 import { FindPeople } from "./FindPeople";
+import { PROVIDER_LABEL, isProvider, providerForEmail, providerMode } from "@/lib/people/providers";
+
+/** The message after coming back from Gmail / Outlook. */
+function syncNotice(synced: unknown, checked: unknown, simulated: unknown): { ok: boolean; text: string } | null {
+  if (typeof synced !== "string") return null;
+  if (isProvider(synced)) {
+    const fake = simulated ? " (simulated: no " + PROVIDER_LABEL[synced] + " keys are set up in development)" : "";
+    return { ok: true, text: `✓ Checked ${Number(checked) || 0} ${PROVIDER_LABEL[synced]} contacts${fake}. Anyone who also has you appears above.` };
+  }
+  if (synced === "cancelled") return { ok: false, text: "Nothing was shared: access wasn't allowed." };
+  if (synced === "limit") return { ok: false, text: "You've synced a lot today. Try again tomorrow." };
+  return { ok: false, text: "We couldn't read your contacts. Please try again." };
+}
 
 export default async function DiscoverPage({ searchParams }: PageProps<"/discover">) {
-  const { agent } = await requireAgent();
-  const { q } = await searchParams;
+  const { user, agent } = await requireAgent();
+  const { q, synced, checked, simulated } = await searchParams;
+  const notice = syncNotice(synced, checked, simulated);
   // Only letters, digits, spaces and a few name characters: keeps the PostgREST filter well-formed.
   const query = (typeof q === "string" ? q : "").trim().replace(/^@/, "").replace(/[^\p{L}\p{N}_ .'-]/gu, "").slice(0, 40);
   const supabase = await createClient();
@@ -31,7 +45,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/discove
     mutualSuggestions(agent.id),
     supabase.from("agent_identifiers").select("kind, hint"),
   ]);
-  const findable = (ids ?? []).map((i) => i.hint);
+  const hint = (kind: string) => ids?.find((i) => i.kind === kind)?.hint ?? null;
   const statusOf = (id: string) =>
     contacts?.find((c) => c.requester_agent === id || c.addressee_agent === id)?.status ?? null;
 
@@ -55,19 +69,36 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/discove
         </section>
       )}
       {!agent.guest && (
-        <section className="card space-y-3" aria-label="Find people you know">
-          <div>
-            <h2 className="font-semibold">Find people you know</h2>
-            <p className="hint">
-              Someone only shows up if you have their number or email <b>and they have yours</b>. We compare, keep only the people
-              already on AGENTME, and forget the rest of your address book. Nobody is added without a tap.
+        <section className="card" aria-label="Find people you know">
+          <h2 className="text-lg font-semibold">Find people you know</h2>
+          <p className="mt-1 text-sm text-muted">🔒 Only people who also have you in their contacts show up. Your contacts are never stored.</p>
+          {notice && (
+            <p className={`mt-3 rounded-xl px-3 py-2 text-sm ${notice.ok ? "bg-accent-soft" : "text-danger"}`} role={notice.ok ? "status" : "alert"}>
+              {notice.text}
             </p>
+          )}
+          <FindPeople
+            sources={(agent.contact_sources ?? {}) as Record<string, string>}
+            providers={{ google: providerMode("google"), microsoft: providerMode("microsoft") }}
+            preferred={providerForEmail(user.email)}
+          />
+          <div className="mt-4 border-t border-border pt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Friends can find you by</p>
+            <div className="mt-2 flex flex-wrap gap-2 text-sm">
+              {hint("email") ? (
+                <span className="rounded-full bg-accent-soft px-3 py-1" data-testid="findable-email">✉️ {hint("email")} ✓</span>
+              ) : (
+                <span className="rounded-full border border-dashed border-border px-3 py-1 text-muted">✉️ Email not verified yet</span>
+              )}
+              {hint("phone") ? (
+                <span className="rounded-full bg-accent-soft px-3 py-1">📱 {hint("phone")} ✓</span>
+              ) : (
+                <Link href="/settings#find-me" className="rounded-full border border-dashed border-accent px-3 py-1 text-accent hover:bg-accent-soft">
+                  📱 Add your phone number
+                </Link>
+              )}
+            </div>
           </div>
-          <FindPeople syncedAt={agent.contacts_synced_at} />
-          <p className="hint">
-            People can find you by: {findable.length ? findable.join(" · ") : "nothing yet"} ·{" "}
-            <Link href="/settings#find-me" className="text-accent underline">{findable.some((h) => h.startsWith("+")) ? "change" : "add your phone"}</Link>
-          </p>
         </section>
       )}
       <form className="flex gap-2" role="search">

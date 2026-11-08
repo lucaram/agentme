@@ -19,12 +19,17 @@ type Out = { error?: string };
 // ------------------------------------------------------------- people you know
 
 /** Compare an address book (emails/phones only, read on the device) and forget it. */
-export async function syncContactsAction(entries: string[], countryCode: string): Promise<Out & { checked?: number }> {
+export async function syncContactsAction(entries: string[], countryCode: string | null, source: "phone" | "typed"): Promise<Out & { checked?: number }> {
   const { user, agent } = await requireAgent();
   if (!Array.isArray(entries)) return { error: "Nothing to check." };
   // Syncing also makes you findable by your own verified email (mutual matches only).
   await registerAccountEmail(agent.id, user);
-  const result = await syncAddressBook(agent, entries.filter((e) => typeof e === "string"), normaliseCountryCode(countryCode));
+  const result = await syncAddressBook(
+    agent,
+    entries.filter((e) => typeof e === "string"),
+    normaliseCountryCode(countryCode),
+    source === "phone" ? "phone" : "typed",
+  );
   revalidatePath("/discover");
   return result.ok ? { checked: result.checked } : { error: result.error };
 }

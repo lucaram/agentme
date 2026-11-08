@@ -86,7 +86,14 @@ export async function removePhone(agentId: string) {
  * returns no count of matches: a one-sided "is this number on AGENTME?" answer
  * would let anyone probe who uses the app. Only mutual suggestions are shown.
  */
-export async function syncAddressBook(agent: AgentRow, entries: string[], defaultCode: string | null): Promise<Result<{ checked: number }>> {
+export type ContactSource = "google" | "microsoft" | "phone" | "typed";
+
+export async function syncAddressBook(
+  agent: AgentRow,
+  entries: string[],
+  defaultCode: string | null,
+  source: ContactSource = "typed",
+): Promise<Result<{ checked: number }>> {
   const limit = await hit("contactSyncsPerAgent", agent.id);
   if (!limit.allowed) return { ok: false, error: `You've synced a lot today. Try again in ${describeRetry(limit.retryAfterSeconds)}.` };
   const hashes = [
@@ -105,12 +112,16 @@ export async function syncAddressBook(agent: AgentRow, entries: string[], defaul
     const { data } = await db.from("agent_identifiers").select("agent_id").in("hash", hashes.slice(i, i + 300));
     for (const row of data ?? []) if (row.agent_id !== agent.id) matched.add(row.agent_id);
   }
-  // A sync replaces the previous one.
-  await db.from("address_book_matches").delete().eq("owner_agent", agent.id);
+  // Sources add up (Gmail + phone + typed); "Forget" clears them all.
   if (matched.size) {
-    await db.from("address_book_matches").insert([...matched].map((matched_agent) => ({ owner_agent: agent.id, matched_agent })));
+    await db
+      .from("address_book_matches")
+      .upsert([...matched].map((matched_agent) => ({ owner_agent: agent.id, matched_agent })), { onConflict: "owner_agent,matched_agent", ignoreDuplicates: true });
   }
-  await db.from("agents").update({ contacts_synced_at: new Date().toISOString() }).eq("id", agent.id);
+  const now = new Date().toISOString();
+  const { data: current } = await db.from("agents").select("contact_sources").eq("id", agent.id).single();
+  const sources = { ...((current?.contact_sources as Record<string, string> | null) ?? {}), [source]: now };
+  await db.from("agents").update({ contacts_synced_at: now, contact_sources: sources }).eq("id", agent.id);
   return { ok: true, checked: hashes.length };
 }
 
@@ -118,7 +129,7 @@ export async function syncAddressBook(agent: AgentRow, entries: string[], defaul
 export async function clearAddressBook(agentId: string) {
   const db = adminClient();
   await db.from("address_book_matches").delete().eq("owner_agent", agentId);
-  await db.from("agents").update({ contacts_synced_at: null }).eq("id", agentId);
+  await db.from("agents").update({ contacts_synced_at: null, contact_sources: {} }).eq("id", agentId);
 }
 
 export type Suggestion = { id: string; handle: string; display_name: string; avatar: string };
