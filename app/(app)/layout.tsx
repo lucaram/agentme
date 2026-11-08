@@ -3,6 +3,7 @@ import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { ChatsBadge } from "@/components/ChatsBadge";
+import { ChatSearch } from "@/components/ChatSearch";
 import { signOut } from "../(auth)/actions";
 
 const NAV = [
@@ -40,6 +41,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             <button className="text-sm text-muted hover:underline">Log out</button>
           </form>
         </div>
+        <ChatSearch />
         <nav className="-mx-1 mt-2 flex gap-1 overflow-x-auto pb-2 text-sm">
           {NAV.map(([href, label]) => (
             <Link key={href} href={href} className="flex items-center gap-1 rounded-full px-3 py-1 hover:bg-accent-soft">
