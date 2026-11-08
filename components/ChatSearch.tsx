@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { searchAction, type SearchHit, type SearchScope, type SearchSection } from "@/app/(app)/chats/search-actions";
 import { openDirectMessage } from "@/app/(app)/actions";
@@ -112,7 +113,13 @@ export function ChatSearch() {
         }}
       />
       {open && query.trim() && sections && (
-        <div id="header-search-results" className="absolute inset-x-0 top-full z-20 mt-1 max-h-96 overflow-y-auto rounded-xl border border-border bg-surface py-1 shadow-lg">
+        <>
+          {/* Dims the page behind the results (attached to the page: the header's blur would trap it). */}
+          {createPortal(<div className="fixed inset-0 z-[5] bg-black/40" aria-hidden data-testid="search-backdrop" />, document.body)}
+        <div
+          id="header-search-results"
+          className="absolute inset-x-0 top-full z-20 mt-2 max-h-[70dvh] overflow-y-auto rounded-xl border border-accent/40 bg-raised py-1 shadow-2xl ring-1 ring-black/10"
+        >
           {hits.length === 0 ? (
             <p className="px-3 py-2 text-sm text-muted">Nothing matches “{query.trim()}”.</p>
           ) : (
@@ -151,6 +158,7 @@ export function ChatSearch() {
           )}
           {pending && <p className="px-3 py-1 text-xs text-muted">Opening…</p>}
         </div>
+        </>
       )}
     </div>
   );

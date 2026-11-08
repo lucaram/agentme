@@ -3,6 +3,8 @@
 :root {
   --background: #f6f5f1;
   --surface: #ffffff;
+  /* Panels that float above the page (search results). */
+  --raised: #ffffff;
   --foreground: #1b1a17;
   --muted: #6b6860;
   --border: #e4e1d8;
@@ -17,6 +19,7 @@
   :root {
     --background: #121311;
     --surface: #1b1c1a;
+    --raised: #262823;
     --foreground: #ecebe6;
     --muted: #a19f97;
     --border: #2d2e2a;
@@ -31,6 +34,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
+  --color-raised: var(--raised);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-border: var(--border);
