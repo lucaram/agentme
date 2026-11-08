@@ -136,7 +136,7 @@ test("search in Chats finds your groups and contacts and opens them", async ({ b
 
   await search.fill("which option");
   await luca.page.getByRole("option").filter({ hasText: "Which option do you prefer?" }).first().click();
-  await expect(luca.page.getByRole("heading", { name: /Which option do you prefer/ })).toBeVisible();
+  await expect(luca.page.getByRole("heading", { level: 1, name: /Which option do you prefer/ })).toBeVisible();
 
   await search.fill("pau");
   await luca.page.getByRole("option").filter({ hasText: "@paul" }).first().click();
