@@ -199,6 +199,23 @@ describe.skipIf(!dbUp)("groups and communities (live)", () => {
     // Contacts: incoming contact requests.
     await admin().from("contacts").insert({ requester_agent: b.agent.id, addressee_agent: d.agent.id });
     expect((await counts(d)).contacts).toBe(1);
+
+    // My Agent keeps its counter while a request waits for an answer, even once read.
+    const { chat } = await lib();
+    const myAgent = await chat.getOrCreateMyAgentConversation(d.userId);
+    const myAgentCount = async () => {
+      const { data } = await (await signedIn(d)).rpc("unread_counts");
+      return Number(data?.find((r) => r.conversation_id === myAgent.id)?.unread ?? 0);
+    };
+    const { data: item } = await admin()
+      .from("inbox_items")
+      .insert({ owner_id: d.userId, agent_id: d.agent.id, kind: "question", payload: { kind: "question", question: "Free on Sunday?" } })
+      .select("id")
+      .single();
+    await (await signedIn(d)).rpc("mark_conversation_read", { p_conversation: myAgent.id });
+    expect(await myAgentCount()).toBe(1);
+    await admin().from("inbox_items").update({ status: "answered" }).eq("id", item!.id);
+    expect(await myAgentCount()).toBe(0);
   });
 
   it("the browser sees private communities and moderation data only when allowed", async () => {
