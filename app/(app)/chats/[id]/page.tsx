@@ -10,6 +10,7 @@ import { AssignCard } from "./AssignCard";
 import { leaveConversation } from "../../actions";
 import { MarkRead } from "@/components/MarkRead";
 import { DraftReply } from "./DraftReply";
+import { RichText } from "@/components/RichText";
 
 export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
   const { id } = await params;
@@ -157,7 +158,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
                 }`}
                 data-testid={isPrivate ? "private-message" : undefined}
               >
-                {m.content}
+                {m.is_ai_generated ? <RichText text={m.content} /> : m.content}
               </div>
               {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}
               {task && (

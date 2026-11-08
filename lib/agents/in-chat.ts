@@ -73,7 +73,8 @@ export async function handleAgentCommand(opts: { userId: string; agent: AgentRow
   switch (command.mode) {
     case "summarise": {
       const summary = await assist("summarise", chatBlock, {});
-      return reply(`📝 ${summary}`);
+      return reply(`📝 Summary
+${summary}`);
     }
     case "translate": {
       const lastFromOthers = [...messages].reverse().find((m) => m.sender_user_id !== userId && (m.sender_user_id || m.sender_agent_id));
