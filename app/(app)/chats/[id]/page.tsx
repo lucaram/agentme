@@ -16,6 +16,7 @@ import { LocalTime } from "@/components/LocalTime";
 import { InviteLink } from "./InviteLink";
 import { MessageActions } from "./MessageActions";
 import { OpenRequests } from "@/components/requests/OpenRequests";
+import { AgentName } from "@/components/AgentName";
 import { adminClient } from "@/lib/supabase/admin";
 import { waysOf } from "@/lib/business/booking";
 import { canPost, communityMembership, groupRole, isGroupAdmin, isModerator, type ConvRow } from "@/lib/social/shared";
@@ -216,7 +217,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
               <span className="mb-0.5 flex items-center gap-1 text-xs text-muted">
                 {m.is_ai_generated ? (
                   <>
-                    {senderAgent?.avatar} {senderAgent ? `@${senderAgent.handle}'s agent` : "An agent"}
+                    <AgentName agent={senderAgent}>{senderAgent?.avatar} {senderAgent ? `@${senderAgent.handle}'s agent` : "An agent"}</AgentName>
                     <span className="rounded bg-agent-border px-1 text-[10px] font-semibold uppercase text-foreground" title="Written by an AI agent">AI</span>
                   </>
                 ) : mine ? (

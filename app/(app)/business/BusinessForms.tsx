@@ -42,7 +42,7 @@ export function BusinessInfoForm({ about, customers }: { about: string; customer
           {state.addedLinks ? ` I also added ${state.addedLinks} ${state.addedLinks === 1 ? "link" : "links"} from your text to “Links your agent reads”; your agent is reading ${state.addedLinks === 1 ? "it" : "them"} now.` : ""}
         </p>
       )}
-      <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
+      <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : "Save your words"}</button>
     </form>
   );
 }

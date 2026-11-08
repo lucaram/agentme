@@ -80,7 +80,7 @@ export function WaysEditor({ initial }: { initial: Way[] }) {
       )}
       {message && <p className={`text-sm ${message.ok ? "text-accent" : "text-danger"}`} role={message.ok ? "status" : "alert"}>{message.text}</p>}
       <div>
-        <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
+        <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : "Save booking & ordering"}</button>
       </div>
     </form>
   );

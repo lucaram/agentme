@@ -9,6 +9,7 @@ import { ShareLink } from "./ShareLink";
 import { IntroduceForm } from "./IntroduceForm";
 import { PeopleTabs } from "@/components/PeopleTabs";
 import { OpenRequests } from "@/components/requests/OpenRequests";
+import { AgentName } from "@/components/AgentName";
 
 export default async function ContactsPage() {
   const { agent } = await requireAgent();
@@ -163,9 +164,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Row({ agent, children }: { agent: { avatar: string; display_name: string; handle: string; type: string }; children: React.ReactNode }) {
   return (
     <li className="flex flex-wrap items-center gap-3 px-4 py-3">
-      <span className="text-2xl">{agent.avatar}</span>
+      <AgentName agent={agent} className="text-2xl">{agent.avatar}</AgentName>
       <span className="min-w-0 flex-1">
-        <span className="block font-medium">{agent.display_name}</span>
+        <AgentName agent={agent} className="block font-medium">{agent.display_name}</AgentName>
         <span className="block text-xs text-muted">@{agent.handle}{agent.type === "business" ? " · Business" : ""}</span>
       </span>
       <span className="flex gap-2">{children}</span>

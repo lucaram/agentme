@@ -27,7 +27,7 @@ test("my business: the agent reads the menu link, answers from it, and asks the 
     .getByRole("textbox", { name: /About your business/ })
     .fill(`Family-run Italian restaurant in Camden. Open Tue–Sun 12–15 and 18–23.
 Our menu: ${baseURL}/demo/trattoria-menu.html`);
-  await shop.page.getByRole("region", { name: "In your own words" }).getByRole("button", { name: "Save" }).click();
+  await shop.page.getByRole("button", { name: "Save your words" }).click();
   await expect(shop.page.getByRole("status").filter({ hasText: "I also added 1 link from your text" })).toBeVisible();
   await expect(shop.page.getByTestId("source-status").first()).toContainText("✓ Read", { timeout: 20_000 });
   // Shown as the same link seen from two places, not a duplicate.
@@ -158,7 +158,7 @@ test("how to book: the business adds its own ways; its page, its agent and frien
   await ways.getByRole("button", { name: "＋ Add another way" }).click();
   await ways.getByLabel("Way 2: what is it").selectOption("call");
   await ways.getByLabel("Way 2: link or number").fill("020 7946 0000");
-  await ways.getByRole("button", { name: "Save" }).click();
+  await ways.getByRole("button", { name: "Save booking & ordering" }).click();
   await expect(ways.getByRole("status")).toContainText("Saved");
 
   // Its page shows them as buttons.
