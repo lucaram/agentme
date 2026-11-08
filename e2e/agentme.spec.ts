@@ -475,10 +475,12 @@ test("My Agent: one thread per request; an update brings it back with a badge, a
 
   // A second request starts its own thread: the first one's messages aren't there.
   await luca.page.getByTestId("back-to-my-agent").click();
+  await expect(luca.page.getByRole("heading", { name: "My Agent" })).toBeVisible(); // the list, not the thread
   await send(luca.page, "Plan lunch with @paul on Sunday");
   await expect(luca.page.getByRole("region", { name: "Agent task" }).last()).toContainText("@paul");
   await expect(luca.page.getByText(/ladder/)).toHaveCount(0);
   await luca.page.getByTestId("back-to-my-agent").click();
+  await expect(luca.page.getByRole("heading", { name: "My Agent" })).toBeVisible(); // the list, not the thread
   await expect(luca.page.getByRole("region", { name: "Needs you" }).getByTestId("agent-thread")).not.toHaveCount(0);
 
   // Marco answers: Luca's ladder request comes back with a badge.
@@ -495,6 +497,7 @@ test("My Agent: one thread per request; an update brings it back with a badge, a
   await expect(luca.page.getByText("💬 @marco answered personally: “Yes, it's in the shed”")).toBeVisible();
   await expect(luca.page.getByText("Plan lunch with @paul on Sunday")).toHaveCount(0);
   await luca.page.getByTestId("back-to-my-agent").click();
+  await expect(luca.page.getByRole("heading", { name: "My Agent" })).toBeVisible(); // the list, not the thread
   await expect(luca.page.getByTestId("agent-thread").filter({ hasText: "answered personally" }).getByTestId("thread-badge")).toHaveCount(0);
   await luca.close();
   await marco.close();

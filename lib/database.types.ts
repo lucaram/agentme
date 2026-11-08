@@ -427,14 +427,14 @@ isOneToOne: false
                   ]
                 },"introductions": {
                   Row: {
-                    "a_agent": string,"a_answer": string | null,"b_agent": string,"b_answer": string | null,"created_at": string,"id": string,"introducer_agent": string,"note": string | null,"status": string
+                    "a_agent": string,"a_answer": string | null,"b_agent": string,"b_answer": string | null,"created_at": string,"id": string,"introducer_agent": string,"note": string | null,"status": string,"thread_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "a_agent": string,"a_answer"?: string | null,"b_agent": string,"b_answer"?: string | null,"created_at"?: string,"id"?: string,"introducer_agent": string,"note"?: string | null,"status"?: string
+                    "a_agent": string,"a_answer"?: string | null,"b_agent": string,"b_answer"?: string | null,"created_at"?: string,"id"?: string,"introducer_agent": string,"note"?: string | null,"status"?: string,"thread_id"?: string | null
                   }
                   Update: {
-                    "a_agent"?: string,"a_answer"?: string | null,"b_agent"?: string,"b_answer"?: string | null,"created_at"?: string,"id"?: string,"introducer_agent"?: string,"note"?: string | null,"status"?: string
+                    "a_agent"?: string,"a_answer"?: string | null,"b_agent"?: string,"b_answer"?: string | null,"created_at"?: string,"id"?: string,"introducer_agent"?: string,"note"?: string | null,"status"?: string,"thread_id"?: string | null
                   }
                   Relationships: [
                     {
@@ -454,6 +454,12 @@ isOneToOne: false
       columns: ["introducer_agent"]
 isOneToOne: false
       referencedRelation: "agents"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "introductions_thread_id_fkey"
+      columns: ["thread_id"]
+isOneToOne: false
+      referencedRelation: "agent_threads"
       referencedColumns: ["id"]
     }
                   ]

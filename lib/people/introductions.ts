@@ -3,6 +3,7 @@ import { adminClient } from "@/lib/supabase/admin";
 import { asJson } from "@/lib/data/json";
 import { getAgentByHandle, getAgentById, getContactRow, type AgentRow } from "@/lib/data/agents";
 import { getOrCreateMyAgentConversation, postMessage } from "@/lib/data/chat";
+import { threadFor } from "@/lib/agents/thread-context";
 import { describeRetry, hit } from "@/lib/limits";
 import { normalizeHandle } from "@/lib/policy/handles";
 import { connectPeople, openDmWithNote } from "./connect";
@@ -48,7 +49,8 @@ export async function createIntroduction(introducer: AgentRow, aHandle: string, 
   const cleanNote = note?.trim().slice(0, 280) || null;
   const { data: intro, error } = await db
     .from("introductions")
-    .insert({ introducer_agent: introducer.id, a_agent: a.id, b_agent: b.id, note: cleanNote })
+    // Asked in a My Agent thread: its outcome goes back there.
+    .insert({ introducer_agent: introducer.id, a_agent: a.id, b_agent: b.id, note: cleanNote, thread_id: threadFor((await getOrCreateMyAgentConversation(introducer.owner_id)).id) })
     .select("id")
     .single();
   if (error || !intro) return { ok: false, error: "Couldn't create the introduction." };
@@ -108,6 +110,7 @@ export async function answerIntroduction(itemId: string, ownerId: string, accept
       agentId: introducer.id,
       content: `🤝 ${a.display_name} and ${b.display_name} accepted your introduction and are now connected.`,
       metadata: { kind: "info" },
+      threadId: intro.thread_id ?? undefined,
     });
   }
   return { ok: true, chatId };
