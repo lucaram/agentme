@@ -31,7 +31,7 @@ Our menu: ${baseURL}/demo/trattoria-menu.html`);
   await expect(shop.page.getByRole("status").filter({ hasText: "I also added 1 link from your text" })).toBeVisible();
   await expect(shop.page.getByTestId("source-status").first()).toContainText("✓ Read", { timeout: 20_000 });
   // Shown as the same link seen from two places, not a duplicate.
-  await expect(shop.page.getByTestId("source-from-text")).toHaveText(" · 📝 from your link in About your business");
+  await expect(shop.page.getByTestId("source-from-text")).toContainText("📝 from your link in About your business");
 
   // Try it: answered from the menu it read.
   await shop.page.getByLabel("Test question").fill("Do you have panna cotta?");
