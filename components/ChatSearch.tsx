@@ -15,8 +15,8 @@ function scopeFor(pathname: string): SearchScope | null {
 }
 
 const PLACEHOLDER: Record<SearchScope, string> = {
-  chats: "🔍 Search chats and contacts",
-  contacts: "🔍 Search your contacts",
+  chats: "🔍 Search chats, contacts and businesses",
+  contacts: "🔍 Search your contacts and businesses",
   groups: "🔍 Search your groups",
   communities: "🔍 Search communities",
 };
