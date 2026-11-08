@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { BusinessInfoForm, SourcesManager, TryIt } from "./BusinessForms";
 import { QuestionsAnswers } from "./QuestionsAnswers";
+import { linkKey, linksIn } from "@/lib/business/extract";
 
 type Info = { about?: string; customers?: string; description?: string; hours?: string; faqs?: { q: string; a: string }[] };
 const words = (s: string | null | undefined) => (s ?? "").split(/\s+/).filter(Boolean).length;
@@ -25,7 +26,11 @@ export default async function MyBusinessPage() {
   const about = info.about ?? [info.description, info.hours && `Opening hours: ${info.hours}`].filter(Boolean).join("\n");
   // RLS: the owner's own links and what was read.
   const { data: rows } = await supabase.from("business_sources").select("*").order("created_at");
+  // Links also written in the text boxes: shown as one item seen from two places, not a duplicate.
+  const inAbout = new Set(linksIn(about).map(linkKey));
+  const inCustomers = new Set(linksIn(info.customers ?? "").map(linkKey));
   const sources = (rows ?? []).map((s) => ({
+    fromText: inAbout.has(linkKey(s.url)) ? "About your business" : inCustomers.has(linkKey(s.url)) ? "For customers only" : null,
     id: s.id,
     url: s.url,
     visibility: s.visibility,
