@@ -18,11 +18,13 @@ export async function searchChatsAction(raw: string): Promise<{ chats: ChatHit[]
   const q = String(raw ?? "").trim().replace(/^@/, "").toLowerCase().slice(0, 60);
   if (!q) return { chats: [], contacts: [] };
   const supabase = await createClient();
-  const [{ data: conversations }, { data: agents }, { data: contacts }] = await Promise.all([
-    supabase.from("conversations").select("id, kind, title, target_agent, conversation_members(user_id)"),
+  const [{ data: conversations }, { data: agents }, { data: contacts }, { data: communities }] = await Promise.all([
+    supabase.from("conversations").select("id, kind, title, target_agent, community_id, avatar, conversation_members(user_id)"),
     supabase.from("agents").select("id, owner_id, handle, display_name, avatar"),
     supabase.from("contacts").select("requester_agent, addressee_agent").eq("status", "accepted"),
+    supabase.from("communities").select("id, name, avatar"),
   ]);
+  const communityById = new Map((communities ?? []).map((c) => [c.id, c]));
   const byOwner = new Map((agents ?? []).map((a) => [a.owner_id, a]));
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));
   const has = (...texts: (string | null | undefined)[]) => texts.some((t) => t?.toLowerCase().includes(q));
@@ -38,9 +40,12 @@ export async function searchChatsAction(raw: string): Promise<{ chats: ChatHit[]
     } else if (c.kind === "agent_chat") {
       const target = c.target_agent ? byId.get(c.target_agent) : undefined;
       if (has(target?.display_name, target?.handle)) hit = { kind: "chat", id: c.id, name: `${target?.display_name ?? "Agent"} · agent`, icon: target?.avatar ?? "🤖", detail: "Agent chat" };
+    } else if (c.kind === "channel") {
+      const community = communityById.get(c.community_id ?? "");
+      if (has(community?.name, c.title)) hit = { kind: "chat", id: c.id, name: `${community?.name ?? "Community"} · ${c.title}`, icon: community?.avatar ?? "🏟️", detail: "Community" };
     } else if (c.kind === "group") {
       if (has(c.title, ...others.map((o) => o.display_name), ...others.map((o) => o.handle))) {
-        hit = { kind: "chat", id: c.id, name: c.title ?? "Group", icon: "👥", detail: `Group · ${others.length + 1} people` };
+        hit = { kind: "chat", id: c.id, name: c.title ?? "Group", icon: c.avatar ?? "👥", detail: `Group · ${others.length + 1} people` };
       }
     } else if (has(c.title, ...others.map((o) => o.display_name), ...others.map((o) => o.handle))) {
       hit = { kind: "chat", id: c.id, name: c.title ?? others.map((o) => o.display_name).join(", "), icon: others[0]?.avatar ?? "💬", detail: others[0] ? `@${others[0].handle}` : "Direct message" };

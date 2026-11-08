@@ -65,17 +65,71 @@ isOneToOne: false
                   ]
                 },"agents": {
                   Row: {
-                    "avatar": string,"bio": string | null,"business_info": NonNullable<Json>,"contact_policy": Database["public"]['Enums']["contact_policy"],"contact_sources": NonNullable<Json>,"contacts_synced_at": string | null,"created_at": string,"discoverable": boolean,"display_name": string,"guest": boolean,"handle": string,"id": string,"owner_id": string,"type": Database["public"]['Enums']["agent_type"]
+                    "avatar": string,"bio": string | null,"business_info": NonNullable<Json>,"contact_policy": Database["public"]['Enums']["contact_policy"],"contact_sources": NonNullable<Json>,"contacts_synced_at": string | null,"created_at": string,"discoverable": boolean,"display_name": string,"group_add_policy": string,"guest": boolean,"handle": string,"id": string,"owner_id": string,"type": Database["public"]['Enums']["agent_type"]
                   }
                   ComputedFields: never
                   Insert: {
-                    "avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name": string,"guest"?: boolean,"handle": string,"id"?: string,"owner_id": string,"type"?: Database["public"]['Enums']["agent_type"]
+                    "avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name": string,"group_add_policy"?: string,"guest"?: boolean,"handle": string,"id"?: string,"owner_id": string,"type"?: Database["public"]['Enums']["agent_type"]
                   }
                   Update: {
-                    "avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name"?: string,"guest"?: boolean,"handle"?: string,"id"?: string,"owner_id"?: string,"type"?: Database["public"]['Enums']["agent_type"]
+                    "avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name"?: string,"group_add_policy"?: string,"guest"?: boolean,"handle"?: string,"id"?: string,"owner_id"?: string,"type"?: Database["public"]['Enums']["agent_type"]
                   }
                   Relationships: [
                     
+                  ]
+                },"communities": {
+                  Row: {
+                    "avatar": string,"created_at": string,"description": string | null,"id": string,"name": string,"owner_id": string | null,"rules": string | null,"visibility": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "avatar"?: string,"created_at"?: string,"description"?: string | null,"id"?: string,"name": string,"owner_id"?: string | null,"rules"?: string | null,"visibility"?: string
+                  }
+                  Update: {
+                    "avatar"?: string,"created_at"?: string,"description"?: string | null,"id"?: string,"name"?: string,"owner_id"?: string | null,"rules"?: string | null,"visibility"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"community_bans": {
+                  Row: {
+                    "banned_by": string | null,"community_id": string,"created_at": string,"reason": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "banned_by"?: string | null,"community_id": string,"created_at"?: string,"reason"?: string | null,"user_id": string
+                  }
+                  Update: {
+                    "banned_by"?: string | null,"community_id"?: string,"created_at"?: string,"reason"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "community_bans_community_id_fkey"
+      columns: ["community_id"]
+isOneToOne: false
+      referencedRelation: "communities"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"community_members": {
+                  Row: {
+                    "community_id": string,"joined_at": string,"muted_until": string | null,"role": string,"rules_accepted_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "community_id": string,"joined_at"?: string,"muted_until"?: string | null,"role"?: string,"rules_accepted_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "community_id"?: string,"joined_at"?: string,"muted_until"?: string | null,"role"?: string,"rules_accepted_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "community_members_community_id_fkey"
+      columns: ["community_id"]
+isOneToOne: false
+      referencedRelation: "communities"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"contact_imports": {
                   Row: {
@@ -129,16 +183,36 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"conversation_members": {
+                },"conversation_blocks": {
                   Row: {
-                    "conversation_id": string,"joined_at": string,"last_read_at": string,"user_id": string
+                    "conversation_id": string,"created_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "conversation_id": string,"joined_at"?: string,"last_read_at"?: string,"user_id": string
+                    "conversation_id": string,"created_at"?: string,"user_id": string
                   }
                   Update: {
-                    "conversation_id"?: string,"joined_at"?: string,"last_read_at"?: string,"user_id"?: string
+                    "conversation_id"?: string,"created_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "conversation_blocks_conversation_id_fkey"
+      columns: ["conversation_id"]
+isOneToOne: false
+      referencedRelation: "conversations"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"conversation_members": {
+                  Row: {
+                    "conversation_id": string,"joined_at": string,"last_read_at": string,"muted": boolean,"role": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "conversation_id": string,"joined_at"?: string,"last_read_at"?: string,"muted"?: boolean,"role"?: string,"user_id": string
+                  }
+                  Update: {
+                    "conversation_id"?: string,"joined_at"?: string,"last_read_at"?: string,"muted"?: boolean,"role"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -151,17 +225,23 @@ isOneToOne: false
                   ]
                 },"conversations": {
                   Row: {
-                    "created_at": string,"created_by": string | null,"id": string,"kind": Database["public"]['Enums']["conversation_kind"],"target_agent": string | null,"title": string | null
+                    "approve_new_members": boolean,"avatar": string | null,"channel": string | null,"community_id": string | null,"created_at": string,"created_by": string | null,"description": string | null,"id": string,"kind": Database["public"]['Enums']["conversation_kind"],"only_admins_edit": boolean,"only_admins_send": boolean,"target_agent": string | null,"title": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"kind": Database["public"]['Enums']["conversation_kind"],"target_agent"?: string | null,"title"?: string | null
+                    "approve_new_members"?: boolean,"avatar"?: string | null,"channel"?: string | null,"community_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"description"?: string | null,"id"?: string,"kind": Database["public"]['Enums']["conversation_kind"],"only_admins_edit"?: boolean,"only_admins_send"?: boolean,"target_agent"?: string | null,"title"?: string | null
                   }
                   Update: {
-                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"kind"?: Database["public"]['Enums']["conversation_kind"],"target_agent"?: string | null,"title"?: string | null
+                    "approve_new_members"?: boolean,"avatar"?: string | null,"channel"?: string | null,"community_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"description"?: string | null,"id"?: string,"kind"?: Database["public"]['Enums']["conversation_kind"],"only_admins_edit"?: boolean,"only_admins_send"?: boolean,"target_agent"?: string | null,"title"?: string | null
                   }
                   Relationships: [
                     {
+      foreignKeyName: "conversations_community_id_fkey"
+      columns: ["community_id"]
+isOneToOne: false
+      referencedRelation: "communities"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "conversations_target_agent_fkey"
       columns: ["target_agent"]
 isOneToOne: false
@@ -265,6 +345,58 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"join_links": {
+                  Row: {
+                    "community_id": string | null,"conversation_id": string | null,"created_at": string,"created_by": string | null,"expires_at": string,"revoked": boolean,"token": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "community_id"?: string | null,"conversation_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"expires_at": string,"revoked"?: boolean,"token": string
+                  }
+                  Update: {
+                    "community_id"?: string | null,"conversation_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"expires_at"?: string,"revoked"?: boolean,"token"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "join_links_community_id_fkey"
+      columns: ["community_id"]
+isOneToOne: false
+      referencedRelation: "communities"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "join_links_conversation_id_fkey"
+      columns: ["conversation_id"]
+isOneToOne: false
+      referencedRelation: "conversations"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"join_requests": {
+                  Row: {
+                    "community_id": string | null,"conversation_id": string | null,"created_at": string,"decided_by": string | null,"id": string,"status": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "community_id"?: string | null,"conversation_id"?: string | null,"created_at"?: string,"decided_by"?: string | null,"id"?: string,"status"?: string,"user_id": string
+                  }
+                  Update: {
+                    "community_id"?: string | null,"conversation_id"?: string | null,"created_at"?: string,"decided_by"?: string | null,"id"?: string,"status"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "join_requests_community_id_fkey"
+      columns: ["community_id"]
+isOneToOne: false
+      referencedRelation: "communities"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "join_requests_conversation_id_fkey"
+      columns: ["conversation_id"]
+isOneToOne: false
+      referencedRelation: "conversations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"llm_usage": {
                   Row: {
                     "agent_id": string | null,"cache_read_tokens": number,"cost_usd": number,"created_at": string,"id": string,"input_tokens": number,"model": string,"ok": boolean,"output_tokens": number,"provider": string,"purpose": string,"task_id": string | null,"user_id": string | null
@@ -293,14 +425,14 @@ isOneToOne: false
                   ]
                 },"messages": {
                   Row: {
-                    "content": string,"conversation_id": string,"created_at": string,"id": string,"is_ai_generated": boolean,"metadata": NonNullable<Json>,"sender_agent_id": string | null,"sender_user_id": string | null,"visible_to": string | null
+                    "content": string,"conversation_id": string,"created_at": string,"id": string,"is_ai_generated": boolean,"metadata": NonNullable<Json>,"removed_at": string | null,"removed_by": string | null,"sender_agent_id": string | null,"sender_user_id": string | null,"visible_to": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "content": string,"conversation_id": string,"created_at"?: string,"id"?: string,"is_ai_generated": boolean,"metadata"?: NonNullable<Json>,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"visible_to"?: string | null
+                    "content": string,"conversation_id": string,"created_at"?: string,"id"?: string,"is_ai_generated": boolean,"metadata"?: NonNullable<Json>,"removed_at"?: string | null,"removed_by"?: string | null,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"visible_to"?: string | null
                   }
                   Update: {
-                    "content"?: string,"conversation_id"?: string,"created_at"?: string,"id"?: string,"is_ai_generated"?: boolean,"metadata"?: NonNullable<Json>,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"visible_to"?: string | null
+                    "content"?: string,"conversation_id"?: string,"created_at"?: string,"id"?: string,"is_ai_generated"?: boolean,"metadata"?: NonNullable<Json>,"removed_at"?: string | null,"removed_by"?: string | null,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"visible_to"?: string | null
                   }
                   Relationships: [
                     {
@@ -449,6 +581,38 @@ isOneToOne: true
                   Relationships: [
                     
                   ]
+                },"reports": {
+                  Row: {
+                    "community_id": string | null,"conversation_id": string | null,"created_at": string,"excerpt": string | null,"id": string,"message_id": string | null,"reason": string,"reporter_id": string | null,"resolved_by": string | null,"status": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "community_id"?: string | null,"conversation_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"message_id"?: string | null,"reason": string,"reporter_id"?: string | null,"resolved_by"?: string | null,"status"?: string
+                  }
+                  Update: {
+                    "community_id"?: string | null,"conversation_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"message_id"?: string | null,"reason"?: string,"reporter_id"?: string | null,"resolved_by"?: string | null,"status"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "reports_community_id_fkey"
+      columns: ["community_id"]
+isOneToOne: false
+      referencedRelation: "communities"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "reports_conversation_id_fkey"
+      columns: ["conversation_id"]
+isOneToOne: false
+      referencedRelation: "conversations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "reports_message_id_fkey"
+      columns: ["message_id"]
+isOneToOne: false
+      referencedRelation: "messages"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"step_responses": {
                   Row: {
                     "agent_id": string,"answered_by": string,"step_id": string,"updated_at": string,"value": NonNullable<Json>
@@ -575,13 +739,27 @@ isOneToOne: false
         isOneToOne: false
         isSetofReturn: true
       } },
+"community_member_counts":
+{ Args: { "p_ids": (string)[] }; Returns: {
+              "community_id": string,"members": number
+            }[]
+                           },
+"community_role":
+{ Args: { "c": string }; Returns: string
+                           },
 "confirmed_users_by_email":
 { Args: { "p_emails": (string)[] }; Returns: {
               "email": string,"user_id": string
             }[]
                            },
+"conversation_role":
+{ Args: { "conv": string }; Returns: string
+                           },
 "increment_invite_uses":
 { Args: { "p_token": string }; Returns: undefined
+                           },
+"is_community_member":
+{ Args: { "c": string }; Returns: boolean
                            },
 "is_conversation_member":
 { Args: { "conv": string }; Returns: boolean
@@ -602,12 +780,12 @@ isOneToOne: false
                            },
 "unread_counts":
 { Args: Record<PropertyKey, never>; Returns: {
-              "conversation_id": string,"unread": number
+              "conversation_id": string,"muted": boolean,"unread": number
             }[]
                            }
           }
           Enums: {
-            "agent_type": "personal"|"business","contact_policy": "contacts_only"|"anyone"|"nobody","contact_status": "pending"|"accepted"|"blocked","conversation_kind": "dm"|"group"|"my_agent"|"agent_chat","disclosure_level": "private"|"contacts","exchange_status": "pending"|"completed"|"refused"|"failed"|"waiting_human","proposal_status": "pending"|"accepted"|"rejected","task_status": "awaiting_approval"|"running"|"proposal_ready"|"accepted"|"rejected"|"cancelled"|"failed"|"waiting"|"completed"
+            "agent_type": "personal"|"business","contact_policy": "contacts_only"|"anyone"|"nobody","contact_status": "pending"|"accepted"|"blocked","conversation_kind": "dm"|"group"|"my_agent"|"agent_chat"|"channel","disclosure_level": "private"|"contacts","exchange_status": "pending"|"completed"|"refused"|"failed"|"waiting_human","proposal_status": "pending"|"accepted"|"rejected","task_status": "awaiting_approval"|"running"|"proposal_ready"|"accepted"|"rejected"|"cancelled"|"failed"|"waiting"|"completed"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -727,7 +905,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "agent_type": ["personal", "business"],"contact_policy": ["contacts_only", "anyone", "nobody"],"contact_status": ["pending", "accepted", "blocked"],"conversation_kind": ["dm", "group", "my_agent", "agent_chat"],"disclosure_level": ["private", "contacts"],"exchange_status": ["pending", "completed", "refused", "failed", "waiting_human"],"proposal_status": ["pending", "accepted", "rejected"],"task_status": ["awaiting_approval", "running", "proposal_ready", "accepted", "rejected", "cancelled", "failed", "waiting", "completed"]
+            "agent_type": ["personal", "business"],"contact_policy": ["contacts_only", "anyone", "nobody"],"contact_status": ["pending", "accepted", "blocked"],"conversation_kind": ["dm", "group", "my_agent", "agent_chat", "channel"],"disclosure_level": ["private", "contacts"],"exchange_status": ["pending", "completed", "refused", "failed", "waiting_human"],"proposal_status": ["pending", "accepted", "rejected"],"task_status": ["awaiting_approval", "running", "proposal_ready", "accepted", "rejected", "cancelled", "failed", "waiting", "completed"]
           }
         }
 } as const

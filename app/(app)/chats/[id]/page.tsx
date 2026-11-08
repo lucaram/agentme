@@ -14,6 +14,8 @@ import { DraftReply } from "./DraftReply";
 import { RichText } from "@/components/RichText";
 import { LocalTime } from "@/components/LocalTime";
 import { InviteLink } from "./InviteLink";
+import { MessageActions } from "./MessageActions";
+import { canPost, communityMembership, groupRole, isGroupAdmin, isModerator, type ConvRow } from "@/lib/social/shared";
 
 export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
   const { id } = await params;
@@ -95,22 +97,36 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
   const others = conv.conversation_members.filter((m) => m.user_id !== user.id).map((m) => byOwner.get(m.user_id));
   // The other person left this direct message: keep it readable, but closed.
   const dmClosed = conv.kind === "dm" && others.length === 0;
+  const shared = conv.kind === "group" || conv.kind === "channel";
+  const community = conv.kind === "channel" && conv.community_id ? (await supabase.from("communities").select("id, name, avatar").eq("id", conv.community_id).maybeSingle()).data : null;
+  // Who may post here, and who may remove other people's messages.
+  const posting = shared ? await canPost(conv as unknown as ConvRow, user.id) : { ok: true as const };
+  const canModerate =
+    conv.kind === "group" ? isGroupAdmin(await groupRole(id, user.id)) : community ? isModerator((await communityMembership(community.id, user.id))?.role) : false;
   const title =
     conv.kind === "my_agent"
       ? "My Agent"
       : conv.kind === "agent_chat"
         ? `${target?.avatar ?? ""} ${target?.display_name ?? "Agent"} (@${target?.handle})`
-        : conv.title ?? others.map((o) => o?.display_name).join(", ");
+        : conv.kind === "channel"
+          ? `${community?.avatar ?? ""} ${community?.name ?? "Community"} · ${conv.title}`
+          : conv.title ?? others.map((o) => o?.display_name).join(", ");
   const subtitle =
     conv.kind === "my_agent"
       ? "Ask your agent to organise something with your contacts. It always asks before contacting anyone."
       : conv.kind === "agent_chat"
         ? "You're talking to an AI agent over A2A. It answers only from information its owner published."
-        : conv.kind === "group"
-          ? `Members: ${["you", ...others.map((o) => (o ? `@${o.handle}` : "someone"))].join(", ")}`
-          : dmClosed
-            ? "They left this chat"
-            : "Direct message";
+        : conv.kind === "channel"
+          ? conv.channel === "announcements"
+            ? "Announcements from the community's moderators"
+            : "Community chat · be kind, follow the rules"
+          : conv.kind === "group"
+            ? others.length > 6
+              ? `${others.length + 1} members`
+              : `Members: ${["you", ...others.map((o) => (o ? `@${o.handle}` : "someone"))].join(", ")}`
+            : dmClosed
+              ? "They left this chat"
+              : "Direct message";
 
   return (
     <div className="flex flex-1 flex-col">
@@ -126,10 +142,16 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
           <h1 className="text-lg font-semibold">{title}</h1>
           <p className="text-xs text-muted">{subtitle}</p>
         </div>
-        {conv.kind !== "my_agent" && (
-          <form action={leaveConversation.bind(null, id)}>
-            <button className="text-xs text-muted hover:text-danger">{conv.kind === "agent_chat" ? "Delete chat" : "Leave"}</button>
-          </form>
+        {conv.kind === "group" ? (
+          <Link href={`/groups/${id}`} className="text-xs text-accent hover:underline">Group info ›</Link>
+        ) : conv.kind === "channel" && community ? (
+          <Link href={`/communities/${community.id}`} className="text-xs text-accent hover:underline">Community ›</Link>
+        ) : (
+          conv.kind !== "my_agent" && (
+            <form action={leaveConversation.bind(null, id)}>
+              <button className="text-xs text-muted hover:text-danger">{conv.kind === "agent_chat" ? "Delete chat" : "Leave"}</button>
+            </form>
+          )
         )}
       </div>
       {ownPlan && (
@@ -183,13 +205,24 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
                   </span>
                 )}
               </span>
-              <div
-                className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ${isPrivate ? "border border-dashed opacity-90" : ""} ${
-                  m.is_ai_generated ? "border border-agent-border bg-agent" : mine ? "bg-accent text-white dark:text-black" : "border border-border bg-surface"
-                }`}
-                data-testid={isPrivate ? "private-message" : undefined}
-              >
-                {m.is_ai_generated ? <RichText text={m.content} /> : m.content}
+              <div className={`flex max-w-[85%] items-start gap-1 ${mine ? "flex-row-reverse" : ""}`}>
+                <div
+                  className={`whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ${isPrivate ? "border border-dashed opacity-90" : ""} ${
+                    m.removed_at
+                      ? "border border-border italic text-muted"
+                      : m.is_ai_generated
+                        ? "border border-agent-border bg-agent"
+                        : mine
+                          ? "bg-accent text-white dark:text-black"
+                          : "border border-border bg-surface"
+                  }`}
+                  data-testid={isPrivate ? "private-message" : m.removed_at ? "removed-message" : undefined}
+                >
+                  {m.is_ai_generated && !m.removed_at ? <RichText text={m.content} /> : m.content}
+                </div>
+                {shared && !isPrivate && !m.removed_at && (
+                  <MessageActions messageId={m.id} conversationId={id} canReport={!mine} canRemove={mine || canModerate} />
+                )}
               </div>
               {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}
               {task && (
@@ -239,6 +272,11 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
         })}
       </ol>
 
+      {!posting.ok && (
+        <p className="mt-4 rounded-2xl border border-border bg-surface px-4 py-2 text-center text-sm text-muted" data-testid="cannot-post">
+          {posting.error} You can still ask @agent privately.
+        </p>
+      )}
       {dmClosed ? (
         <p className="mt-4 rounded-2xl border border-border bg-surface px-4 py-3 text-center text-sm text-muted" data-testid="dm-closed">
           You can&apos;t send messages here any more. To talk again, open them from{" "}
@@ -252,9 +290,11 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
             ? "e.g. Arrange dinner with @marco and @paul on Saturday evening"
             : conv.kind === "agent_chat"
               ? `Ask @${target?.handle ?? "agent"} a question`
-              : "Message — or @agent to ask your agent (only you see it)"
+              : !posting.ok
+                ? "@agent … (only you see it)"
+                : "Message — or @agent to ask your agent (only you see it)"
         }
-        thinkingLabel={conv.kind === "dm" || conv.kind === "group" ? undefined : "Agent is thinking…"}
+        thinkingLabel={conv.kind === "dm" || conv.kind === "group" || conv.kind === "channel" ? undefined : "Agent is thinking…"}
         examples={examples}
       />
       )}
