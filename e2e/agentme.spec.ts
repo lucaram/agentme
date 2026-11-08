@@ -489,7 +489,7 @@ test("My Agent: one thread per request; an update brings it back with a badge, a
   const item = marco.page.getByTestId("inbox-item").filter({ hasText: "ladder" });
   await item.getByLabel("Your answer").fill("Yes, it's in the shed");
   await item.getByRole("button", { name: "Reply" }).click();
-  const row = luca.page.getByTestId("agent-thread").filter({ hasText: "answered personally" });
+  const row = luca.page.getByTestId("agent-thread").filter({ hasText: /ladder/ });
   await expect(row.getByTestId("thread-badge")).toBeVisible({ timeout: 15_000 });
 
   // Opening it shows only that request, and clears its badge.
@@ -498,7 +498,7 @@ test("My Agent: one thread per request; an update brings it back with a badge, a
   await expect(luca.page.getByText("Plan lunch with @paul on Sunday")).toHaveCount(0);
   await luca.page.getByTestId("back-to-my-agent").click();
   await expect(luca.page.getByRole("heading", { name: "My Agent" })).toBeVisible(); // the list, not the thread
-  await expect(luca.page.getByTestId("agent-thread").filter({ hasText: "answered personally" }).getByTestId("thread-badge")).toHaveCount(0);
+  await expect(luca.page.getByTestId("agent-thread").filter({ hasText: /ladder/ }).getByTestId("thread-badge")).toHaveCount(0);
   await luca.close();
   await marco.close();
 });
