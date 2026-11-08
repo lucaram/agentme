@@ -4,13 +4,15 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentForUser, type AgentRow } from "@/lib/data/agents";
 
-export type SessionUser = { id: string; email: string | null };
+export type SessionUser = { id: string; email: string | null; emailConfirmed: boolean; isAnonymous: boolean };
 
 /** Verified current user (validates the JWT with Supabase Auth), or null. */
 export const getUser = cache(async (): Promise<SessionUser | null> => {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
-  return data.user ? { id: data.user.id, email: data.user.email ?? null } : null;
+  return data.user
+    ? { id: data.user.id, email: data.user.email ?? null, emailConfirmed: Boolean(data.user.email_confirmed_at), isAnonymous: Boolean(data.user.is_anonymous) }
+    : null;
 });
 
 export async function requireUser(): Promise<SessionUser> {

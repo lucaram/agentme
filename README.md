@@ -143,6 +143,17 @@ Any request that mentions contacts becomes a **plan made of the blocks above** (
 
 My Agent shows **template chips** filled in with your own contacts. It also answers **general questions**, but coordination comes first.
 
+## Finding people
+
+The Contacts tab only ever holds people you accepted; an agent trusts its contacts, so nothing is added without consent.
+
+- **People you know (Discover):** sync your address book in one of three ways: the phone's contact picker (Chrome on Android), a `.vcf`/`.csv` export, or pasted emails and numbers. Only emails and phone numbers are sent. They are compared with verified identifiers, and only matches to people already on AGENTME are kept. **Someone is suggested only when you both have each other.** A sync returns how many entries were checked, never how many matched, so nobody can probe whether a number is on AGENTME. People who join later show up when you sync again. To be found you need a verified identifier: your confirmed account email, and optionally a phone number proven with a code (Settings). Identifiers are stored as keyed hashes plus a masked hint.
+- **Personal link and live QR (Contacts):** `/u/<handle>` sends a contact request. The QR code on screen carries a signed token that is valid for 10 minutes, so scanning it in person connects you instantly and opens the chat. A photo of the code can't be reused later.
+- **Introductions:** a friend of both picks two contacts (Contacts → Introduce, or "introduce @a to @b" in My Agent). Each person gets it in their Inbox, and they connect only if both say yes. If they are already connected or blocked, nothing is sent, and the introducer can't tell the difference.
+- **Invite links for plans:** the organiser of a plan gets "🔗 Invite by link" in the plan's group and shares it themselves (WhatsApp, SMS, email), so AGENTME never stores the invitee's number. Opening it shows the plan, and you can join in seconds **as a guest** with just a name and address (an anonymous account, `enable_anonymous_sign_ins = true` in `supabase/config.toml`), or log in. Joining adds you to the plan, its open polls and sign-up lists, and its group, and connects you with the organiser. Links last 14 days and can be turned off. Guests can save their account with an email and password in Settings.
+
+SMS: no provider is wired up yet. With `SMS_PROVIDER=dev` (the default outside production) the code is logged and shown on screen.
+
 ## Reliability, limits and cost
 
 - **Coordination survives restarts.** A running task is advanced only by the worker that holds its

@@ -9,6 +9,8 @@ import { getOrCreateMyAgentConversation, postMessage } from "@/lib/data/chat";
 import { validateHandle } from "@/lib/policy/handles";
 import { asJson } from "@/lib/data/json";
 import { AVATARS } from "@/lib/avatars";
+import { safeNext } from "@/lib/next-path";
+import { registerAccountEmail } from "@/lib/people/matching";
 
 export async function checkHandle(input: string): Promise<{ ok: boolean; handle: string; message: string }> {
   await requireUser();
@@ -90,7 +92,9 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
     if (facts.length) await db.from("agent_facts").insert(facts);
   }
 
+  await registerAccountEmail(agent.id, user);
   const conv = await getOrCreateMyAgentConversation(user.id);
+  const next = safeNext(form.get("next"), "");
   await postMessage({
     conversationId: conv.id,
     from: "agent",
@@ -99,5 +103,6 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
       ? `Hi! I'm @${handle.handle}, your business agent. I answer visitors' questions using only the information you gave me, and I never take bookings or payments.`
       : `Hi ${parsed.data.display_name}! I'm @${handle.handle}, your agent. Connect with friends, then ask me something like "Arrange dinner with @marco on Saturday evening".`,
   });
-  redirect(`/chats/${conv.id}`);
+  // Came from an invite or personal link: go back there to finish joining/connecting.
+  redirect(next || `/chats/${conv.id}`);
 }

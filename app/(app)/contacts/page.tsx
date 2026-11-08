@@ -3,6 +3,10 @@ import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { ActionButton } from "@/components/ActionButton";
 import { acceptContact, blockContact, openAgentChat, openDirectMessage, removeContact } from "../actions";
+import { LocalTime } from "@/components/LocalTime";
+import { liveQr, personalLink } from "@/lib/people/links";
+import { ShareLink } from "./ShareLink";
+import { IntroduceForm } from "./IntroduceForm";
 
 export default async function ContactsPage() {
   const { agent } = await requireAgent();
@@ -22,6 +26,8 @@ export default async function ContactsPage() {
   const outgoing = rows.filter((r) => r.status === "pending" && !r.incoming);
   const accepted = rows.filter((r) => r.status === "accepted");
   const blocked = rows.filter((r) => r.status === "blocked" && r.blocked_by === agent.id);
+  const link = personalLink(agent.handle);
+  const qr = await liveQr(agent.id, agent.handle);
 
   return (
     <div className="space-y-6">
@@ -35,6 +41,31 @@ export default async function ContactsPage() {
             </Row>
           ))}
         </Section>
+      )}
+
+      {!agent.guest && (
+        <section className="card space-y-3" aria-label="Your link">
+          <div>
+            <h2 className="font-semibold">Add people in a tap</h2>
+            <p className="hint">Send your link to anyone (they&apos;ll send you a request), or let a friend next to you scan your code.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="min-w-0 flex-1 truncate rounded-lg bg-accent-soft px-2 py-1.5 text-sm" data-testid="personal-link">{link}</code>
+            <ShareLink url={link} text={`Add me on AGENTME: @${agent.handle}`} label="Share my link" />
+          </div>
+          <details className="group">
+            <summary className="btn-ghost inline-flex cursor-pointer list-none">📷 Show my QR code</summary>
+            <div className="mt-3 flex flex-col items-center gap-2 text-center">
+              {/* Generated server-side from our own URL; white background so phones can scan it in dark mode. */}
+              <div className="w-56 rounded-2xl bg-white p-2" data-testid="qr-code" data-url={qr.url} dangerouslySetInnerHTML={{ __html: qr.svg }} />
+              <p className="hint max-w-xs">
+                Scanning this connects you straight away, no request needed. It changes every 10 minutes (this one works until{" "}
+                <LocalTime iso={qr.expiresAt.toISOString()} />
+                ), so a photo of it can&apos;t be reused later.
+              </p>
+            </div>
+          </details>
+        </section>
       )}
 
       <Section title="Contacts">
@@ -55,6 +86,16 @@ export default async function ContactsPage() {
           </Row>
         ))}
       </Section>
+
+      {accepted.length >= 2 && (
+        <section className="card space-y-3" aria-label="Introduce">
+          <div>
+            <h2 className="font-semibold">🤝 Introduce two friends</h2>
+            <p className="hint">They each get your introduction in their Inbox and are connected only if both say yes.</p>
+          </div>
+          <IntroduceForm people={accepted.map((r) => r.other)} />
+        </section>
+      )}
 
       {outgoing.length > 0 && (
         <Section title="Sent requests">

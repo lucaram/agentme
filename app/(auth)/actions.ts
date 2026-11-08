@@ -3,6 +3,9 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { safeNext } from "@/lib/next-path";
+import { getAgentForUser } from "@/lib/data/agents";
+import { registerAccountEmail } from "@/lib/people/matching";
 
 export type AuthState = { error?: string } | undefined;
 
@@ -11,18 +14,15 @@ const Credentials = z.object({
   password: z.string().min(8, "Use at least 8 characters."),
 });
 
-function safeNext(next: FormDataEntryValue | null) {
-  const value = typeof next === "string" ? next : "";
-  return value.startsWith("/") && !value.startsWith("//") ? value : "/chats";
-}
-
 export async function signUp(_prev: AuthState, form: FormData): Promise<AuthState> {
   const parsed = Credentials.safeParse({ email: form.get("email"), password: form.get("password") });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const supabase = await createClient();
   const { error } = await supabase.auth.signUp(parsed.data);
   if (error) return { error: error.message };
-  redirect("/onboarding");
+  // e.g. back to the invite link or personal link that sent them here.
+  const next = safeNext(form.get("next"), "");
+  redirect(next ? `/onboarding?next=${encodeURIComponent(next)}` : "/onboarding");
 }
 
 export async function signIn(_prev: AuthState, form: FormData): Promise<AuthState> {
@@ -32,8 +32,11 @@ export async function signIn(_prev: AuthState, form: FormData): Promise<AuthStat
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+  const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) return { error: "Wrong email or password." };
+  // Keep the verified email matchable for "People you know" (only ever mutual).
+  const agent = await getAgentForUser(data.user.id);
+  if (agent) await registerAccountEmail(agent.id, { email: data.user.email ?? null, emailConfirmed: Boolean(data.user.email_confirmed_at) });
   redirect(safeNext(form.get("next")));
 }
 

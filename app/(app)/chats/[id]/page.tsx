@@ -13,6 +13,7 @@ import { MarkRead } from "@/components/MarkRead";
 import { DraftReply } from "./DraftReply";
 import { RichText } from "@/components/RichText";
 import { LocalTime } from "@/components/LocalTime";
+import { InviteLink } from "./InviteLink";
 
 export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
   const { id } = await params;
@@ -56,6 +57,20 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
   ]);
 
   const target = conv.target_agent ? byId.get(conv.target_agent) : undefined;
+
+  // The organiser of a plan shared in this group can invite more people by link (RLS: own tasks only).
+  const { data: ownPlan } =
+    conv.kind === "group"
+      ? await supabase
+          .from("tasks")
+          .select("id")
+          .eq("group_conversation_id", id)
+          .eq("owner_id", user.id)
+          .not("status", "in", "(cancelled,failed,rejected,awaiting_approval)")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : { data: null };
 
   // Template chips for My Agent, filled with the owner's own contacts.
   let examples: { label: string; text: string }[] | undefined;
@@ -117,6 +132,11 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
           </form>
         )}
       </div>
+      {ownPlan && (
+        <div className="mb-3 flex justify-end">
+          <InviteLink taskId={ownPlan.id} title={title} />
+        </div>
+      )}
 
       <ol className="flex flex-1 flex-col gap-3" aria-label="Messages">
         {(messages ?? []).map((m) => {

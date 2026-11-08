@@ -6,7 +6,7 @@ import { checkHandle, createAgent } from "./actions";
 
 type HandleStatus = { ok: boolean; message: string } | null;
 
-export function OnboardingForm({ suggestedHandle }: { suggestedHandle: string }) {
+export function OnboardingForm({ suggestedHandle, next }: { suggestedHandle: string; next?: string }) {
   const [state, action, pending] = useActionState(createAgent, undefined);
   const [type, setType] = useState<"personal" | "business">("personal");
   const [handle, setHandle] = useState(suggestedHandle);
@@ -30,6 +30,7 @@ export function OnboardingForm({ suggestedHandle }: { suggestedHandle: string })
     <form action={action} className="mt-6 space-y-5">
       <input type="hidden" name="type" value={type} />
       <input type="hidden" name="avatar" value={avatar} />
+      <input type="hidden" name="next" value={next ?? ""} />
 
       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Account type">
         {(["personal", "business"] as const).map((t) => (

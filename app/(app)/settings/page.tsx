@@ -2,19 +2,46 @@ import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { CATEGORY_LABELS, FACT_CATEGORIES } from "@/lib/policy/disclosure";
 import { deleteAccount, saveSettings } from "../actions";
+import { PhoneVerify } from "./PhoneVerify";
+import { SaveAccount } from "./SaveAccount";
 
 export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
   const { agent } = await requireAgent();
   const { saved, error } = await searchParams;
   const supabase = await createClient();
-  const { data: facts } = await supabase.from("agent_facts").select("category, value, disclosure");
+  const [{ data: facts }, { data: identifiers }] = await Promise.all([
+    supabase.from("agent_facts").select("category, value, disclosure"),
+    supabase.from("agent_identifiers").select("kind, hint"),
+  ]);
+  const hint = (kind: string) => identifiers?.find((i) => i.kind === kind)?.hint ?? null;
   const fact = (c: string) => facts?.find((f) => f.category === c);
   const info = agent.business_info as { description?: string; hours?: string; faqs?: { q: string; a: string }[] };
 
   return (
     <div className="space-y-8">
+      {saved === "account" && <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status">Your account is saved. You can now log in with your email anywhere.</p>}
+      {agent.guest && (
+        <section id="account" className="card space-y-3 border-accent">
+          <h2 className="font-semibold">Save your account</h2>
+          <p className="hint">You joined as a guest, so this account only lives in this browser. Add an email and password to keep your plans, chats and contacts.</p>
+          <SaveAccount />
+        </section>
+      )}
+      {!agent.guest && (
+        <section id="find-me" className="card space-y-3">
+          <div>
+            <h2 className="font-semibold">How friends can find you</h2>
+            <p className="hint">
+              Only people who have your email or number <b>and</b> whom you have too will see you under “People you know”. Nobody else can
+              look you up by them.
+            </p>
+          </div>
+          <p className="text-sm">✉️ {hint("email") ? `${hint("email")} ✓` : "Your email isn't verified yet."}</p>
+          <PhoneVerify current={hint("phone")} />
+        </section>
+      )}
       <form action={saveSettings} className="space-y-6">
-        {saved && <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status">Saved.</p>}
+        {saved && saved !== "account" && <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status">Saved.</p>}
         <section className="card space-y-3">
           <h2 className="font-semibold">Profile</h2>
           <div>

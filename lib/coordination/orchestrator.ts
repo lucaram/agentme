@@ -13,6 +13,7 @@ import { createSteps } from "@/lib/plans/steps";
 import { ComposeSchema, heuristicCompose, validateDraft, type PlanDraft } from "@/lib/plans/compose";
 import { ensurePlanGroup } from "@/lib/plans/group";
 import { withdrawInboxForTask } from "@/lib/plans/inbox";
+import { createIntroduction, parseIntroduceCommand } from "@/lib/people/introductions";
 import { describeRetry, hit } from "@/lib/limits";
 import { displayClock } from "./heuristics";
 import type { Proposal } from "./schemas";
@@ -37,6 +38,20 @@ function errorText(error: unknown) {
 export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow; conversationId: string; text: string }) {
   const { userId, agent, conversationId, text } = opts;
   await postMessage({ conversationId, from: "human", userId, content: text });
+
+  // "introduce @luca to @paul": the owner's own instruction, so it goes out straight away.
+  const intro = parseIntroduceCommand(text);
+  if (intro) {
+    const result = await createIntroduction(agent, intro.a, intro.b, intro.note);
+    return postMessage({
+      conversationId,
+      from: "agent",
+      agentId: agent.id,
+      content: result.ok
+        ? `🤝 Done. @${intro.a} and @${intro.b} will each see your introduction in their Inbox, and they'll be connected only if both say yes.`
+        : result.error,
+    });
+  }
 
   const mentions = extractMentions(text).filter((h) => h !== agent.handle);
   if (mentions.length === 0) return replyToOwner(agent, userId, conversationId, text);

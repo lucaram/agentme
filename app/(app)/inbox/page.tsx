@@ -5,6 +5,8 @@ import { CATEGORY_LABELS, isRequestableCategory } from "@/lib/policy/disclosure"
 import { inboxPayloadOf } from "@/lib/plans/inbox";
 import { InboxItemForm, type InboxField } from "./InboxItemForm";
 import { QuestionForm } from "./QuestionForm";
+import { IntroductionForm } from "./IntroductionForm";
+import type { IntroductionPayload } from "@/lib/people/introductions";
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 
@@ -35,9 +37,30 @@ export default async function InboxPage() {
       {!open.length && <p className="card text-sm text-muted">Nothing needs your answer right now.</p>}
       <ul className="space-y-3">
         {open.map((item) => {
-          const payload = inboxPayloadOf(item);
           const from = item.from_agent ? byId.get(item.from_agent) : undefined;
           const who = from ? `${from.avatar} @${from.handle}` : "Someone";
+
+          if (item.kind === "introduction") {
+            const intro = item.payload as unknown as IntroductionPayload;
+            const other = byId.get(intro.other_agent);
+            return (
+              <li key={item.id} className="card space-y-3" data-testid="inbox-item">
+                <div>
+                  <p className="text-sm">
+                    🤝 <b>{from?.display_name ?? "A friend"}</b> wants to introduce you to{" "}
+                    <b>
+                      {other?.avatar} {other?.display_name ?? "someone"}
+                    </b>{" "}
+                    <span className="text-muted">@{other?.handle}</span>
+                  </p>
+                  {intro.note && <p className="mt-1 rounded-lg bg-accent-soft px-3 py-2 text-sm">“{intro.note}”</p>}
+                  <p className="hint mt-1">{fmt(item.created_at)}</p>
+                </div>
+                <IntroductionForm itemId={item.id} name={other?.display_name ?? "them"} />
+              </li>
+            );
+          }
+          const payload = inboxPayloadOf(item);
 
           if (payload.kind === "question") {
             return (
@@ -85,12 +108,19 @@ export default async function InboxPage() {
           <h2 className="mb-2 text-sm font-semibold text-muted">Earlier</h2>
           <ul className="divide-y divide-border rounded-2xl border border-border bg-surface text-sm">
             {closed.map((item) => {
-              const payload = inboxPayloadOf(item);
               const from = item.from_agent ? byId.get(item.from_agent) : undefined;
-              const label = { answered: "You answered", declined: "You declined", withdrawn: "No longer needed" }[
-                item.status as "answered" | "declined" | "withdrawn"
-              ];
-              const what = payload.kind === "question" ? `“${payload.question}”` : `${payload.event} (${payload.window})`;
+              const isIntro = item.kind === "introduction";
+              const label = (
+                isIntro
+                  ? { answered: "You said yes", declined: "You declined", withdrawn: "No longer available" }
+                  : { answered: "You answered", declined: "You declined", withdrawn: "No longer needed" }
+              )[item.status as "answered" | "declined" | "withdrawn"];
+              const payload = isIntro ? null : inboxPayloadOf(item);
+              const what = isIntro
+                ? `introduction to @${byId.get((item.payload as unknown as IntroductionPayload).other_agent)?.handle ?? "someone"}`
+                : payload?.kind === "question"
+                  ? `“${payload.question}”`
+                  : `${payload?.event} (${payload?.window})`;
               return (
                 <li key={item.id} className="flex justify-between gap-2 px-4 py-2">
                   <span className="min-w-0 truncate">

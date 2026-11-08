@@ -19,7 +19,8 @@ type Result = { ok: true; wake: string | null } | { ok: false; error: string };
 
 async function loadItem(itemId: string, ownerId: string) {
   const { data: item } = await adminClient().from("inbox_items").select("*").eq("id", itemId).maybeSingle();
-  if (!item || item.owner_id !== ownerId) return null;
+  // Introductions have their own flow (lib/people/introductions.ts).
+  if (!item || item.owner_id !== ownerId || item.kind === "introduction") return null;
   return item;
 }
 
