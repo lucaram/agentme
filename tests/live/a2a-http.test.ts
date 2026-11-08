@@ -2,12 +2,14 @@
  * Security tests against the live A2A HTTP endpoint. Needs a seeded database and
  * a mock-mode server at LIVE_TEST_URL; skipped otherwise (see ./env.ts).
  */
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import { signAgentToken } from "@/lib/a2a/auth";
 import { LIVE_URL as BASE, SECRET, serverUp as reachable } from "./env";
 
 const ids: Record<string, string> = {};
+// A throwaway agent that is nobody's contact (other suites may connect the demo accounts).
+let stranger: { userId: string; agentId: string } | null = null;
 
 async function rpc(handle: string, body: unknown, token?: string, headers: Record<string, string> = {}) {
   const res = await fetch(`${BASE}/api/a2a/${handle}`, {
@@ -39,6 +41,14 @@ describe.skipIf(!reachable || !SECRET)("A2A endpoint security (live)", () => {
     const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
     const { data } = await db.from("agents").select("id, handle");
     for (const a of data ?? []) ids[a.handle] = a.id;
+    const handle = `stranger_${Math.random().toString(36).slice(2, 8)}`;
+    const { data: user } = await db.auth.admin.createUser({ email: `${handle}@a2a.test`, password: crypto.randomUUID(), email_confirm: true });
+    const { data: agent } = await db.from("agents").insert({ owner_id: user.user!.id, handle, display_name: "Stranger" }).select("id").single();
+    stranger = { userId: user.user!.id, agentId: agent!.id };
+  });
+
+  afterAll(async () => {
+    if (stranger) await createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!).auth.admin.deleteUser(stranger.userId);
   });
 
   it("rejects forged tokens", async () => {
@@ -54,7 +64,7 @@ describe.skipIf(!reachable || !SECRET)("A2A endpoint security (live)", () => {
   });
 
   it("refuses a valid non-contact agent and discloses nothing", async () => {
-    const token = await signAgentToken({ sub: ids.eve, recipient: "marco" }, SECRET);
+    const token = await signAgentToken({ sub: stranger!.agentId, recipient: "marco" }, SECRET);
     const { status, json } = await rpc("marco", coordination(), token);
     expect(status).toBe(200);
     const body = JSON.stringify(json);
