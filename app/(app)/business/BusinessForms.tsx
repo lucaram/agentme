@@ -29,7 +29,10 @@ export function BusinessInfoForm({ about, customers }: { about: string; customer
       <div>
         <label className="label" htmlFor="customers">For customers only <span className="font-normal text-muted">· your contacts</span></label>
         <textarea id="customers" name="customers" className="input" rows={3} maxLength={4000} defaultValue={customers} placeholder="e.g. Private events: £35 per person, minimum 20 people." />
-        <p className="hint mt-1">Only shared with people who are your contacts on AGENTME.</p>
+        <p className="hint mt-1">
+          Only for people in your Contacts, when they ask your agent directly. Never shown in groups or communities, where others can read the
+          answer.
+        </p>
       </div>
       {state?.error && <p className="text-sm text-danger" role="alert">{state.error}</p>}
       {state?.saved && (
