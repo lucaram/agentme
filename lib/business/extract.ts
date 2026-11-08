@@ -4,8 +4,11 @@
  * HTML-to-text. No network or server code here, so they're unit-tested.
  */
 
-/** Only plain http(s) links to a hostname, no credentials, standard ports. */
-export function checkUrl(raw: string): { ok: true; url: URL } | { ok: false; error: string } {
+/**
+ * Only plain http(s) links to a hostname, no credentials, standard ports.
+ * allowLocal (development/tests only) also lets localhost use any port.
+ */
+export function checkUrl(raw: string, opts: { allowLocal?: boolean } = {}): { ok: true; url: URL } | { ok: false; error: string } {
   let url: URL;
   try {
     url = new URL(raw.trim());
@@ -14,7 +17,8 @@ export function checkUrl(raw: string): { ok: true; url: URL } | { ok: false; err
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") return { ok: false, error: "Use a web address starting with https://" };
   if (url.username || url.password) return { ok: false, error: "Web addresses with a login can't be read." };
-  if (url.port && !["80", "443"].includes(url.port)) return { ok: false, error: "Only standard web addresses can be read." };
+  const local = opts.allowLocal && url.hostname === "localhost";
+  if (url.port && !["80", "443"].includes(url.port) && !local) return { ok: false, error: "Only standard web addresses can be read." };
   if (!url.hostname.includes(".") && url.hostname !== "localhost") return { ok: false, error: "That doesn't look like a public website." };
   return { ok: true, url };
 }

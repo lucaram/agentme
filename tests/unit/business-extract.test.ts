@@ -9,6 +9,10 @@ describe("reading a business's own pages safely", () => {
     expect(checkUrl("https://example.com:8443/x").ok).toBe(false);
     expect(checkUrl("http://intranet/menu").ok).toBe(false);
     expect(checkUrl("not a url").ok).toBe(false);
+    // Development only: local pages on any port.
+    expect(checkUrl("http://localhost:3000/demo/menu.html").ok).toBe(false);
+    expect(checkUrl("http://localhost:3000/demo/menu.html", { allowLocal: true }).ok).toBe(true);
+    expect(checkUrl("https://example.com:8443/x", { allowLocal: true }).ok).toBe(false);
   });
 
   it("never fetches internal addresses (loopback, private, cloud metadata)", () => {

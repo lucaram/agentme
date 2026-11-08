@@ -13,7 +13,7 @@ const MAX_REDIRECTS = 3;
  * Local pages are allowed only for development/tests with ALLOW_LOCAL_FETCH=1
  * (never in production), so the demo menu can be served by the app itself.
  */
-const allowLocal = () => process.env.NODE_ENV !== "production" && process.env.ALLOW_LOCAL_FETCH === "1";
+export const allowLocal = () => process.env.NODE_ENV !== "production" && process.env.ALLOW_LOCAL_FETCH === "1";
 
 /**
  * Resolves the hostname and refuses non-public addresses AT CONNECT TIME, so
@@ -35,7 +35,7 @@ export type Fetched = { contentType: string; body: Buffer; finalUrl: string };
 
 /** GET a public web page/file with strict limits. Throws an Error with a user-readable message. */
 export async function safeFetch(raw: string, redirects = 0): Promise<Fetched> {
-  const check = checkUrl(raw);
+  const check = checkUrl(raw, { allowLocal: allowLocal() });
   if (!check.ok) throw new Error(check.error);
   const url = check.url;
   if (url.hostname === "localhost" && !allowLocal()) throw new Error("That doesn't look like a public website.");

@@ -8,6 +8,7 @@ import { adminClient } from "@/lib/supabase/admin";
 import { asJson } from "@/lib/data/json";
 import { checkUrl } from "@/lib/business/extract";
 import { businessSources, readSource } from "@/lib/business/sources";
+import { allowLocal } from "@/lib/business/fetch";
 import { draftBusinessAnswer } from "@/lib/agents/respond";
 import { withUsageContext } from "@/lib/usage/context";
 import { describeRetry, hit } from "@/lib/limits";
@@ -47,7 +48,7 @@ export async function saveBusinessInfoAction(_prev: Out | undefined, form: FormD
   let addedLinks = 0;
   for (const [text, visibility] of [[about, "public"], [customers, "customers"]] as const) {
     for (const raw of linksIn(text)) {
-      const check = checkUrl(raw);
+      const check = checkUrl(raw, { allowLocal: allowLocal() });
       if (!check.ok || room <= 0) continue;
       const { data } = await db
         .from("business_sources")
@@ -76,7 +77,7 @@ export async function removeFaqAction(index: number): Promise<Out> {
 /** A link your agent reads: your website, a PDF menu, a photo of your menu. Read in the background. */
 export async function addSourceAction(url: string, visibility: string): Promise<Out> {
   const { agent } = await requireBusiness();
-  const check = checkUrl(String(url ?? ""));
+  const check = checkUrl(String(url ?? ""), { allowLocal: allowLocal() });
   if (!check.ok) return { error: check.error };
   const db = adminClient();
   const { count } = await db.from("business_sources").select("*", { count: "exact", head: true }).eq("agent_id", agent.id);
