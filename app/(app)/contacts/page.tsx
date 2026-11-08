@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ActionButton } from "@/components/ActionButton";
 import { acceptContact, blockContact, openAgentChat, openDirectMessage, removeContact } from "../actions";
 import { LocalTime } from "@/components/LocalTime";
-import { liveQr, personalLink } from "@/lib/people/links";
+import { liveQr, permanentQr, personalLink } from "@/lib/people/links";
 import { ShareLink } from "./ShareLink";
 import { IntroduceForm } from "./IntroduceForm";
 import { PeopleTabs } from "@/components/PeopleTabs";
@@ -34,7 +34,9 @@ export default async function ContactsPage() {
     .filter((i) => (i.a_agent === agent.id && i.a_answer === "accepted") || (i.b_agent === agent.id && i.b_answer === "accepted"))
     .map((i) => ({ id: i.id, other: byId.get(i.a_agent === agent.id ? i.b_agent : i.a_agent), introducer: byId.get(i.introducer_agent) }));
   const link = personalLink(agent.handle);
-  const qr = await liveQr(agent.id, agent.handle);
+  // People: a live code that changes every 10 minutes. Businesses: a permanent code to print.
+  const isBusiness = agent.type === "business";
+  const qr = isBusiness ? { ...(await permanentQr(agent.handle)), expiresAt: null } : await liveQr(agent.id, agent.handle);
 
   return (
     <div className="space-y-6">
@@ -77,11 +79,21 @@ export default async function ContactsPage() {
             <div className="mt-3 flex flex-col items-center gap-2 text-center">
               {/* Generated server-side from our own URL; white background so phones can scan it in dark mode. */}
               <div className="w-56 rounded-2xl bg-white p-2" data-testid="qr-code" data-url={qr.url} dangerouslySetInnerHTML={{ __html: qr.svg }} />
-              <p className="hint max-w-xs">
-                Scanning this connects you straight away, no request needed. It changes every 10 minutes (this one works until{" "}
-                <LocalTime iso={qr.expiresAt.toISOString()} />
-                ), so a photo of it can&apos;t be reused later.
-              </p>
+              {qr.expiresAt ? (
+                <p className="hint max-w-xs">
+                  Scanning this connects you straight away, no request needed. It changes every 10 minutes (this one works until{" "}
+                  <LocalTime iso={qr.expiresAt.toISOString()} />
+                  ), so a photo of it can&apos;t be reused later.
+                </p>
+              ) : (
+                <>
+                  <p className="hint max-w-xs">
+                    This code never changes, so use it anywhere you meet customers: in your shop, on your website or on social media. One scan and
+                    they can ask your agent anything, or become a customer.
+                  </p>
+                  <Link href="/print/qr" className="btn-primary" data-testid="print-poster">🖨️ Print poster</Link>
+                </>
+              )}
             </div>
           </details>
         </section>

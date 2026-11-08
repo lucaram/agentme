@@ -15,3 +15,13 @@ export async function liveQr(agentId: string, handle: string) {
   const svg = await QRCode.toString(url, { type: "svg", margin: 1, errorCorrectionLevel: "M", color: { dark: "#000000", light: "#ffffff" } });
   return { url, svg, expiresAt };
 }
+
+/**
+ * A business's permanent QR code (for tables, the till, the menu): its public
+ * page, where anyone can ask its agent. Never expires, carries no token.
+ */
+export async function permanentQr(handle: string) {
+  const url = personalLink(handle);
+  const svg = await QRCode.toString(url, { type: "svg", margin: 1, errorCorrectionLevel: "M", color: { dark: "#000000", light: "#ffffff" } });
+  return { url, svg };
+}
