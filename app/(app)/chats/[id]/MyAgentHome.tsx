@@ -25,12 +25,13 @@ export async function MyAgentHome({ conversationId, examples, now }: { conversat
   return (
     <div className="flex flex-1 flex-col">
       <RealtimeRefresh channel={`my-agent-${conversationId}`} tables={["messages", "inbox_items"]} filter={`conversation_id=eq.${conversationId}`} />
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold">My Agent</h1>
-          <p className="text-xs text-muted">Your requests, one per line. Tap one to see only its updates. Your agent always asks before contacting anyone.</p>
-        </div>
-        <Link href={`/chats/${conversationId}?t=new`} className="btn-primary shrink-0" data-testid="new-request">＋ New request</Link>
+      {/* New requests start in the box at the bottom (one way to start, not two). */}
+      <div className="mb-3">
+        <h1 className="text-lg font-semibold">My Agent</h1>
+        <p className="text-xs text-muted">
+          Your requests, one per line. Tap one to see only its updates, or type below to start a new one. Your agent always asks before contacting
+          anyone.
+        </p>
       </div>
 
       <div className="mb-4">

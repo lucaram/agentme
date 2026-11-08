@@ -178,7 +178,11 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
         filter={`conversation_id=eq.${id}`}
       />
       {isMyAgent && (
-        <Link href={`/chats/${id}`} className="mb-1 text-sm text-accent" data-testid="back-to-my-agent">‹ My Agent</Link>
+        <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+          <Link href={`/chats/${id}`} className="text-accent hover:underline" data-testid="back-to-my-agent">‹ My Agent</Link>
+          {/* Inside a request the box continues it; this starts another one. */}
+          {thread && <Link href={`/chats/${id}?t=new`} className="text-accent hover:underline" data-testid="new-request">＋ New request</Link>}
+        </div>
       )}
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
