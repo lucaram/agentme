@@ -39,6 +39,11 @@ export default async function ChatsPage() {
     supabase.from("conversation_members").select("conversation_id, muted").eq("user_id", user.id),
   ]);
   const communityById = new Map((communities ?? []).map((c) => [c.id, c]));
+  const { count: needsAnswer } = await supabase
+    .from("inbox_items")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "open")
+    .in("kind", ["info_request", "question"]);
   const muted = new Set((myMemberships ?? []).filter((m) => m.muted).map((m) => m.conversation_id));
   const byOwner = new Map((agents ?? []).map((a) => [a.owner_id, a]));
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));
@@ -77,44 +82,85 @@ export default async function ChatsPage() {
               : "";
       return { id: c.id, kind: c.kind, name, icon, last, author, at: last?.created_at ?? "", unread: unread.get(c.id) ?? 0, muted: muted.has(c.id) };
     })
-    .sort((a, b) => (a.kind === "my_agent" ? -1 : b.kind === "my_agent" ? 1 : b.at.localeCompare(a.at)));
+    .sort((a, b) => b.at.localeCompare(a.at));
+  const myAgentRow = rows.find((r) => r.kind === "my_agent");
+  const chatRows = rows.filter((r) => r.kind !== "my_agent");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <RealtimeRefresh channel={`chats-${user.id}`} tables={["messages", "inbox_items"]} />
-      {!rows.some((r) => r.kind === "my_agent") && (
+      {!myAgentRow && (
         <form action={openMyAgent}><button className="btn-primary">Talk to your agent</button></form>
       )}
-      <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
-        {rows.map((r) => (
-          <li key={r.id}>
-            <Link href={`/chats/${r.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-accent-soft">
-              <span className="text-2xl">{r.icon}</span>
-              <span className="min-w-0 flex-1">
-                <span className={`block truncate ${r.unread && !r.muted ? "font-semibold" : "font-medium"}`}>
-                  {r.name}
-                  {r.muted && <span className="ml-1 text-xs" title="Muted" aria-label="muted">🔕</span>}
-                </span>
-                <span className={`block truncate text-sm ${r.unread ? "text-foreground" : "text-muted"}`}>
-                  {r.last ? `${r.author}${r.last.content}` : KIND_LABEL[r.kind]}
-                </span>
+      {/* My Agent: its own card above the chats, in the agent colour, always first. */}
+      {myAgentRow && (
+        <section aria-label="Your agent">
+          <Link
+            href={`/chats/${myAgentRow.id}`}
+            className="flex items-center gap-3 rounded-2xl border-2 border-agent-border bg-agent px-4 py-3.5 shadow-sm transition hover:border-accent"
+            data-testid="my-agent-card"
+          >
+            <span className="text-3xl">{myAgentRow.icon}</span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-2">
+                <span className={`truncate ${myAgentRow.unread ? "font-semibold" : "font-medium"}`}>My Agent</span>
+                <span className="rounded bg-agent-border px-1 text-[10px] font-semibold uppercase text-foreground" title="Your AI agent">AI</span>
+                <span className="truncate text-xs text-muted">@{agent.handle}</span>
               </span>
-              <span className="flex shrink-0 flex-col items-end gap-1">
-                <span className={`text-xs ${r.unread ? "text-accent" : "text-muted"}`}>{formatWhen(r.at)}</span>
-                {r.unread > 0 && (
-                  <span
-                    className={`min-w-5 rounded-full px-1.5 text-center text-xs font-semibold leading-5 ${r.muted ? "bg-border text-muted" : "bg-accent text-white dark:text-black"}`}
-                    data-testid="unread-badge"
-                    aria-label={`${r.unread} unread`}
-                  >
-                    {r.unread > 99 ? "99+" : r.unread}
+              <span className={`block truncate text-sm ${myAgentRow.unread || needsAnswer ? "text-foreground" : "text-muted"}`} data-testid="my-agent-subtitle">
+                {needsAnswer
+                  ? `🔔 ${needsAnswer} ${needsAnswer === 1 ? "thing needs" : "things need"} your answer`
+                  : myAgentRow.last
+                    ? `${myAgentRow.author === "🤖 " ? "" : myAgentRow.author}${myAgentRow.last.content}`
+                    : "Ask me to organise something with your contacts"}
+              </span>
+            </span>
+            <span className="flex shrink-0 flex-col items-end gap-1">
+              <span className={`text-xs ${myAgentRow.unread ? "text-accent" : "text-muted"}`}>{formatWhen(myAgentRow.at)}</span>
+              {myAgentRow.unread > 0 && (
+                <span className="min-w-5 rounded-full bg-accent px-1.5 text-center text-xs font-semibold leading-5 text-white dark:text-black" data-testid="unread-badge" aria-label={`${myAgentRow.unread} unread`}>
+                  {myAgentRow.unread > 99 ? "99+" : myAgentRow.unread}
+                </span>
+              )}
+            </span>
+          </Link>
+        </section>
+      )}
+
+      {chatRows.length > 0 ? (
+        <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface" aria-label="Chats">
+          {chatRows.map((r) => (
+            <li key={r.id}>
+              <Link href={`/chats/${r.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-accent-soft">
+                <span className="text-2xl">{r.icon}</span>
+                <span className="min-w-0 flex-1">
+                  <span className={`block truncate ${r.unread && !r.muted ? "font-semibold" : "font-medium"}`}>
+                    {r.name}
+                    {r.muted && <span className="ml-1 text-xs" title="Muted" aria-label="muted">🔕</span>}
                   </span>
-                )}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+                  <span className={`block truncate text-sm ${r.unread ? "text-foreground" : "text-muted"}`}>
+                    {r.last ? `${r.author}${r.last.content}` : KIND_LABEL[r.kind]}
+                  </span>
+                </span>
+                <span className="flex shrink-0 flex-col items-end gap-1">
+                  <span className={`text-xs ${r.unread ? "text-accent" : "text-muted"}`}>{formatWhen(r.at)}</span>
+                  {r.unread > 0 && (
+                    <span
+                      className={`min-w-5 rounded-full px-1.5 text-center text-xs font-semibold leading-5 ${r.muted ? "bg-border text-muted" : "bg-accent text-white dark:text-black"}`}
+                      data-testid="unread-badge"
+                      aria-label={`${r.unread} unread`}
+                    >
+                      {r.unread > 99 ? "99+" : r.unread}
+                    </span>
+                  )}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="card text-sm text-muted">No chats yet. Message a contact, create a group, or join a community.</p>
+      )}
 
     </div>
   );
