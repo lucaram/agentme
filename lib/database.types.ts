@@ -97,6 +97,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"business_managers": {
+                  Row: {
+                    "business_agent_id": string,"created_at": string,"role": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "business_agent_id": string,"created_at"?: string,"role"?: string,"user_id": string
+                  }
+                  Update: {
+                    "business_agent_id"?: string,"created_at"?: string,"role"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "business_managers_business_agent_id_fkey"
+      columns: ["business_agent_id"]
+isOneToOne: false
+      referencedRelation: "agents"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"business_sources": {
                   Row: {
                     "agent_id": string,"content": string | null,"created_at": string,"error": string | null,"id": string,"kind": string | null,"last_read_at": string | null,"status": string,"url": string,"visibility": string
@@ -813,6 +833,9 @@ isOneToOne: false
                            },
 "conversation_role":
 { Args: { "conv": string }; Returns: string
+                           },
+"identity_badge":
+{ Args: { "p_user": string }; Returns: number
                            },
 "increment_invite_uses":
 { Args: { "p_token": string }; Returns: undefined

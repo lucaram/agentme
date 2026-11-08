@@ -8,6 +8,7 @@ import { SaveAccount } from "./SaveAccount";
 import { DiscoverableToggle } from "./DiscoverableToggle";
 import { SavedTips } from "./SavedTips";
 import { maskEmail } from "@/lib/people/normalise";
+import { businessesOnlyOwnedBy, isManagedLogin, realPerson } from "@/lib/identities";
 
 export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
   const { user, agent } = await requireAgent();
@@ -20,6 +21,10 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
   const { data: tips } = await supabase.from("agent_tips").select("id, topic, tip").order("created_at", { ascending: false });
   const hint = (kind: string) => identifiers?.find((i) => i.kind === kind)?.hint ?? null;
   const fact = (c: string) => facts?.find((f) => f.category === c);
+  // A business added from a personal account has an internal login: nothing to find it by.
+  const managedBusiness = isManagedLogin(user.email);
+  const person = await realPerson(user, agent);
+  const ownedBusinesses = agent.type === "personal" && person ? await businessesOnlyOwnedBy(person) : [];
 
   return (
     <div className="space-y-8">
@@ -31,7 +36,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           <SaveAccount />
         </section>
       )}
-      {!agent.guest && (
+      {!agent.guest && !managedBusiness && (
         <section id="find-me" className="card space-y-3">
           <div>
             <h2 className="font-semibold">How friends can find you</h2>
@@ -161,6 +166,9 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         <p className="text-sm text-muted">
           Permanently deletes your agent, preferences, contacts, private chats, tasks and audit history. Messages you sent in shared
           chats stay for other members, without your name.
+          {ownedBusinesses.length > 0 &&
+            ` The ${ownedBusinesses.length === 1 ? "business" : `${ownedBusinesses.length} businesses`} you added (and only you manage) ${ownedBusinesses.length === 1 ? "is" : "are"} deleted too.`}
+          {managedBusiness && " This deletes only the business; your personal account stays and you're switched back to it."}
         </p>
         <form action={deleteAccount} className="flex flex-wrap gap-2">
           <input className="input max-w-xs" name="confirm" placeholder={`Type ${agent.handle} to confirm`} aria-label="Confirm handle" />

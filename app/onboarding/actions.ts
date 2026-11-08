@@ -79,6 +79,8 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
     return { error: error.code === "23505" ? `@${handle.handle} was just taken. Try another.` : "Could not create your agent." };
   }
 
+  // A business that signed up on its own manages itself (staff can be added later).
+  if (isBusiness) await db.from("business_managers").insert({ business_agent_id: agent.id, user_id: user.id, role: "owner" });
   if (!isBusiness) {
     const facts = (["availability", "food", "notes"] as const)
       .map((category) => ({
