@@ -129,3 +129,24 @@ test("connecting contacts shows a list to tick: add who you want, invite the res
   await expect(marco.page.getByText("Last checked")).toBeVisible();
   await marco.close();
 });
+
+test("search in Chats finds your groups and contacts and opens them", async ({ browser }) => {
+  const luca = await as(browser, "luca");
+  const search = luca.page.getByRole("combobox", { name: "Search chats and contacts" });
+
+  await search.fill("which option");
+  await luca.page.getByRole("option").filter({ hasText: "Which option do you prefer?" }).first().click();
+  await expect(luca.page.getByRole("heading", { name: /Which option do you prefer/ })).toBeVisible();
+
+  await search.fill("pau");
+  await luca.page.getByRole("option").filter({ hasText: "@paul" }).first().click();
+  await expect(luca.page).toHaveURL(/\/chats\/[0-9a-f-]+$/);
+  await expect(luca.page.getByRole("heading", { name: "Paul", exact: true })).toBeVisible();
+
+  // Keyboard: type, Enter opens the first match.
+  await search.fill("my agent");
+  await expect(luca.page.getByRole("option").first()).toContainText("My Agent");
+  await search.press("Enter");
+  await expect(luca.page.getByRole("heading", { name: "My Agent" })).toBeVisible();
+  await luca.close();
+});
