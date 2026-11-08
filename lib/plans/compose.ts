@@ -9,6 +9,7 @@ import { z } from "zod";
 import { displayClock, heuristicIntent, splitList } from "@/lib/coordination/heuristics";
 import { CATEGORY_LABELS, isRequestableCategory } from "@/lib/policy/disclosure";
 import { MAX_PLAN_PEOPLE, type NewStep, type TaskParsed } from "./types";
+import { stepWords } from "./wording";
 
 export const COMPOSABLE_STEPS = ["collect", "proposal", "rsvp", "poll", "question", "assign", "announce"] as const;
 export type ComposableStep = (typeof COMPOSABLE_STEPS)[number];
@@ -141,7 +142,7 @@ export function validateDraft(draft: PlanDraft, ctx: { organiser: string; partic
         const event = s.event.trim() || title;
         Object.assign(parsed, { event, window, categories });
         steps.push({ type: "collect", config: { categories, participants: ctx.participants } });
-        preview.push(`Ask their agents for ${categories.map((c) => CATEGORY_LABELS[c].toLowerCase()).join(" and ")} for ${event} (${window}). Nothing else is shared.`);
+        preview.push(`${stepWords.collect(ctx.participants)} ${categories.map((c) => CATEGORY_LABELS[c].toLowerCase()).join(" and ")} for ${event} (${window}). Nothing else is shared.`);
         break;
       }
       case "proposal":
@@ -164,7 +165,7 @@ export function validateDraft(draft: PlanDraft, ctx: { organiser: string; partic
           const event = s.event.trim() || title;
           Object.assign(parsed, { event, window: day, time, min, max });
           steps.push({ type: "rsvp", config: { title: event, day, time, min: min || null, max: max || null } });
-          preview.push(`Invite everyone to ${event}, ${day} at ${displayClock(time)}, and ask who's in${limits ? ` (${limits})` : ""}.`);
+          preview.push(`${stepWords.invite(ctx.participants)} ${event}, ${day} at ${displayClock(time)}, and ask who's in${limits ? ` (${limits})` : ""}.`);
         }
         break;
       }
@@ -174,7 +175,7 @@ export function validateDraft(draft: PlanDraft, ctx: { organiser: string; partic
         if (!question || options.length < 2) return { ok: false, error: "A poll needs a question and at least two options." };
         Object.assign(parsed, { question, options });
         steps.push({ type: "poll", config: { question, options, voters: [ctx.organiser, ...ctx.participants] } });
-        preview.push(`Everyone votes: “${question}” ${options.join(" · ")}. Options can't change once sent.`);
+        preview.push(`${stepWords.vote(ctx.participants)}: “${question}” ${options.join(" · ")}. Options can't change once sent.`);
         break;
       }
       case "question": {
@@ -182,7 +183,7 @@ export function validateDraft(draft: PlanDraft, ctx: { organiser: string; partic
         if (!question) return { ok: false, error: "What should I ask them?" };
         parsed.question ??= question;
         steps.push({ type: "question", config: { question, participants: ctx.participants } });
-        preview.push(`Ask each of them personally: “${question}”`);
+        preview.push(`${stepWords.question(ctx.participants)}: “${question}”`);
         break;
       }
       case "assign": {
@@ -191,7 +192,7 @@ export function validateDraft(draft: PlanDraft, ctx: { organiser: string; partic
         const listTitle = s.event.trim() || title;
         Object.assign(parsed, { items });
         steps.push({ type: "assign", config: { title: listTitle, items, people: [ctx.organiser, ...ctx.participants] } });
-        preview.push(`Sign-up list: ${items.join(" · ")}. Everyone claims their own; nobody is assigned anything.`);
+        preview.push(`Sign-up list: ${items.join(" · ")}. ${stepWords.claim(ctx.participants)}; nobody is assigned anything.`);
         break;
       }
       case "announce": {

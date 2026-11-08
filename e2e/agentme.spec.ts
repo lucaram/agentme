@@ -229,7 +229,7 @@ test("an agent asks its human when it may not share, and the plan continues with
     await send(luca.page, "Arrange drinks with @paul on Saturday evening");
     const task = luca.page.getByRole("region", { name: "Agent task" }).last();
     await task.getByRole("button", { name: "Approve" }).click();
-    await expect(task.getByTestId("task-status")).toHaveText("Waiting for people to answer");
+    await expect(task.getByTestId("task-status")).toHaveText("Waiting for @paul to answer");
     await expect(task.getByTestId("exchange")).toContainText("asked @paul personally");
 
     // Paul's agent tells him in My Agent (unread), where it waits under "Needs your answer",
@@ -298,7 +298,7 @@ test("a question is answered personally and relayed to whoever asked", async ({ 
   const task = luca.page.getByRole("region", { name: "Agent task" }).last();
   await expect(task).toContainText("“Can you help me move on Sunday?”");
   await task.getByRole("button", { name: "Approve" }).click();
-  await expect(task.getByTestId("task-status")).toHaveText("Waiting for people to answer");
+  await expect(task.getByTestId("task-status")).toHaveText("Waiting for @marco to answer");
 
   const marco = await as(browser, "marco");
   await marco.page.getByRole("link", { name: /My Agent/ }).click();
