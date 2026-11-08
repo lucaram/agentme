@@ -205,7 +205,7 @@ describe.skipIf(!dbUp)("groups and communities (live)", () => {
     const myAgent = await chat.getOrCreateMyAgentConversation(d.userId);
     const myAgentCount = async () => {
       const { data } = await (await signedIn(d)).rpc("unread_counts");
-      return Number(data?.find((r) => r.conversation_id === myAgent.id)?.unread ?? 0);
+      return Number((data as { conversation_id: string; unread: number }[] | null)?.find((r) => r.conversation_id === myAgent.id)?.unread ?? 0);
     };
     const { data: item } = await admin()
       .from("inbox_items")
