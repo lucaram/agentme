@@ -63,6 +63,15 @@ export default async function MyBusinessPage() {
         </div>
       </section>
 
+      <section className="card flex flex-wrap items-center gap-3" aria-label="Your QR code">
+        <span className="text-3xl" aria-hidden>📷</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">Your QR code for customers</span>
+          <span className="block text-xs text-muted">Put it on tables, the till or your menu: scanning it lets people ask your agent anything.</span>
+        </span>
+        <Link href="/print/qr" className="btn-primary">🖨️ Print poster</Link>
+      </section>
+
       <section className="card space-y-3" aria-label="In your own words">
         <h2 className="font-semibold">In your own words</h2>
         <BusinessInfoForm about={about} customers={info.customers ?? ""} />

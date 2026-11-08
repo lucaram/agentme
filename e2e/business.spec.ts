@@ -65,3 +65,22 @@ Our menu: ${baseURL}/demo/trattoria-menu.html`);
   await shop.close();
   await luca.close();
 });
+
+test("a business's permanent QR code: printable poster, and scanning it lets anyone ask the agent", async ({ browser, baseURL }) => {
+  const shop = await as(browser, "trattoria");
+  await shop.page.goto("/contacts");
+  await shop.page.getByText("📷 Show my QR code").click();
+  // Permanent: the plain business page, no expiring token.
+  await expect(shop.page.getByTestId("qr-code")).toHaveAttribute("data-url", `${baseURL}/u/trattoria`);
+  await shop.page.getByTestId("print-poster").click();
+  await expect(shop.page.getByTestId("qr-poster")).toContainText("Scan to ask us anything");
+
+  // A customer scans it: one tap opens a chat with the business's agent.
+  const luca = await as(browser, "luca");
+  await luca.page.goto("/u/trattoria");
+  await luca.page.getByRole("button", { name: "💬 Ask us anything" }).click();
+  await expect(luca.page).toHaveURL(/\/chats\/[0-9a-f-]+$/);
+  await expect(luca.page.getByRole("heading", { name: /Trattoria Sole/ })).toBeVisible();
+  await shop.close();
+  await luca.close();
+});
