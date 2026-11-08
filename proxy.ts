@@ -32,7 +32,8 @@ export async function proxy(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const signedIn = Boolean(data?.claims);
   const path = request.nextUrl.pathname;
-  const isPublic = path === "/" || path.startsWith("/login") || path.startsWith("/signup");
+  // Invite links and personal links open without an account (they offer to sign in or join as a guest).
+  const isPublic = path === "/" || path.startsWith("/login") || path.startsWith("/signup") || path.startsWith("/join/") || path.startsWith("/u/");
 
   if (!signedIn && !isPublic) {
     const url = request.nextUrl.clone();
