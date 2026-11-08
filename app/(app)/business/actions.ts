@@ -24,18 +24,44 @@ async function requireBusiness() {
 type Info = { about?: string; customers?: string; description?: string; hours?: string; faqs?: { q: string; a: string }[] };
 
 /** "About your business" (public) and "For customers only", in plain language. */
-export async function saveBusinessInfoAction(_prev: Out | undefined, form: FormData): Promise<Out & { saved?: boolean }> {
+/** Web addresses written in the text ("our menu: https://…"), to add as links the agent reads. */
+function linksIn(text: string): string[] {
+  return [...new Set((text.match(/https?:\/\/[^\s<>"')]+/gi) ?? []).map((u) => u.replace(/[.,;:!?]+$/, "")))];
+}
+
+export async function saveBusinessInfoAction(_prev: Out | undefined, form: FormData): Promise<Out & { saved?: boolean; addedLinks?: number }> {
   const { agent } = await requireBusiness();
   const about = String(form.get("about") ?? "").trim().slice(0, 8000);
   const customers = String(form.get("customers") ?? "").trim().slice(0, 4000);
   if (!about) return { error: "Tell your agent a little about your business." };
   const info = (agent.business_info ?? {}) as Info;
-  await adminClient()
+  const db = adminClient();
+  await db
     .from("agents")
     .update({ bio: about.split("\n")[0].slice(0, 280), business_info: asJson({ ...info, about, customers, description: about.slice(0, 500) }) })
     .eq("id", agent.id);
+
+  // Links written in the text are added to "Links your agent reads" (with the visibility of the box they're in).
+  const { count } = await db.from("business_sources").select("*", { count: "exact", head: true }).eq("agent_id", agent.id);
+  let room = MAX_LINKS - (count ?? 0);
+  let addedLinks = 0;
+  for (const [text, visibility] of [[about, "public"], [customers, "customers"]] as const) {
+    for (const raw of linksIn(text)) {
+      const check = checkUrl(raw);
+      if (!check.ok || room <= 0) continue;
+      const { data } = await db
+        .from("business_sources")
+        .upsert({ agent_id: agent.id, url: check.url.toString(), visibility }, { onConflict: "agent_id,url", ignoreDuplicates: true })
+        .select("id");
+      if (data?.length) {
+        room--;
+        addedLinks++;
+        after(() => readSource(data[0].id));
+      }
+    }
+  }
   revalidatePath("/business");
-  return { saved: true };
+  return { saved: true, addedLinks };
 }
 
 export async function removeFaqAction(index: number): Promise<Out> {

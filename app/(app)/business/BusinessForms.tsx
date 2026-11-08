@@ -21,7 +21,10 @@ export function BusinessInfoForm({ about, customers }: { about: string; customer
           defaultValue={about}
           placeholder={"Family-run Italian restaurant in Camden.\nOpen Tue–Sun 12–15 and 18–23, closed Mondays.\nDogs welcome. Gluten-free pasta on request. Step-free entrance."}
         />
-        <p className="hint mt-1">Write it like you&apos;d tell a new staff member: hours, address, what you offer, prices, policies. Anyone&apos;s agent can get this.</p>
+        <p className="hint mt-1">
+          Write it like you&apos;d tell a new staff member: hours, address, what you offer, prices, policies. Anyone&apos;s agent can get this. Web
+          addresses you write here (e.g. your menu) are added to the links your agent reads.
+        </p>
       </div>
       <div>
         <label className="label" htmlFor="customers">For customers only <span className="font-normal text-muted">· your contacts</span></label>
@@ -29,7 +32,12 @@ export function BusinessInfoForm({ about, customers }: { about: string; customer
         <p className="hint mt-1">Only shared with people who are your contacts on AGENTME.</p>
       </div>
       {state?.error && <p className="text-sm text-danger" role="alert">{state.error}</p>}
-      {state?.saved && <p className="text-sm text-accent" role="status">Saved. Your agent uses this straight away.</p>}
+      {state?.saved && (
+        <p className="text-sm text-accent" role="status">
+          Saved. Your agent uses this straight away.
+          {state.addedLinks ? ` I also added ${state.addedLinks} ${state.addedLinks === 1 ? "link" : "links"} from your text to “Links your agent reads”; your agent is reading ${state.addedLinks === 1 ? "it" : "them"} now.` : ""}
+        </p>
+      )}
       <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : "Save"}</button>
     </form>
   );
@@ -146,9 +154,21 @@ export function TryIt() {
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        <input className="input min-w-0 flex-1" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="e.g. Do you have vegan options?" aria-label="Test question" />
+        <input
+          className="input min-w-0 flex-1"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && question.trim()) {
+              e.preventDefault();
+              start(async () => setResult(await tryQuestionAction(question, asCustomer)));
+            }
+          }}
+          placeholder="Type a question a customer might ask, e.g. Do you have vegan options?"
+          aria-label="Test question"
+        />
         <button type="button" className="btn-primary" disabled={pending || !question.trim()} onClick={() => start(async () => setResult(await tryQuestionAction(question, asCustomer)))}>
-          {pending ? "Asking…" : "Ask"}
+          {pending ? "Thinking…" : "See the answer"}
         </button>
       </div>
       <label className="flex items-center gap-2 text-xs text-muted">
@@ -157,6 +177,7 @@ export function TryIt() {
       {result?.error && <p className="text-sm text-danger" role="alert">{result.error}</p>}
       {result?.answer && (
         <div className="rounded-xl border border-agent-border bg-agent px-3 py-2 text-sm" data-testid="try-answer">
+          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Your agent would answer</span>
           {result.answer}
           {result.needsTeam && <p className="mt-1 text-xs text-muted">A real visitor would be told you&apos;ve been asked, and it would appear in your Needs your answer.</p>}
         </div>

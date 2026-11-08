@@ -22,16 +22,18 @@ test("my business: the agent reads the menu link, answers from it, and asks the 
   // The business describes itself in plain language and adds its menu page.
   const shop = await as(browser, "trattoria");
   await shop.page.getByRole("navigation").first().getByRole("link", { name: "My Business" }).click();
-  await shop.page.getByRole("textbox", { name: /About your business/ }).fill("Family-run Italian restaurant in Camden. Open Tue–Sun 12–15 and 18–23.");
+  // A web address written in the text is added to the links the agent reads.
+  await shop.page
+    .getByRole("textbox", { name: /About your business/ })
+    .fill(`Family-run Italian restaurant in Camden. Open Tue–Sun 12–15 and 18–23.
+Our menu: ${baseURL}/demo/trattoria-menu.html`);
   await shop.page.getByRole("button", { name: "Save" }).click();
-  await expect(shop.page.getByText("Saved. Your agent uses this straight away.")).toBeVisible();
-  await shop.page.getByLabel("Link to read").fill(`${baseURL}/demo/trattoria-menu.html`);
-  await shop.page.getByRole("button", { name: "Add link" }).click();
+  await expect(shop.page.getByRole("status").filter({ hasText: "I also added 1 link from your text" })).toBeVisible();
   await expect(shop.page.getByTestId("source-status").first()).toContainText("✓ Read", { timeout: 20_000 });
 
   // Try it: answered from the menu it read.
   await shop.page.getByLabel("Test question").fill("Do you have panna cotta?");
-  await shop.page.getByRole("button", { name: "Ask", exact: true }).click();
+  await shop.page.getByRole("button", { name: "See the answer" }).click();
   await expect(shop.page.getByTestId("try-answer")).toContainText("Panna cotta");
 
   // A visitor asks something that isn't there: the agent says it asked the team.

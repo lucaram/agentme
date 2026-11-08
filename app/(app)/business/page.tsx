@@ -57,8 +57,9 @@ export default async function MyBusinessPage() {
           {words(about).toLocaleString("en-GB")} words about your business · {sources.filter((s) => s.status === "ok").length} of {sources.length} links read (
           {readWords.toLocaleString("en-GB")} words) · {faqs.length} questions &amp; answers
         </p>
-        <div className="mt-3">
-          <h3 className="mb-1 text-sm font-medium">Try it</h3>
+        <div className="mt-4 rounded-xl border border-dashed border-border p-3">
+          <h3 className="text-sm font-semibold">🧪 Test your agent</h3>
+          <p className="mb-2 text-xs text-muted">See how your agent would answer a customer, before anyone asks. It&apos;s only a preview: nothing is sent to anyone.</p>
           <TryIt />
         </div>
       </section>
