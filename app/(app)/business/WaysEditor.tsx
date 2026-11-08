@@ -69,7 +69,7 @@ export function WaysEditor({ initial }: { initial: Way[] }) {
       {rows.length < MAX_WAYS && (
         <button
           type="button"
-          className="text-sm font-medium text-accent"
+          className="text-sm font-medium text-accent hover:underline"
           onClick={() => {
             setRows((rs) => [...rs, { key: next, kind: rows.some((r) => r.kind === "book") ? "call" : "book", value: "" }]);
             setNext((n) => n + 1);

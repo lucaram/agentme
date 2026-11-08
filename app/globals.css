@@ -48,6 +48,20 @@ body {
   color: var(--foreground);
 }
 
+/* Anything you can tap shows the hand cursor (Tailwind v4 leaves buttons on the default arrow). */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  select:not(:disabled),
+  label:has(> input[type="checkbox"], > input[type="radio"]) {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
 @layer components {
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition disabled:opacity-50 bg-accent text-white hover:opacity-90 dark:text-black;
