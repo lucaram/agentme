@@ -2,12 +2,16 @@ import { llm } from "@/lib/llm";
 import { canContact, type ContactPolicy, type Relationship } from "@/lib/policy/contactPolicy";
 import { isRequestableCategory, selectDisclosableFacts, type Fact, type RequestableCategory } from "@/lib/policy/disclosure";
 import {
+  AskAroundRequestSchema,
   CoordinationReplySchema,
   CoordinationRequestSchema,
   QuestionRequestSchema,
   type CoordinationReply,
 } from "@/lib/coordination/schemas";
 import { BUSINESS_FAQ_SYSTEM, COORDINATION_REPLY_SYSTEM, wrapUntrusted } from "./prompts";
+import { matchTips } from "@/lib/people/askAround";
+
+export type Tip = { topic: string; tip: string };
 
 export type RecipientAgent = {
   id: string;
@@ -16,6 +20,8 @@ export type RecipientAgent = {
   contact_policy: ContactPolicy;
   display_name: string;
   business_info: unknown;
+  /** "Friends can ask me for recommendations" (Settings). */
+  recommendations_ok?: boolean;
 };
 
 export type IncomingA2A = {
@@ -50,7 +56,7 @@ export type InboxRequest =
       /** Requested categories it could share automatically, for the owner to review. */
       shareable: Partial<Record<RequestableCategory, string>>;
     }
-  | { kind: "question"; question: string };
+  | { kind: "question"; question: string; ask_around?: boolean };
 
 /** Categories without which a coordination reply is useless; if not shareable, ask the human. */
 const ESSENTIAL: readonly RequestableCategory[] = ["availability"];
@@ -74,10 +80,14 @@ export async function respondAsAgent(
   recipient: RecipientAgent,
   incoming: IncomingA2A,
   facts: readonly Fact[],
+  tips: readonly Tip[] = [],
 ): Promise<AgentResponse> {
   const isCoordination = CoordinationRequestSchema.safeParse(incoming.data);
   const isQuestion = QuestionRequestSchema.safeParse(incoming.data);
-  const skill = isCoordination.success
+  const isAskAround = AskAroundRequestSchema.safeParse(incoming.data);
+  const skill = isAskAround.success && recipient.type === "personal"
+    ? "coordination.ask_around"
+    : isCoordination.success
     ? "coordination.availability"
     : isQuestion.success
       ? recipient.type === "business" ? "business.faq" : "coordination.question"
@@ -95,6 +105,31 @@ export async function respondAsAgent(
 
   if (recipient.type === "business") {
     return answerBusinessQuestion(recipient, isQuestion.success ? isQuestion.data.question : incoming.text);
+  }
+
+  // Ask around: only contacts, only if the person allows it. A saved tip on the
+  // topic is shared by the agent itself; otherwise the person decides.
+  if (isAskAround.success) {
+    if (incoming.relationship !== "accepted") return refuse(skill, "not_a_contact", "Only contacts can ask around.");
+    if (recipient.recommendations_ok === false) return refuse(skill, "not_taking_requests", "Not taking recommendation requests.");
+    const matching = matchTips(isAskAround.data.question, [...tips]).slice(0, 3);
+    if (matching.length) {
+      const answer = matching.map((t) => t.tip).join(" · ");
+      return {
+        status: "completed",
+        skill,
+        text: answer,
+        data: { type: "agentme.ask_around.answer", answer, from: "saved_tip" },
+        disclosed: ["saved_tip"],
+      };
+    }
+    return {
+      status: "needs_human",
+      skill,
+      text: "I've passed it on; they'll answer if they have a tip.",
+      disclosed: [],
+      inbox: { kind: "question", question: isAskAround.data.question, ask_around: true },
+    };
   }
 
   // Free questions are always answered by the person, never guessed by their

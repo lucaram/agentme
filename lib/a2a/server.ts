@@ -19,7 +19,7 @@ import {
 } from "@a2a-js/sdk/server";
 import { env } from "@/lib/env";
 import { adminClient } from "@/lib/supabase/admin";
-import { getAgentByHandle, getAgentById, getFacts, getRelationship, type AgentRow } from "@/lib/data/agents";
+import { getAgentByHandle, getAgentById, getFacts, getRelationship, getTips, type AgentRow } from "@/lib/data/agents";
 import { respondAsAgent, type AgentResponse } from "@/lib/agents/respond";
 import { buildAgentCard } from "./card";
 import { verifyAgentToken } from "./auth";
@@ -89,10 +89,12 @@ export async function handleA2ARequest(request: Request, handle: string): Promis
   const executor = new AgentmeExecutor(async (text, data) => {
     // Facts are loaded for the recipient only; respondAsAgent minimises them.
     const facts = recipient.type === "personal" ? await getFacts(recipient.id) : [];
+    // Saved tips, only ever shared for an "ask around" whose topic matches one.
+    const tips = recipient.type === "personal" ? await getTips(recipient.id) : [];
     // AI cost of this reply is attributed to the recipient's owner and, when the
     // platform-signed token names one, to the coordination task it serves.
     return withUsageContext({ taskId: caller.taskId ?? null, agentId: recipient.id, userId: recipient.owner_id }, () =>
-      respondAsAgent(recipient, { callerHandle: caller.agent?.handle ?? null, relationship, text, data }, facts),
+      respondAsAgent(recipient, { callerHandle: caller.agent?.handle ?? null, relationship, text, data }, facts, tips),
     );
   }, (response, a2aTaskId, requestData) => recordExchange(recipient, caller, response, a2aTaskId, requestData));
 
@@ -258,7 +260,9 @@ async function recordExchange(
       const from = caller.agent ? `@${caller.agent.handle}` : "Someone";
       const what =
         response.inbox.kind === "question"
-          ? `🔔 ${from} asks you: “${response.inbox.question}”.`
+          ? response.inbox.ask_around
+            ? `🔎 ${from} is asking around: “${response.inbox.question}” Share a tip if you have one.`
+            : `🔔 ${from} asks you: “${response.inbox.question}”.`
           : `🔔 ${from}'s agent is organising ${response.inbox.event} and needs something only you can share.`;
       await tellOwner(recipient.owner_id, recipient.id, `${what} ${NEEDS_ANSWER}`);
     }

@@ -185,3 +185,37 @@ test("the header search follows the tab: contacts on Contacts, your groups on Gr
   await expect(luca.page.getByRole("combobox", { name: /^Search/ })).toHaveCount(0); // no search on Settings
   await luca.close();
 });
+
+test("ask around: a saved tip answers by itself, a friend answers personally, then a summary", async ({ browser }) => {
+  // Paul saves a tip: his agent may share it by itself when someone asks about plumbers.
+  const paul = await as(browser, "paul");
+  await paul.page.goto("/settings");
+  await paul.page.getByLabel("Tip topic").fill("plumber");
+  await paul.page.getByLabel("Tip", { exact: true }).fill("Joe's Plumbing, 020 7946 0000");
+  await paul.page.getByRole("button", { name: "Add tip" }).click();
+  await expect(paul.page.getByTestId("saved-tips")).toContainText("Joe's Plumbing");
+
+  const luca = await as(browser, "luca");
+  await luca.page.getByRole("link", { name: /My Agent/ }).click();
+  await send(luca.page, "ask around: does anyone know a good plumber in Camden?");
+  const task = luca.page.getByRole("region", { name: "Agent task" }).last();
+  await expect(task).toContainText("🔎 Ask around");
+  await task.getByRole("button", { name: "Approve" }).click();
+  await expect(luca.page.getByText("💡 @paul's saved tip: “Joe's Plumbing, 020 7946 0000”")).toBeVisible({ timeout: 20_000 });
+
+  // Marco has no saved tip: he's asked personally, under Needs your answer.
+  const marco = await as(browser, "marco");
+  await marco.page.getByRole("link", { name: /My Agent/ }).click();
+  const item = marco.page.getByTestId("inbox-item").filter({ hasText: "is asking around" });
+  await item.getByLabel("Your tip").fill("Mario at Camden Plumbing, very reliable");
+  await item.getByRole("button", { name: "Share tip" }).click();
+  await expect(luca.page.getByText("💡 @marco: “Mario at Camden Plumbing, very reliable”")).toBeVisible({ timeout: 20_000 });
+  await expect(task.getByTestId("ask-around-progress")).toContainText("2 tips so far");
+
+  // Luca doesn't wait for everyone: a short summary of who recommends what.
+  await task.getByRole("button", { name: "✨ Summarise now" }).click();
+  await expect(luca.page.getByText("What your friends said")).toBeVisible({ timeout: 20_000 });
+  await luca.close();
+  await marco.close();
+  await paul.close();
+});

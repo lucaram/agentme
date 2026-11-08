@@ -76,6 +76,22 @@ export async function OpenRequests({ title, kinds, hint }: { title: string; kind
           }
 
           const payload = inboxPayloadOf(item);
+          if (payload.kind === "question" && payload.ask_around) {
+            return (
+              <li key={item.id} className="card space-y-3" data-testid="inbox-item">
+                <div>
+                  <p className="text-sm">
+                    🔎 <b>{who}</b> is asking around:
+                  </p>
+                  <p className="mt-1 rounded-lg bg-accent-soft px-3 py-2 text-sm">“{payload.question}”</p>
+                  <p className="hint mt-1">
+                    {when} · Share a tip if you have one. If you tap “I don&apos;t know”, @{from?.handle ?? "they"} isn&apos;t told.
+                  </p>
+                </div>
+                <QuestionForm itemId={item.id} askAround />
+              </li>
+            );
+          }
           if (payload.kind === "question") {
             return (
               <li key={item.id} className="card space-y-3" data-testid="inbox-item">

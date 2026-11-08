@@ -14,6 +14,8 @@ import { ComposeSchema, heuristicCompose, validateDraft, type PlanDraft } from "
 import { ensurePlanGroup } from "@/lib/plans/group";
 import { withdrawInboxForTask } from "@/lib/plans/inbox";
 import { createIntroduction, parseIntroduceCommand } from "@/lib/people/introductions";
+import { parseAskAround } from "@/lib/people/askAround";
+import { stepWords } from "@/lib/plans/wording";
 import { describeRetry, hit } from "@/lib/limits";
 import { displayClock } from "./heuristics";
 import type { Proposal } from "./schemas";
@@ -52,6 +54,10 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
         : result.error,
     });
   }
+
+  // "ask around: does anyone know a good plumber?" asks your contacts for tips.
+  const ask = parseAskAround(text);
+  if (ask) return startAskAround({ userId, agent, conversationId, ...ask });
 
   const mentions = extractMentions(text).filter((h) => h !== agent.handle);
   if (mentions.length === 0) return replyToOwner(agent, userId, conversationId, text);
@@ -160,6 +166,67 @@ export async function composePlan(opts: {
     content: planSummary(valid, plan.preview),
     metadata: { kind: "task_card", task_id: task.id },
     visibleTo: opts.card.visibleTo,
+  });
+  return task.id;
+}
+
+const MAX_ASK_AROUND = 25;
+
+/**
+ * Ask around: who is asked (the people you named, or every contact who allows
+ * recommendation requests, up to 25), then the usual approval card. Nothing is
+ * sent until you approve.
+ */
+async function startAskAround(opts: { userId: string; agent: AgentRow; conversationId: string; question: string; mentions: string[] }) {
+  const { userId, agent, conversationId, question } = opts;
+  const say = (content: string) => postMessage({ conversationId, from: "agent", agentId: agent.id, content });
+  const db = adminClient();
+  const { data: rows } = await db
+    .from("contacts")
+    .select("requester_agent, addressee_agent")
+    .eq("status", "accepted")
+    .or(`requester_agent.eq.${agent.id},addressee_agent.eq.${agent.id}`);
+  const contactIds = (rows ?? []).map((r) => (r.requester_agent === agent.id ? r.addressee_agent : r.requester_agent));
+  const { data: contacts } = contactIds.length
+    ? await db.from("agents").select("handle, type, guest, recommendations_ok").in("id", contactIds)
+    : { data: [] };
+  const askable = (contacts ?? []).filter((c) => c.type === "personal" && !c.guest && c.recommendations_ok);
+
+  let people: string[];
+  if (opts.mentions.length) {
+    const named = opts.mentions.filter((h) => h !== agent.handle);
+    people = named.filter((h) => askable.some((c) => c.handle === h));
+    const left = named.filter((h) => !people.includes(h));
+    if (left.length) await say(`I can only ask contacts who accept recommendation requests. Not asking ${listHandles(left)}.`);
+  } else {
+    people = askable.map((c) => c.handle).sort();
+  }
+  if (!people.length) return say("There's nobody to ask yet: add contacts first (or your contacts have switched off recommendation requests).");
+  const capped = people.slice(0, MAX_ASK_AROUND);
+
+  const limit = await hit("askAroundPerUser", userId);
+  if (!limit.allowed) return say(`You've asked around a lot today. Try again in ${describeRetry(limit.retryAfterSeconds)}.`);
+
+  const { data: task, error } = await db
+    .from("tasks")
+    .insert({
+      owner_id: userId,
+      initiator_agent: agent.id,
+      conversation_id: conversationId,
+      goal: question,
+      parsed: asJson({ kind: "ask_around", event: question, window: "", participants: capped, categories: [], question } satisfies TaskParsed),
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  await createSteps(task.id, [{ type: "ask_around", config: { question, participants: capped } }]);
+  const more = people.length > capped.length ? ` (the first ${MAX_ASK_AROUND} of ${people.length})` : "";
+  await postMessage({
+    conversationId,
+    from: "agent",
+    agentId: agent.id,
+    content: `🔎 ${stepWords.askAround(capped)}${more}: “${question}”\nTheir agents share a saved tip if they have one; otherwise they answer themselves, or say they don't know (you won't be told who). Nothing is sent until you approve.`,
+    metadata: { kind: "task_card", task_id: task.id },
   });
   return task.id;
 }

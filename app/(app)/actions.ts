@@ -343,6 +343,8 @@ export async function saveSettings(form: FormData) {
     .update({
       ...(policy.success ? { contact_policy: policy.data } : {}),
       ...(groupPolicy.success ? { group_add_policy: groupPolicy.data } : {}),
+      // A checkbox sends nothing when unticked: only trust its absence when the form section was there.
+      ...(form.get("recommendations_form") ? { recommendations_ok: form.get("recommendations_ok") === "on" } : {}),
       ...(displayName ? { display_name: displayName } : {}),
     })
     .eq("id", agent.id);

@@ -31,6 +31,11 @@ export async function getFacts(agentId: string): Promise<Fact[]> {
   return (data ?? []) as Fact[];
 }
 
+export async function getTips(agentId: string): Promise<{ topic: string; tip: string }[]> {
+  const { data } = await adminClient().from("agent_tips").select("topic, tip").eq("agent_id", agentId).limit(200);
+  return data ?? [];
+}
+
 export async function getContactRow(a: string, b: string): Promise<ContactRow | null> {
   const { data } = await adminClient()
     .from("contacts")

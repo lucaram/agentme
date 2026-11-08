@@ -23,5 +23,6 @@ export const stepWords = {
   question: (people: string[]) => (people.length > MAX_NAMED ? `Ask each of the ${people.length} people personally` : `Ask ${who(people)} personally`),
   invite: (people: string[]) => `Invite ${who(people)} to`,
   vote: (people: string[]) => (people.length > MAX_NAMED ? "Everyone votes" : `You and ${who(people)} vote`),
+  askAround: (people: string[]) => (people.length > MAX_NAMED ? `Ask your ${people.length} friends for tips` : `Ask ${who(people)} for tips`),
   claim: (people: string[]) => (people.length > MAX_NAMED ? "Everyone claims their own" : `You and ${who(people)} each claim your own`),
 };

@@ -51,6 +51,12 @@ export class MockProvider implements LLMProvider {
         }
         break;
       }
+      case "ask_around_summary": {
+        // Deterministic: one labelled line per tip.
+        const tips = (ctx.tips ?? []) as { handle: string; answer: string }[];
+        text = tips.map((t) => `- **@${t.handle}:** ${t.answer}`).join("\n");
+        break;
+      }
       case "business_faq":
         text = answerFaq(String(ctx.question ?? ""), (ctx.businessInfo ?? {}) as BusinessInfo);
         break;

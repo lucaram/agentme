@@ -20,6 +20,8 @@ export const LIMITS = {
   contactSyncsPerAgent: { windowSeconds: 86400, max: 20 },
   /** Phone verification codes sent. */
   phoneCodesPerAgent: { windowSeconds: 3600, max: 5 },
+  /** "Ask around" requests (each reaches up to 25 contacts). */
+  askAroundPerUser: { windowSeconds: 86400, max: 10 },
   /** Introductions an agent may make. */
   introductionsPerAgent: { windowSeconds: 3600, max: 20 },
   /** Guest accounts created from plan invite links, per invite. */

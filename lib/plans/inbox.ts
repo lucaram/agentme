@@ -54,6 +54,10 @@ export async function answerInboxItem(itemId: string, ownerId: string, raw: Reco
     response = { text: parsed.data.answer, data: { type: "agentme.question.answer", answer: parsed.data.answer } };
     disclosed = ["answer"];
     stored = { answer: parsed.data.answer };
+    // Ask around: optionally keep the answer as a tip the agent may share by itself next time.
+    if (remember && payload.ask_around) {
+      await db.from("agent_tips").insert({ agent_id: item.agent_id, topic: payload.question.slice(0, 80), tip: parsed.data.answer.slice(0, 500) });
+    }
   } else {
     const parsedAnswers = InfoAnswers.safeParse(raw);
     if (!parsedAnswers.success) return { ok: false, error: "Answers are too long." };
