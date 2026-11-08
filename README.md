@@ -163,7 +163,15 @@ A **My Business** tab, shown to business accounts, holds everything the business
   - **Website text is untrusted data** (`<website_content>`), never instructions.
 - **What your agent knows + Try it:** ask a test question as a visitor or as a customer.
 - **Answers:** the agent answers only from this information. If the answer isn't there, it says *"I've asked the team"*: the question lands in the business's *Needs your answer* (signed-in askers only, 10 a day per asker), and the team's answer goes back to the asker's chat. One tick adds it to *Questions & answers*, so the agent answers it by itself next time.
-- **Never:** bookings, orders or payments.
+- **Never:** bookings, orders or payments. Instead, the agent sends people to the business's own ways (next item).
+- **How customers book or order** (`lib/business/booking.ts`):
+  - **What the business adds:** up to 4 ways, each one 📅 Book, 🛍️ Order, 📞 Call, 💬 WhatsApp, ✉️ Email or 🔗 Website.
+  - **Known services:** OpenTable, Fresha, Treatwell, Calendly, Deliveroo, Uber Eats and others are recognised from the link, so the button reads e.g. *"📅 Book on OpenTable"*.
+  - **Safe links:** only `https`, `tel`, `wa.me` and `mailto` links are ever produced, and stored ways are re-checked whenever they're read.
+  - **Where they appear:**
+    - as buttons on the business page (`/u/handle`), with no account needed;
+    - in the agent's answers. Code makes sure a booking or ordering question gets these ways and never goes to the team.
+  - **In plans:** a business @mentioned in a plan request (*"Organise pizza at @trattoria on Friday at 8pm with @marco"*) becomes the plan's **place**, not a participant. The plan card shows *📍 At Trattoria Sole* with its booking buttons. Mentioning only a business makes the agent reply with that business's ways to book.
 
 There are two visibility levels, not an "internal" one: anything given to the AI could be coaxed out by a clever question, so information that must never be shared is simply not given to it.
 

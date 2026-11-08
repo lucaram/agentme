@@ -312,3 +312,25 @@ describe("businesses in groups and communities: public information only", () => 
     expect(res).toMatchObject({ status: "needs_human", text: expect.stringContaining("reply to @luca in a private chat") });
   });
 });
+
+describe("business agents: booking and ordering", () => {
+  const shop: RecipientAgent = {
+    id: "b",
+    handle: "trattoria",
+    type: "business",
+    contact_policy: "anyone",
+    display_name: "Trattoria Sole",
+    business_info: { about: "Italian restaurant.", ways: [{ kind: "book", value: "https://sole.example/book" }, { kind: "website", value: "javascript:alert(1)" }] },
+  };
+
+  it("sends people to the business's own way to book, instead of handing the question to the team", async () => {
+    useRecorder();
+    const res = await respondAsAgent(shop, { callerHandle: "luca", relationship: "none", text: "Can I book a table for 4 on Friday?", data: null }, [], [], {
+      sources: [],
+      requestHandoff: async () => true,
+    });
+    expect(res).toMatchObject({ status: "completed", text: expect.stringContaining("https://sole.example/book") });
+    // A bad stored link never reaches the model or the answer.
+    expect(JSON.stringify(res)).not.toContain("javascript:");
+  });
+});

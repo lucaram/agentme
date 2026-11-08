@@ -56,7 +56,7 @@ export async function searchAction(scope: SearchScope, raw: string): Promise<Sea
 
   const [{ data: conversations }, { data: agents }, { data: contacts }, { data: communities }] = await Promise.all([
     supabase.from("conversations").select("id, kind, title, description, avatar, target_agent, community_id, conversation_members(user_id)"),
-    supabase.from("agents").select("id, owner_id, handle, display_name, avatar"),
+    supabase.from("agents").select("id, owner_id, handle, display_name, avatar, type"),
     supabase.from("contacts").select("requester_agent, addressee_agent").eq("status", "accepted"),
     scope === "chats" ? supabase.from("communities").select("id, name, avatar") : Promise.resolve({ data: [] as { id: string; name: string; avatar: string }[] }),
   ]);
@@ -78,6 +78,8 @@ export async function searchAction(scope: SearchScope, raw: string): Promise<Sea
       .sort((a, b) => a.display_name.localeCompare(b.display_name))
       .slice(0, LIMIT)
       .map<SearchHit>((o) => {
+        // A business opens its page (booking buttons, "Ask us anything"); a person opens your chat.
+        if (o.type === "business") return { key: o.id, name: o.display_name, icon: o.avatar, detail: `@${o.handle} · Business`, href: `/u/${o.handle}` };
         const chatId = dmWith.get(o.id);
         return { key: o.id, name: o.display_name, icon: o.avatar, detail: `@${o.handle}`, ...(chatId ? { href: `/chats/${chatId}` } : { openDmWith: o.id }) };
       });

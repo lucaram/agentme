@@ -41,6 +41,7 @@ export const runRsvp: StepHandler = async ({ task, step, organiser, parsed, resu
       participants: [organiser.handle, ...parsed.participants],
       rationale: "",
       disclaimer: DISCLAIMER,
+      venue: parsed.venue ?? null,
     };
     let { data: saved } = await db.from("proposals").select("id, group_conversation_id").eq("task_id", task.id).maybeSingle();
     const group = await ensurePlanGroup(task, parsed.participants, title);

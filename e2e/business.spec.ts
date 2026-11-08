@@ -27,7 +27,7 @@ test("my business: the agent reads the menu link, answers from it, and asks the 
     .getByRole("textbox", { name: /About your business/ })
     .fill(`Family-run Italian restaurant in Camden. Open Tue–Sun 12–15 and 18–23.
 Our menu: ${baseURL}/demo/trattoria-menu.html`);
-  await shop.page.getByRole("button", { name: "Save" }).click();
+  await shop.page.getByRole("button", { name: "Save your words" }).click();
   await expect(shop.page.getByRole("status").filter({ hasText: "I also added 1 link from your text" })).toBeVisible();
   await expect(shop.page.getByTestId("source-status").first()).toContainText("✓ Read", { timeout: 20_000 });
   // Shown as the same link seen from two places, not a duplicate.
@@ -145,4 +145,46 @@ test("add a business from a personal account and switch between the two", async 
 
   await luca.close();
   await context.close();
+});
+
+test("how to book: the business adds its own ways; its page, its agent and friends' plans send people there", async ({ browser }) => {
+  // The business says how customers book (AGENTME never books itself).
+  const shop = await as(browser, "trattoria");
+  await shop.page.goto("/business");
+  const ways = shop.page.getByRole("form", { name: "How customers book or order" });
+  await ways.getByLabel("Way 1: what is it").selectOption("book");
+  await ways.getByLabel("Way 1: link or number").fill("trattoria-sole.example/book");
+  await expect(ways.getByTestId("way-preview").first()).toContainText("📅 Book online");
+  await ways.getByRole("button", { name: "＋ Add another way" }).click();
+  await ways.getByLabel("Way 2: what is it").selectOption("call");
+  await ways.getByLabel("Way 2: link or number").fill("020 7946 0000");
+  await ways.getByRole("button", { name: "Save booking & ordering" }).click();
+  await expect(ways.getByRole("status")).toContainText("Saved");
+
+  // Its page shows them as buttons.
+  const luca = await as(browser, "luca");
+  await luca.page.goto("/u/trattoria");
+  const buttons = luca.page.getByTestId("business-ways");
+  await expect(buttons.getByRole("link", { name: "📅 Book online" })).toHaveAttribute("href", "https://trattoria-sole.example/book");
+  await expect(buttons.getByRole("link", { name: "📞 Call 020 7946 0000" })).toHaveAttribute("href", "tel:02079460000");
+
+  // Its agent gives the way to book instead of promising anything.
+  await luca.page.getByRole("button", { name: /Ask us anything/ }).click();
+  await send(luca.page, "Can I book a table for 4 on Friday?");
+  await expect(luca.page.getByText(/https:\/\/trattoria-sole\.example\/book/).last()).toBeVisible();
+
+  // A plan at @trattoria: the place is the business (not a participant) and the plan links to its booking page.
+  await luca.page.goto("/chats");
+  await luca.page.getByTestId("my-agent-card").click();
+  await send(luca.page, "Organise pizza at @trattoria on Friday at 8pm with @marco");
+  const task = luca.page.getByRole("region", { name: "Agent task" }).last();
+  await task.getByRole("button", { name: "Approve" }).click();
+  await expect(luca.page.getByText(/I've invited everyone in a new group/).last()).toBeVisible();
+  const marco = await as(browser, "marco");
+  await marco.page.getByRole("link", { name: /^👥 Get-together/ }).first().click();
+  const venue = marco.page.getByTestId("proposal").last().getByTestId("plan-venue");
+  await expect(venue).toContainText("At Trattoria");
+  await expect(venue.getByRole("link", { name: "📅 Book online" })).toHaveAttribute("href", "https://trattoria-sole.example/book");
+
+  await Promise.all([shop.close(), luca.close(), marco.close()]);
 });

@@ -9,6 +9,7 @@ import { ContactList } from "./ContactList";
 import { loadContactList } from "@/lib/people/imports";
 import { personalLink } from "@/lib/people/links";
 import { maskEmail } from "@/lib/people/normalise";
+import { AgentName } from "@/components/AgentName";
 
 /** Problems coming back from Gmail / Outlook. */
 function syncNotice(synced: unknown): string | null {
@@ -100,9 +101,9 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/discove
           const status = statusOf(a.id);
           return (
             <li key={a.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-              <span className="text-2xl">{a.avatar}</span>
+              <AgentName agent={a} className="text-2xl">{a.avatar}</AgentName>
               <span className="min-w-0 flex-1">
-                <span className="block font-medium">{a.display_name}</span>
+                <AgentName agent={a} className="block font-medium">{a.display_name}</AgentName>
                 <span className="block text-xs text-muted">@{a.handle}{a.type === "business" ? ` · Business${a.bio ? ` · ${a.bio}` : ""}` : ""}</span>
               </span>
               <span className="flex gap-2">

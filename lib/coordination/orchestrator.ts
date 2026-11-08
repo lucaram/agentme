@@ -18,6 +18,7 @@ import { parseAskAround } from "@/lib/people/askAround";
 import { stepWords } from "@/lib/plans/wording";
 import { describeRetry, hit } from "@/lib/limits";
 import { displayClock } from "./heuristics";
+import { waysOf, waysText, type Way } from "@/lib/business/booking";
 import type { Proposal } from "./schemas";
 
 export type { TaskParsed } from "@/lib/plans/types";
@@ -124,23 +125,44 @@ export async function composePlan(opts: {
   if (draft.kind === "chat" || !draft.steps.length) return opts.onChat();
 
   // Participants come from the owner (mentions or chat members), never from the model.
+  // A business @mentioned in the request is the place, not a participant.
   const valid: string[] = [];
   const rejected: string[] = [];
-  for (const handle of [...new Set(opts.participants)].filter((h) => h !== agent.handle)) {
+  let venue: { agent_id: string; handle: string; name: string; ways: Way[] } | null = null;
+  for (const handle of [...new Set([...opts.participants, ...extractMentions(text)])].filter((h) => h !== agent.handle)) {
     const other = await getAgentByHandle(handle);
+    if (other?.type === "business") {
+      venue ??= { agent_id: other.id, handle: other.handle, name: other.display_name, ways: waysOf(other.business_info) };
+      continue;
+    }
+    if (!opts.participants.includes(handle)) continue; // only the owner's participants, never other words in the text
     if (other && other.type === "personal" && (await getRelationship(agent.id, other.id)) === "accepted") valid.push(handle);
     else rejected.push(handle);
   }
   if (rejected.length) {
     await say(`I can only involve people in your contacts. ${listHandles(rejected)} ${rejected.length > 1 ? "aren't contacts" : "isn't a contact"} yet.`);
   }
-  if (!valid.length) return;
+  if (!valid.length) {
+    // Only a business: AGENTME never books, so point to the business's own ways.
+    if (venue && !rejected.length) {
+      return say(
+        venue.ways.length
+          ? `I can't book or order for you, but ${venue.name} takes bookings here:
+${waysText(venue.ways)}
+
+To organise it with friends, mention them too, e.g. "Dinner at @${venue.handle} with @marco on Saturday".`
+          : `I can't book or order for you. Ask @${venue.handle} directly from its page, or mention friends to organise it with them.`,
+      );
+    }
+    return;
+  }
   if (valid.length + 1 > MAX_PLAN_PEOPLE) {
     return say(`A plan can include up to ${MAX_PLAN_PEOPLE} people, including you. Please mention fewer people.`);
   }
 
   const plan = validateDraft(draft, { organiser: agent.handle, participants: valid });
   if (!plan.ok) return say(`I couldn't set that up: ${plan.error}`);
+  if (venue) plan.parsed.venue = { agent_id: venue.agent_id, handle: venue.handle, name: venue.name };
 
   const limit = await hit("tasksPerUser", userId);
   if (!limit.allowed) return say(`You've started a lot of plans recently. Please try again in ${describeRetry(limit.retryAfterSeconds)}.`);

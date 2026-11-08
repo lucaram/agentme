@@ -1,4 +1,5 @@
 import { wrapUntrusted } from "@/lib/agents/prompts";
+import { waysOf, waysText } from "./booking";
 
 /** What a business agent knows: pure (no server code), shared by the answering code and My Business. */
 
@@ -20,9 +21,12 @@ export function businessKnowledge(
 ): { info: string; websites: string } {
   const info = (agent.business_info ?? {}) as BusinessInfo;
   const about = info.about?.trim() || [info.description, info.hours && `Opening hours: ${info.hours}`].filter(Boolean).join("\n");
+  const ways = waysOf(agent.business_info);
   const own = [
     `Business: ${agent.display_name} (@${agent.handle})`,
     about,
+    ways.length ? `How customers book or order (you can't do it yourself; give them these):
+${waysText(ways)}` : "",
     ...(info.faqs ?? []).map((f) => `Q: ${f.q}\nA: ${f.a}`),
     audience === "customers" && info.customers?.trim() ? `For customers:\n${info.customers.trim()}` : "",
   ]

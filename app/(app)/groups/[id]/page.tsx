@@ -26,6 +26,7 @@ import {
 } from "../../social-actions";
 import { GroupInfoForm, GroupSettings } from "./GroupForms";
 import { BusinessHandleForm } from "@/components/social/BusinessHandleForm";
+import { AgentName } from "@/components/AgentName";
 
 const ROLE_LABEL = { owner: "Owner", admin: "Admin", member: "" } as const;
 
@@ -149,9 +150,9 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
           <ul className="divide-y divide-border">
             {businesses.map((b) => (
               <li key={b.id} className="flex flex-wrap items-center gap-3 py-2" data-testid="group-business">
-                <span className="text-xl">{b.avatar}</span>
+                <AgentName agent={{ handle: b.handle, type: "business" }} className="text-xl">{b.avatar}</AgentName>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium">{b.display_name}</span>
+                  <AgentName agent={{ handle: b.handle, type: "business" }} className="block text-sm font-medium">{b.display_name}</AgentName>
                   <span className="block text-xs text-muted">@{b.handle} · Business</span>
                 </span>
                 <ActionButton action={removeBusinessFromGroupAction.bind(null, id, b.id)} label="Remove" />
