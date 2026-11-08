@@ -47,7 +47,7 @@ export function BusinessInfoForm({ about, customers }: { about: string; customer
   );
 }
 
-type Source = { fromText: boolean; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; last_read_at: string | null; words: number; preview: string };
+type Source = { fromText: string | null; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; last_read_at: string | null; words: number; preview: string };
 
 const KIND: Record<string, string> = { page: "web page", pdf: "PDF", image: "photo", text: "text" };
 
@@ -98,7 +98,7 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
                 )}
                 {s.fromText && (
                   <span className="text-muted" data-testid="source-from-text" title="This address is also written in your text above, so your agent can give it to customers too.">
-                    {" "}· 📝 from your text above
+                    {" "}· 📝 from your link in {s.fromText}
                   </span>
                 )}
               </p>
