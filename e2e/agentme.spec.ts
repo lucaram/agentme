@@ -185,6 +185,19 @@ test("contact request, accept and direct message", async ({ browser }) => {
   await expect(row.getByTestId("unread-badge")).toHaveCount(0);
   // Reading the chat removes exactly its 2 messages from the total.
   await expect.poll(total).toBe(before - 1);
+
+  // Leaving tells the others, with a date and time like every system note.
+  await row.click();
+  await expect(eve.page).toHaveURL(/\/chats\/[0-9a-f-]+$/);
+  await eve.page.getByRole("button", { name: "Leave" }).click();
+  await expect(eve.page).toHaveURL(/\/chats$/);
+  await expect(paul.page.getByTestId("system-note").filter({ hasText: "Eve left the chat." })).toHaveText(/^\d{2} [A-Z][a-z]{2}, \d{2}:\d{2} - Eve left the chat\.$/);
+  // The DM keeps her name (it would otherwise go blank) and is closed for sending.
+  await expect(paul.page.getByRole("heading", { name: "Eve (left)" })).toBeVisible();
+  await expect(paul.page.getByTestId("dm-closed")).toBeVisible();
+  await expect(paul.page.getByLabel("Message", { exact: true })).toHaveCount(0);
+  await paul.page.goto("/chats");
+  await expect(paul.page.getByRole("link", { name: /Eve \(left\)/ })).toBeVisible();
   await eve.close();
   await paul.close();
 });

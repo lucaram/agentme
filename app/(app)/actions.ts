@@ -8,7 +8,7 @@ import { requireAgent } from "@/lib/auth";
 import { adminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentByHandle, getAgentById, getContactRow } from "@/lib/data/agents";
-import { createConversation, findConversation, getConversation, getOrCreateMyAgentConversation, isMember, postMessage } from "@/lib/data/chat";
+import { createConversation, findConversation, getConversation, getOrCreateMyAgentConversation, isMember, memberCount, postMessage } from "@/lib/data/chat";
 import { asJson } from "@/lib/data/json";
 import {
   approveTask,
@@ -42,6 +42,9 @@ export async function sendMessage(conversationId: string, text: string): Promise
   if (!(await isMember(conversationId, user.id))) throw new Error("Not found");
   const conv = await getConversation(conversationId);
   if (!conv) throw new Error("Not found");
+  if (conv.kind === "dm" && (await memberCount(conversationId)) < 2) {
+    return { error: "The other person left this chat. Message them again from Contacts." };
+  }
 
   // "@agent ..." in a group or DM summons the sender's own agent (privately).
   const summoned = (conv.kind === "group" || conv.kind === "dm") && isAgentCommand(content);
@@ -315,12 +318,26 @@ export async function createGroup(form: FormData) {
 }
 
 export async function leaveConversation(conversationId: string) {
-  const { user } = await requireAgent();
+  const { user, agent } = await requireAgent();
   const db = adminClient();
-  await db.from("conversation_members").delete().eq("conversation_id", conversationId).eq("user_id", user.id);
+  // Only an actual member can leave (and so announce it).
+  const { data: left } = await db.from("conversation_members").delete().eq("conversation_id", conversationId).eq("user_id", user.id).select("user_id");
+  if (!left?.length) redirect("/chats");
   const { count } = await db.from("conversation_members").select("*", { count: "exact", head: true }).eq("conversation_id", conversationId);
-  // Delete the conversation (and its messages) once nobody is left.
-  if (!count) await db.from("conversations").delete().eq("id", conversationId);
+  if (!count) {
+    // Delete the conversation (and its messages) once nobody is left.
+    await db.from("conversations").delete().eq("id", conversationId);
+  } else {
+    // Tell the people still in the chat, WhatsApp-style.
+    const { data: conv } = await db.from("conversations").select("kind").eq("id", conversationId).single();
+    if (conv?.kind === "dm") {
+      // A DM is named after the other person: keep their name so the chat doesn't go blank.
+      await db.from("conversations").update({ title: `${agent.display_name} (left)` }).eq("id", conversationId);
+    }
+    if (conv?.kind === "group" || conv?.kind === "dm") {
+      await postMessage({ conversationId, from: "system", content: `${agent.display_name} left the chat.` });
+    }
+  }
   redirect("/chats");
 }
 
