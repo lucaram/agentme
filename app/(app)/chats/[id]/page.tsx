@@ -11,6 +11,7 @@ import { leaveConversation } from "../../actions";
 import { MarkRead } from "@/components/MarkRead";
 import { DraftReply } from "./DraftReply";
 import { RichText } from "@/components/RichText";
+import { LocalTime } from "@/components/LocalTime";
 
 export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
   const { id } = await params;
@@ -123,7 +124,12 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
 
           if (system) {
             return (
-              <li key={m.id} className={`text-center text-xs ${meta.kind === "error" ? "text-danger" : "text-muted"}`}>{m.content}</li>
+              <li key={m.id} className={`text-center text-xs ${meta.kind === "error" ? "text-danger" : "text-muted"}`} data-testid="system-note">
+                <span className="tabular-nums opacity-70">
+                  <LocalTime iso={m.created_at} />
+                </span>{" "}
+                - {m.content}
+              </li>
             );
           }
           const task = meta.kind === "task_card" ? tasks?.find((t) => t.id === meta.task_id) : undefined;

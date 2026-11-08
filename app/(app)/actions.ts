@@ -315,12 +315,22 @@ export async function createGroup(form: FormData) {
 }
 
 export async function leaveConversation(conversationId: string) {
-  const { user } = await requireAgent();
+  const { user, agent } = await requireAgent();
   const db = adminClient();
-  await db.from("conversation_members").delete().eq("conversation_id", conversationId).eq("user_id", user.id);
+  // Only an actual member can leave (and so announce it).
+  const { data: left } = await db.from("conversation_members").delete().eq("conversation_id", conversationId).eq("user_id", user.id).select("user_id");
+  if (!left?.length) redirect("/chats");
   const { count } = await db.from("conversation_members").select("*", { count: "exact", head: true }).eq("conversation_id", conversationId);
-  // Delete the conversation (and its messages) once nobody is left.
-  if (!count) await db.from("conversations").delete().eq("id", conversationId);
+  if (!count) {
+    // Delete the conversation (and its messages) once nobody is left.
+    await db.from("conversations").delete().eq("id", conversationId);
+  } else {
+    // Tell the people still in the chat, WhatsApp-style.
+    const { data: conv } = await db.from("conversations").select("kind").eq("id", conversationId).single();
+    if (conv?.kind === "group" || conv?.kind === "dm") {
+      await postMessage({ conversationId, from: "system", content: `${agent.display_name} left the chat.` });
+    }
+  }
   redirect("/chats");
 }
 
