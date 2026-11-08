@@ -88,8 +88,8 @@ export default async function ContactsPage() {
               ) : (
                 <>
                   <p className="hint max-w-xs">
-                    This code never changes: put it on your tables, the till or your menu. Scanning it opens your page, where people can ask your agent
-                    anything and become customers.
+                    This code never changes, so you can use it anywhere: in your shop (window, tables, till, menu) or online (website, social media,
+                    emails). Anyone who scans it can ask your agent anything and become a customer.
                   </p>
                   <Link href="/print/qr" className="btn-primary" data-testid="print-poster">🖨️ Print poster</Link>
                 </>
