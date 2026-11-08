@@ -72,9 +72,11 @@ export function parseAvailability(text: string | null | undefined): Availability
 const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 const MEALS = ["dinner", "lunch", "breakfast", "brunch"];
 
-export function heuristicIntent(text: string): Intent {
+/** `chatMembers`: when used from a chat ("@agent ..."), its members are the participants. */
+export function heuristicIntent(text: string, chatMembers: string[] = []): Intent {
   const lower = text.toLowerCase();
-  const participants = extractMentions(text);
+  const mentioned = extractMentions(text);
+  const participants = mentioned.length ? mentioned : chatMembers;
   const event =
     lower.match(/\b(dinner|lunch|breakfast|brunch|coffee|drinks|meeting|call|walk|game|five-a-side|5-a-side|football|tennis|match|party|movie|cinema|trip|run)\b/)?.[1] ?? "meetup";
   const day = lower.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tonight|tomorrow|this weekend|weekend)\b/)?.[1];

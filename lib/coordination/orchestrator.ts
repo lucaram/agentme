@@ -40,6 +40,42 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
 
   const mentions = extractMentions(text).filter((h) => h !== agent.handle);
   if (mentions.length === 0) return replyToOwner(agent, userId, conversationId, text);
+  return composePlan({
+    userId,
+    agent,
+    text,
+    participants: mentions,
+    say: (content) => postMessage({ conversationId, from: "agent", agentId: agent.id, content }),
+    card: { conversationId },
+    taskConversationId: conversationId,
+    onChat: () => replyToOwner(agent, userId, conversationId, text),
+  });
+}
+
+/**
+ * Compose a plan from a request, validate it in code, and post the approval card.
+ * Shared by My Agent and by "@agent ..." in any chat. Nothing is sent to anyone
+ * until the organiser approves.
+ */
+export async function composePlan(opts: {
+  userId: string;
+  agent: AgentRow;
+  text: string;
+  /** Handles to involve (from the owner's @mentions, or the chat's members). */
+  participants: string[];
+  /** Where to tell the owner about problems. */
+  say: (content: string) => Promise<unknown>;
+  /** Where the approval card goes; private to the owner when it's a shared chat. */
+  card: { conversationId: string; visibleTo?: string };
+  /** The owner's own conversation for progress messages (My Agent). */
+  taskConversationId: string;
+  /** Share the plan's blocks into this existing chat instead of a new group. */
+  groupConversationId?: string | null;
+  /** From a chat: its members are the participants (passed separately, never mixed into the owner's words). */
+  chatMembers?: string[];
+  onChat: () => Promise<unknown>;
+}) {
+  const { userId, agent, text, say } = opts;
 
   // The AI composes a plan from building blocks; code validates it below.
   let draft: PlanDraft;
@@ -48,22 +84,28 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
       purpose: "compose",
       tier: "smart",
       system: COMPOSE_SYSTEM,
-      messages: [{ role: "user", content: text }],
+      messages: [
+        {
+          role: "user",
+          content: opts.chatMembers?.length ? `${text}
+
+(Sent in a chat with ${opts.chatMembers.map((h) => `@${h}`).join(", ")}: they are the people to involve.)` : text,
+        },
+      ],
       schema: ComposeSchema,
       maxTokens: 2000,
-      mockContext: { text },
+      mockContext: { text, chatMembers: opts.chatMembers ?? [] },
     });
   } catch {
     // Composition is checked by code anyway; fall back to deterministic composition.
-    draft = heuristicCompose(text);
+    draft = heuristicCompose(text, opts.chatMembers ?? []);
   }
-  if (draft.kind === "chat" || !draft.steps.length) return replyToOwner(agent, userId, conversationId, text);
+  if (draft.kind === "chat" || !draft.steps.length) return opts.onChat();
 
-  // Participants come from the @mentions the OWNER typed, never from the model.
-  const say = (content: string) => postMessage({ conversationId, from: "agent", agentId: agent.id, content });
+  // Participants come from the owner (mentions or chat members), never from the model.
   const valid: string[] = [];
   const rejected: string[] = [];
-  for (const handle of mentions) {
+  for (const handle of [...new Set(opts.participants)].filter((h) => h !== agent.handle)) {
     const other = await getAgentByHandle(handle);
     if (other && other.type === "personal" && (await getRelationship(agent.id, other.id)) === "accepted") valid.push(handle);
     else rejected.push(handle);
@@ -84,12 +126,26 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
 
   const { data: task, error } = await adminClient()
     .from("tasks")
-    .insert({ owner_id: userId, initiator_agent: agent.id, conversation_id: conversationId, goal: text, parsed: asJson(plan.parsed) })
+    .insert({
+      owner_id: userId,
+      initiator_agent: agent.id,
+      conversation_id: opts.taskConversationId,
+      goal: text,
+      parsed: asJson(plan.parsed),
+      group_conversation_id: opts.groupConversationId ?? null,
+    })
     .select("id")
     .single();
   if (error) throw error;
   await createSteps(task.id, plan.steps);
-  await postMessage({ conversationId, from: "agent", agentId: agent.id, content: planSummary(valid, plan.preview), metadata: { kind: "task_card", task_id: task.id } });
+  await postMessage({
+    conversationId: opts.card.conversationId,
+    from: "agent",
+    agentId: agent.id,
+    content: planSummary(valid, plan.preview),
+    metadata: { kind: "task_card", task_id: task.id },
+    visibleTo: opts.card.visibleTo,
+  });
   return task.id;
 }
 
@@ -120,7 +176,6 @@ export async function updateDraft(taskId: string, userId: string, draft: PlanDra
   await db
     .from("messages")
     .update({ content: planSummary(participants, plan.preview) })
-    .eq("conversation_id", task.conversation_id)
     .eq("metadata->>task_id", taskId)
     .eq("metadata->>kind", "task_card");
   return { ok: true };

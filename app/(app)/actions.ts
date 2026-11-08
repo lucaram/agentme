@@ -28,6 +28,8 @@ import { claimItem, closePollStep, respondRsvp, unclaimItem, votePoll } from "@/
 import { changePlan, type ChangeInputT } from "@/lib/plans/change";
 import { MAX_PLAN_PEOPLE } from "@/lib/plans/types";
 import { withUsageContext } from "@/lib/usage/context";
+import { isAgentCommand } from "@/lib/agents/commands";
+import { handleAgentCommand } from "@/lib/agents/in-chat";
 
 const Id = z.uuid();
 
@@ -41,7 +43,9 @@ export async function sendMessage(conversationId: string, text: string): Promise
   const conv = await getConversation(conversationId);
   if (!conv) throw new Error("Not found");
 
-  const talksToAgent = conv.kind === "my_agent" || conv.kind === "agent_chat";
+  // "@agent ..." in a group or DM summons the sender's own agent (privately).
+  const summoned = (conv.kind === "group" || conv.kind === "dm") && isAgentCommand(content);
+  const talksToAgent = conv.kind === "my_agent" || conv.kind === "agent_chat" || summoned;
   if (talksToAgent) {
     // Every message to an agent costs AI time: cap the rate per user.
     const limit = await hit("agentMessagesPerUser", user.id);
@@ -55,10 +59,33 @@ export async function sendMessage(conversationId: string, text: string): Promise
       await handleOwnerMessage({ userId: user.id, agent, conversationId, text: content });
     } else if (conv.kind === "agent_chat") {
       await askAgent({ userId: user.id, agent, conversationId, text: content });
+    } else if (summoned) {
+      await handleAgentCommand({ userId: user.id, agent, conversation: conv, text: content });
     } else {
       await postMessage({ conversationId, from: "human", userId: user.id, content });
     }
   });
+  revalidatePath(`/chats/${conversationId}`);
+  return {};
+}
+
+/**
+ * "Send as me": the owner sends (possibly edited) text that their agent drafted.
+ * It is posted as the owner's own message: the owner reviewed and chose to send it.
+ */
+export async function sendDraftAction(conversationId: string, draftMessageId: string, text: string): Promise<{ error?: string }> {
+  const { user } = await requireAgent();
+  const content = text.trim().slice(0, 4000);
+  if (!content || !Id.safeParse(conversationId).success || !Id.safeParse(draftMessageId).success) return { error: "Nothing to send." };
+  if (!(await isMember(conversationId, user.id))) return { error: "Not found." };
+  const db = adminClient();
+  // Only the owner's own, unused private draft in this chat.
+  const { data: draft } = await db.from("messages").select("id, metadata").eq("id", draftMessageId).eq("conversation_id", conversationId).eq("visible_to", user.id).maybeSingle();
+  const meta = (draft?.metadata ?? {}) as Record<string, unknown>;
+  if (!draft || meta.kind !== "draft") return { error: "Not found." };
+  if (meta.sent) return { error: "Already sent." };
+  await postMessage({ conversationId, from: "human", userId: user.id, content });
+  await db.from("messages").update({ metadata: asJson({ ...meta, sent: true }) }).eq("id", draftMessageId);
   revalidatePath(`/chats/${conversationId}`);
   return {};
 }

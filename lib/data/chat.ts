@@ -72,6 +72,8 @@ type NewMessage = {
   conversationId: string;
   content: string;
   metadata?: Record<string, unknown>;
+  /** Only this user can see the message (e.g. their @agent command and its reply). */
+  visibleTo?: string;
 } & (
   | { from: "human"; userId: string }
   | { from: "agent"; agentId: string }
@@ -89,6 +91,7 @@ export async function postMessage(msg: NewMessage): Promise<MessageRow> {
       sender_agent_id: msg.from === "agent" ? msg.agentId : null,
       // Trust rule: every agent-authored message is flagged as AI-generated.
       is_ai_generated: msg.from === "agent",
+      visible_to: msg.visibleTo ?? null,
     })
     .select("*")
     .single();

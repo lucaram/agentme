@@ -7,6 +7,7 @@ import type { z } from "zod";
 export type LLMPurpose =
   | "intent" // parse an owner's request into a coordination task (legacy single-block)
   | "compose" // compose a plan from building blocks
+  | "chat_assist" // @agent in a chat: summarise, translate, draft, answer (private to the owner)
   | "coordination_reply" // answer another agent's availability/preference request
   | "proposal" // turn collected replies into a plan
   | "owner_chat" // talk to the agent's own owner

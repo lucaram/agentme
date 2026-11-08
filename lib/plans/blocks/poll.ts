@@ -1,7 +1,7 @@
 import "server-only";
 import { adminClient } from "@/lib/supabase/admin";
 import { postMessage } from "@/lib/data/chat";
-import { ensurePlanGroup } from "../group";
+import { ensurePlanGroup, whereShared } from "../group";
 import type { PollConfig } from "../poll";
 import type { StepHandler } from "../types";
 
@@ -35,7 +35,7 @@ export const runPoll: StepHandler = async ({ task, step, organiser }) => {
       conversationId: task.conversation_id,
       from: "agent",
       agentId: organiser.id,
-      content: `I've created a new group for the poll, “${group.title ?? config.question}”. I'll tell you the result when everyone has voted, or you can close it early from the group.`,
+      content: `I've shared the poll in ${whereShared(group, config.question)}. I'll tell you the result when everyone has voted, or you can close it early there.`,
       metadata: { kind: "info", task_id: task.id },
     });
   }

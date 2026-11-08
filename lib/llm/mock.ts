@@ -33,6 +33,24 @@ export class MockProvider implements LLMProvider {
             : "I can coordinate plans with your contacts' agents, run polls and ask them questions. Try: \"Arrange dinner with @marco and @paul on Saturday evening.\"";
         break;
       }
+      case "chat_assist": {
+        // Deterministic stand-ins for summarise / translate / draft / answer.
+        const lines = (ctx.lines ?? []) as string[];
+        switch (ctx.mode) {
+          case "summarise":
+            text = lines.length ? `Summary of the last ${lines.length} messages: ${lines.slice(-5).join(" | ")}` : "Nothing to summarise yet.";
+            break;
+          case "translate":
+            text = `(${String(ctx.language)}) ${String(ctx.text ?? "")}`;
+            break;
+          case "draft":
+            text = `Sounds good — ${String(ctx.instruction ?? "")}`.trim();
+            break;
+          default:
+            text = "I can summarise this chat, translate or draft a reply for you, or organise something with everyone here. Try “@agent poll: pizza or sushi?”.";
+        }
+        break;
+      }
       case "business_faq":
         text = answerFaq(String(ctx.question ?? ""), (ctx.businessInfo ?? {}) as BusinessInfo);
         break;
@@ -48,7 +66,7 @@ export class MockProvider implements LLMProvider {
     let value: unknown;
     switch (req.purpose) {
       case "compose":
-        value = heuristicCompose(String(ctx.text ?? ""));
+        value = heuristicCompose(String(ctx.text ?? ""), (ctx.chatMembers ?? []) as string[]);
         break;
       case "intent":
         value = heuristicIntent(String(ctx.text ?? ""));
