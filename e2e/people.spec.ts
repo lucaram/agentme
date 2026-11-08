@@ -53,14 +53,17 @@ test("an introduction connects two friends only when both say yes", async ({ bro
   await expect(luca.page.getByText(/will each be asked by their own agent/)).toBeVisible();
 
   const eve = await as(browser, "eve");
-  await eve.page.goto("/inbox");
+  // It waits in Contacts, and the Contacts tab shows a badge.
+  await expect(eve.page.getByTestId("contacts-badge")).toHaveText("1");
+  await eve.page.getByRole("navigation").first().getByRole("link", { name: /^Contacts/ }).click();
   const card = eve.page.getByTestId("inbox-item").filter({ hasText: "wants to introduce you to" });
   await expect(card).toContainText("you both love climbing");
   await card.getByRole("button", { name: "Connect with Marco" }).click();
-  await expect(eve.page.getByText("You said yes")).toBeVisible();
+  await expect(eve.page.getByTestId("intro-waiting")).toContainText("Waiting for them to say yes too");
+  await expect(eve.page.getByTestId("contacts-badge")).toHaveCount(0);
 
   const marco = await as(browser, "marco");
-  await marco.page.goto("/inbox");
+  await marco.page.goto("/contacts");
   await marco.page.getByTestId("inbox-item").filter({ hasText: "wants to introduce you to" }).getByRole("button", { name: "Connect with Eve" }).click();
   await expect(marco.page).toHaveURL(/\/chats\/[0-9a-f-]+$/);
   await expect(marco.page.getByText("Luca introduced you. Say hi!")).toBeVisible();
@@ -154,11 +157,11 @@ test("search in Chats finds your groups and contacts and opens them", async ({ b
 test("the tab bar is simple: requests live in My Agent, Find people in Contacts, Activity in Settings", async ({ browser }) => {
   const luca = await as(browser, "luca");
   const nav = luca.page.getByRole("navigation").first();
-  await expect(nav.getByRole("link")).toHaveText([/^Chats/, "Contacts", "Groups", "Communities", "Settings"]);
+  await expect(nav.getByRole("link")).toHaveText([/^Chats/, /^Contacts/, /^Groups/, /^Communities/, "Settings"]);
   // Old Inbox links open My Agent.
   await luca.page.goto("/inbox");
   await expect(luca.page.getByRole("heading", { name: "My Agent" })).toBeVisible();
-  await nav.getByRole("link", { name: "Contacts" }).click();
+  await nav.getByRole("link", { name: /^Contacts/ }).click();
   await luca.page.getByRole("link", { name: "Find people" }).click();
   await expect(luca.page).toHaveURL(/\/discover/);
   await nav.getByRole("link", { name: "Settings" }).click();

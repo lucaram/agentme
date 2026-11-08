@@ -159,6 +159,12 @@ SMS: no provider is wired up yet. With `SMS_PROVIDER=dev` (the default outside p
 The tab bar is **Chats · Contacts · Groups · Communities · Settings**.
 - **Waiting for your decision:** these live in **My Agent**, under **Needs your answer**. There is no separate Inbox, and `/inbox` redirects to My Agent.
 - **Find people** (formerly Discover) is inside Contacts.
+- **Tab badges** count only what waits for *you*, and each request has one home:
+  - **Chats:** unread messages. My Agent holds agents' requests and contacts' questions under *Needs your answer*.
+  - **Contacts:** contact requests and introductions.
+  - **Groups:** group invites; join requests and reported messages in groups you admin; and **Updates**.
+  - **Communities:** the same for communities you moderate, plus Updates.
+- **Updates** cover: you were removed or banned; a group or community was deleted; your join request was approved or declined; a moderator muted you; you were made admin or moderator. They clear from the badge once seen, and each group or community row shows "N to review" for admins and moderators.
 - **Activity** (formerly History) is inside Settings.
 
 ## Groups and communities

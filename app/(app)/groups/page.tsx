@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { GROUP_AVATARS } from "@/lib/social/shared";
 import { CreateGroupForm } from "./CreateGroupForm";
 import { OpenRequests } from "@/components/requests/OpenRequests";
+import { Notices } from "@/components/social/Notices";
 
 const ROLE_LABEL = { owner: "Owner", admin: "Admin", member: "" } as const;
 
@@ -18,6 +19,16 @@ export default async function GroupsPage() {
     supabase.from("agents").select("id, handle, display_name, avatar"),
   ]);
   const myRow = new Map((mine ?? []).map((m) => [m.conversation_id, m]));
+  // What admins have to review, per group (RLS: only groups where you're owner/admin).
+  const [{ data: pendingRequests }, { data: openReports }] = await Promise.all([
+    supabase.from("join_requests").select("conversation_id").eq("status", "pending").not("conversation_id", "is", null),
+    supabase.from("reports").select("conversation_id").eq("status", "open").is("community_id", null).not("message_id", "is", null),
+  ]);
+  const toReview = new Map<string, number>();
+  for (const r of [...(pendingRequests ?? []), ...(openReports ?? [])]) {
+    const role = r.conversation_id ? myRow.get(r.conversation_id)?.role : null;
+    if (r.conversation_id && (role === "owner" || role === "admin")) toReview.set(r.conversation_id, (toReview.get(r.conversation_id) ?? 0) + 1);
+  }
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));
   const people = (contacts ?? [])
     .map((c) => byId.get(c.requester_agent === agent.id ? c.addressee_agent : c.requester_agent))
@@ -33,6 +44,7 @@ export default async function GroupsPage() {
         </div>
       </div>
       <OpenRequests title="Group invites" kinds={["group_invite"]} />
+      <Notices area="groups" />
       <CreateGroupForm contacts={people} avatars={GROUP_AVATARS} />
 
       {groups?.length ? (
@@ -54,6 +66,11 @@ export default async function GroupsPage() {
                       {g.description && ` · ${g.description}`}
                     </span>
                   </span>
+                  {toReview.get(g.id) ? (
+                    <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-white dark:text-black" data-testid="to-review">
+                      {toReview.get(g.id)} to review
+                    </span>
+                  ) : null}
                   <span className="text-xs text-accent">Manage ›</span>
                 </Link>
               </li>

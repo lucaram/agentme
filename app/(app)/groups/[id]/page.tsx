@@ -56,7 +56,7 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
   const [{ data: requests }, { data: reports }] = isAdmin
     ? await Promise.all([
         supabase.from("join_requests").select("id, user_id, created_at").eq("conversation_id", id).eq("status", "pending").order("created_at"),
-        supabase.from("reports").select("id, message_id, excerpt, reason, created_at").eq("conversation_id", id).eq("status", "open").order("created_at", { ascending: false }),
+        supabase.from("reports").select("id, message_id, excerpt, reason, created_at").eq("conversation_id", id).eq("status", "open").not("message_id", "is", null).order("created_at", { ascending: false }),
       ])
     : [{ data: [] }, { data: [] }];
 

@@ -163,7 +163,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
 
       {conv.kind === "my_agent" && (
         <div className="mb-4">
-          <OpenRequests title="Needs your answer" hint="Only you can decide these. Nothing is shared until you choose." />
+          <OpenRequests title="Needs your answer" kinds={["info_request", "question"]} hint="Only you can decide these. Nothing is shared until you choose." />
         </div>
       )}
 

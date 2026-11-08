@@ -3,6 +3,7 @@ import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { ChatsBadge } from "@/components/ChatsBadge";
+import { TabBadge } from "@/components/TabBadge";
 import { ChatSearch } from "@/components/ChatSearch";
 import { signOut } from "../(auth)/actions";
 
@@ -18,7 +19,8 @@ const NAV = [
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const { user, agent } = await requireAgent();
   const supabase = await createClient();
-  const { data: unreadRows } = await supabase.rpc("unread_counts");
+  const [{ data: unreadRows }, { data: actionRows }] = await Promise.all([supabase.rpc("unread_counts"), supabase.rpc("action_counts")]);
+  const actions = actionRows?.[0];
   // Muted chats keep their own counter but don't add to the tab total.
   const unreadTotal = (unreadRows ?? []).filter((r) => !r.muted).reduce((n, r) => n + Number(r.unread), 0);
 
@@ -44,6 +46,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             <Link key={href} href={href} className="flex items-center gap-1 rounded-full px-3 py-1 hover:bg-accent-soft">
               {label}
               {href === "/chats" && <ChatsBadge initial={unreadTotal} />}
+              {href === "/contacts" && <TabBadge tab="contacts" initial={Number(actions?.contacts ?? 0)} />}
+              {href === "/groups" && <TabBadge tab="groups" initial={Number(actions?.groups ?? 0)} />}
+              {href === "/communities" && <TabBadge tab="communities" initial={Number(actions?.communities ?? 0)} />}
             </Link>
           ))}
         </nav>

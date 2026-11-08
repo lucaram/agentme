@@ -160,6 +160,47 @@ describe.skipIf(!dbUp)("groups and communities (live)", () => {
     expect(await role(general.id, d)).not.toBeNull();
   });
 
+  it("tab badges count what's waiting for you; removals and decisions arrive as updates", async () => {
+    const { groups, shared } = await lib();
+    const { a, b, d } = people;
+    const signedIn = async (p: P) => {
+      const client = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
+      await client.auth.signInWithPassword({ email: p.email, password: PASSWORD });
+      return client;
+    };
+    const counts = async (p: P) => {
+      const { data } = await (await signedIn(p)).rpc("action_counts");
+      return { contacts: Number(data![0].contacts), groups: Number(data![0].groups), communities: Number(data![0].communities) };
+    };
+    const made = await groups.createGroup(a.me, { title: "Badges", description: "", avatar: "👥", memberAgentIds: [b.agent.id] });
+    const id = (made as { id: string }).id;
+    await admin().from("notices").delete().in("user_id", [a.userId, b.userId, d.userId]);
+    const before = await counts(a);
+
+    // An admin sees join requests to review.
+    const url = await shared.createJoinLink({ conversationId: id }, a.userId);
+    await groups.joinGroupWithLink(url.split("/invite/")[1], d.me);
+    expect((await counts(a)).groups).toBe(before.groups + 1);
+    expect((await counts(b)).groups).toBe(0); // plain members don't
+    const { data: req } = await admin().from("join_requests").select("id").eq("conversation_id", id).eq("user_id", d.userId).single();
+    await groups.decideGroupRequest(req!.id, a.me, false);
+    expect((await counts(a)).groups).toBe(before.groups);
+
+    // The person hears back, and removals are told too.
+    const { data: declined } = await admin().from("notices").select("text").eq("user_id", d.userId);
+    expect(declined!.map((n) => n.text)).toEqual(["Your request to join “Badges” was declined."]);
+    await groups.removeMember(id, a.me, b.userId);
+    const { data: removed } = await admin().from("notices").select("text, area").eq("user_id", b.userId);
+    expect(removed).toEqual([{ text: "🚪 Test A removed you from “Badges”.", area: "groups" }]);
+    expect((await counts(b)).groups).toBe(1);
+    await (await signedIn(b)).rpc("mark_notices_seen", { p_area: "groups" });
+    expect((await counts(b)).groups).toBe(0);
+
+    // Contacts: incoming contact requests.
+    await admin().from("contacts").insert({ requester_agent: b.agent.id, addressee_agent: d.agent.id });
+    expect((await counts(d)).contacts).toBe(1);
+  });
+
   it("the browser sees private communities and moderation data only when allowed", async () => {
     const { communities } = await lib();
     const { a, b, d } = people;

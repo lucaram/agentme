@@ -1,10 +1,9 @@
 import "server-only";
-import { NEEDS_ANSWER, tellOwner } from "@/lib/requests/notify";
 import { adminClient } from "@/lib/supabase/admin";
 import { asJson } from "@/lib/data/json";
 import { getAgentById, getAgentForUser, getContactRow, type AgentRow } from "@/lib/data/agents";
 import { createConversation, postMessage } from "@/lib/data/chat";
-import { GROUP_AVATARS, MAX_GROUP_PEOPLE, groupRole, isGroupAdmin, loadJoinLink, type Result } from "./shared";
+import { GROUP_AVATARS, MAX_GROUP_PEOPLE, groupRole, isGroupAdmin, loadJoinLink, notify, type Result } from "./shared";
 
 type Me = { userId: string; agent: AgentRow };
 
@@ -56,7 +55,6 @@ async function addPeople(groupId: string, groupTitle: string, me: Me, agentIds: 
         kind: "group_invite",
         payload: asJson({ kind: "group_invite", conversation_id: groupId, title: groupTitle }),
       });
-      await tellOwner(other.owner_id, other.id, `🔔 ${me.agent.display_name} wants to add you to the group “${groupTitle}”. ${NEEDS_ANSWER}`);
       invited.push(other);
       continue;
     }
@@ -105,6 +103,8 @@ export async function removeMember(groupId: string, me: Me, userId: string): Pro
   await adminClient().from("conversation_members").delete().eq("conversation_id", groupId).eq("user_id", userId);
   const them = await getAgentForUser(userId);
   await note(groupId, `${me.agent.display_name} removed ${them?.display_name ?? "someone"}.`);
+  const group = await loadGroup(groupId);
+  await notify([userId], "groups", `🚪 ${me.agent.display_name} removed you from “${group?.title ?? "a group"}”.`);
   return { ok: true };
 }
 
@@ -115,6 +115,10 @@ export async function setMemberRole(groupId: string, me: Me, userId: string, rol
   if (theirRole === role) return { ok: true };
   await adminClient().from("conversation_members").update({ role }).eq("conversation_id", groupId).eq("user_id", userId);
   const them = await getAgentForUser(userId);
+  if (role === "admin") {
+    const group = await loadGroup(groupId);
+    await notify([userId], "groups", `⭐ ${me.agent.display_name} made you an admin of “${group?.title ?? "a group"}”.`, `/groups/${groupId}`);
+  }
   await note(groupId, role === "admin" ? `${me.agent.display_name} made ${them?.display_name} an admin.` : `${them?.display_name} is no longer an admin.`);
   return { ok: true };
 }
@@ -183,8 +187,11 @@ export async function reportGroup(groupId: string, me: Me, reason: string): Prom
 
 /** Only the owner can delete a group, for everyone. */
 export async function deleteGroup(groupId: string, me: Me): Promise<Result> {
-  if (!(await loadGroup(groupId)) || (await groupRole(groupId, me.userId)) !== "owner") return { ok: false, error: "Only the owner can delete the group." };
+  const group = await loadGroup(groupId);
+  if (!group || (await groupRole(groupId, me.userId)) !== "owner") return { ok: false, error: "Only the owner can delete the group." };
+  const { data: members } = await adminClient().from("conversation_members").select("user_id").eq("conversation_id", groupId).neq("user_id", me.userId);
   await adminClient().from("conversations").delete().eq("id", groupId);
+  await notify((members ?? []).map((m) => m.user_id), "groups", `🗑️ ${me.agent.display_name} deleted the group “${group.title ?? "Group"}”.`);
   return { ok: true };
 }
 
@@ -222,6 +229,13 @@ export async function decideGroupRequest(requestId: string, me: Me, approve: boo
     const them = await getAgentForUser(req.user_id);
     await note(req.conversation_id, `${me.agent.display_name} let ${them?.display_name ?? "someone"} in.`);
   }
+  const group = await loadGroup(req.conversation_id);
+  await notify(
+    [req.user_id],
+    "groups",
+    approve ? `✅ You're in! You joined “${group?.title ?? "the group"}”.` : `Your request to join “${group?.title ?? "a group"}” was declined.`,
+    approve ? `/chats/${req.conversation_id}` : null,
+  );
   return { ok: true };
 }
 

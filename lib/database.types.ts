@@ -449,6 +449,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"notices": {
+                  Row: {
+                    "area": string,"created_at": string,"id": string,"link": string | null,"seen_at": string | null,"text": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "area": string,"created_at"?: string,"id"?: string,"link"?: string | null,"seen_at"?: string | null,"text": string,"user_id": string
+                  }
+                  Update: {
+                    "area"?: string,"created_at"?: string,"id"?: string,"link"?: string | null,"seen_at"?: string | null,"text"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"phone_verifications": {
                   Row: {
                     "agent_id": string,"attempts": number,"code_hash": string,"expires_at": string,"hint": string,"phone_hash": string
@@ -709,7 +723,12 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "add_plan_participant":
+            "action_counts":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "communities": number,"contacts": number,"groups": number
+            }[]
+                           },
+"add_plan_participant":
 { Args: { "p_handle": string,"p_max": number,"p_task": string }; Returns: string
                            },
 "can_see_task":
@@ -766,6 +785,9 @@ isOneToOne: false
                            },
 "mark_conversation_read":
 { Args: { "p_conversation": string }; Returns: undefined
+                           },
+"mark_notices_seen":
+{ Args: { "p_area": string }; Returns: undefined
                            },
 "my_agent_id":
 { Args: Record<PropertyKey, never>; Returns: string

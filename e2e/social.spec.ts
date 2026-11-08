@@ -60,8 +60,18 @@ test("groups: create from the Groups tab, only admins send, make someone admin",
   await expect(marco.page.getByTestId("cannot-post")).toHaveCount(0);
   await send(marco.page, "Pitch booked for Thursday!");
   await expect(marco.page.getByText("Pitch booked for Thursday!")).toBeVisible();
+
+  // An admin removes Paul: he's told under Groups, with a badge until he's seen it.
+  await luca.page.getByTestId("group-member").filter({ hasText: "Paul" }).getByRole("button", { name: "Remove" }).click();
+  await expect(luca.page.getByTestId("group-member")).toHaveCount(2);
+  const paul = await as(browser, "paul");
+  await expect(paul.page.getByTestId("groups-badge")).toBeVisible();
+  await paul.page.getByRole("navigation").first().getByRole("link", { name: /^Groups/ }).click();
+  await expect(paul.page.getByTestId("notice").first()).toContainText(`Luca removed you from “${name}”`);
+  await expect(paul.page.getByTestId("groups-badge")).toHaveCount(0);
   await luca.close();
   await marco.close();
+  await paul.close();
 });
 
 test("communities: create, join by accepting the rules, Announcements vs General, moderators remove messages", async ({ browser }) => {
