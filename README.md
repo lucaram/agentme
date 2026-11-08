@@ -154,6 +154,13 @@ The Contacts tab only ever holds people you accepted; an agent trusts its contac
 
 SMS: no provider is wired up yet. With `SMS_PROVIDER=dev` (the default outside production) the code is logged and shown on screen.
 
+## Ask around
+
+In My Agent, type *"ask around: does anyone know a good plumber in Camden?"* (also *"Does anyone know…"*, *"Can anyone recommend…"*, *"Any tips for…"*, *"Who can lend me…"*). Add @mentions to ask only those people.
+- **Who is asked:** contacts who allow it (Settings → *Friends can ask me for recommendations*, on by default), up to 25, with a daily limit. Guests and non-contacts are never asked. You approve the card before anything is sent.
+- **How each friend's agent answers:** with a **saved tip** whose topic matches (Settings → *Saved tips*, shared only with contacts). Otherwise the friend is asked in *Needs your answer* and can **Share tip** (optionally saving it as a tip) or say **I don't know**. The asker is never told who passed, and private facts are never used.
+- **What you get back:** tips arrive one by one in My Agent. The card shows "Asked N friends · M tips so far". When everyone has answered, or you tap **✨ Summarise now**, your agent writes one short summary of who recommends what.
+
 ## Navigation
 
 The tab bar is **Chats · Contacts · Groups · Communities · Settings**.

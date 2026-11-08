@@ -35,6 +35,13 @@ export const QuestionRequestSchema = z.object({
 });
 export type QuestionRequest = z.infer<typeof QuestionRequestSchema>;
 
+/** "Ask around": a contact asks for a recommendation (answered from a saved tip, or by the person). */
+export const AskAroundRequestSchema = z.object({
+  type: z.literal("agentme.ask_around"),
+  question: z.string().min(1).max(500),
+});
+export type AskAroundRequest = z.infer<typeof AskAroundRequestSchema>;
+
 /** What a coordination request asks another agent for. Sent as an A2A DataPart. */
 export const CoordinationRequestSchema = z.object({
   type: z.literal("agentme.coordination.request"),

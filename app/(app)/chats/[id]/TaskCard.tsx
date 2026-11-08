@@ -33,6 +33,7 @@ const HEADINGS: Record<NonNullable<TaskParsed["kind"]>, string> = {
   assign: "🧺 Sign-up list",
   announce: "📣 Announcement",
   composed: "🧩 Plan",
+  ask_around: "🔎 Ask around",
 };
 
 type Tone = "waiting" | "personal" | "auto" | "no";
@@ -51,6 +52,9 @@ function replyStatus(e: Exchange, handle: string | undefined): { label: string; 
     case "waiting_human":
       return { label: `⏳ asked ${who} personally, waiting for their answer`, tone: "waiting" };
     case "completed":
+      if (e.skill === "coordination.ask_around") {
+        return e.answered_by === "human" ? { label: "💡 tip", tone: "personal" } : { label: "💡 saved tip", tone: "auto" };
+      }
       return e.answered_by === "human" ? { label: `👤 answered by ${who} personally`, tone: "personal" } : { label: "🤖 replied automatically", tone: "auto" };
     case "refused":
       return { label: e.answered_by === "human" ? "🚫 preferred not to share" : "🚫 refused to share", tone: "no" };
@@ -67,6 +71,7 @@ const STEP_ICON: Record<string, string> = {
   question: "💬",
   assign: "🧺",
   announce: "📣",
+  ask_around: "🔎",
 };
 
 /** One line per step, so the organiser sees exactly what will happen before approving. */
@@ -119,6 +124,9 @@ function StepLine({ step, parsed, hasProposal }: { step: StepRow; parsed: TaskPa
     case "announce":
       body = <>Send your exact words as your own message: “{String(c.message)}”</>;
       break;
+    case "ask_around":
+      body = <>{stepWords.askAround(people)}: “{String(c.question)}”</>;
+      break;
     default:
       body = step.type;
   }
@@ -151,7 +159,9 @@ export function TaskCard({
   const legacy = (task.parsed.kind ?? "coordinate") === "coordinate" && !ordered.some((s) => s.type === "collect");
   const hasProposal = legacy || ordered.some((s) => s.type === "proposal");
   // Retried/interrupted attempts stay in History; the card shows the latest per person.
-  const latest = [...new Map(exchanges.map((e) => [e.to_agent ?? e.id, e])).values()];
+  const allLatest = [...new Map(exchanges.map((e) => [e.to_agent ?? e.id, e])).values()];
+  const askAround = kind === "ask_around";
+  const latest = askAround ? allLatest.filter((e) => e.status === "completed") : allLatest;
   const editable = canAct && task.status === "awaiting_approval";
 
   return (
@@ -186,9 +196,15 @@ export function TaskCard({
         ))}
       </ol>
 
+      {askAround && task.status !== "awaiting_approval" && (
+        <p className="mt-3 border-t border-border pt-2 text-xs text-muted" data-testid="ask-around-progress">
+          Asked {task.parsed.participants.length} {task.parsed.participants.length === 1 ? "friend" : "friends"} · {latest.length}{" "}
+          {latest.length === 1 ? "tip" : "tips"} so far
+        </p>
+      )}
       {latest.length > 0 && (
         <div className="mt-3 border-t border-border pt-3">
-          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Replies</h3>
+          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">{askAround ? "Tips" : "Replies"}</h3>
           <ul className="space-y-2">
             {latest.map((e) => {
               const to = e.to_agent ? agents.get(e.to_agent) : undefined;
@@ -239,14 +255,18 @@ export function TaskCard({
             <ActionButton action={approveTaskAction.bind(null, task.id)} label="Approve" pendingLabel="Starting…" variant="btn-primary" />
           )}
           {task.status === "waiting" && (
-            <ActionButton action={continueWithoutWaitingAction.bind(null, task.id)} label="Continue without waiting" pendingLabel="Continuing…" />
+            <ActionButton
+              action={continueWithoutWaitingAction.bind(null, task.id)}
+              label={askAround ? "✨ Summarise now" : "Continue without waiting"}
+              pendingLabel={askAround ? "Summarising…" : "Continuing…"}
+            />
           )}
           {["awaiting_approval", "running", "waiting"].includes(task.status) && (
             <ActionButton action={cancelTaskAction.bind(null, task.id)} label={task.status === "awaiting_approval" ? "Cancel" : "Stop"} />
           )}
         </div>
       )}
-      {editable && <DraftEditor taskId={task.id} initial={draftFromSteps(task.parsed.event, ordered, task.parsed)} />}
+      {editable && !askAround && <DraftEditor taskId={task.id} initial={draftFromSteps(task.parsed.event, ordered, task.parsed)} />}
     </section>
   );
 }

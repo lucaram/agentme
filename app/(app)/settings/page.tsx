@@ -6,6 +6,7 @@ import { deleteAccount, saveSettings } from "../actions";
 import { PhoneVerify } from "./PhoneVerify";
 import { SaveAccount } from "./SaveAccount";
 import { DiscoverableToggle } from "./DiscoverableToggle";
+import { SavedTips } from "./SavedTips";
 import { maskEmail } from "@/lib/people/normalise";
 
 export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
@@ -16,6 +17,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
     supabase.from("agent_facts").select("category, value, disclosure"),
     supabase.from("agent_identifiers").select("kind, hint"),
   ]);
+  const { data: tips } = await supabase.from("agent_tips").select("id, topic, tip").order("created_at", { ascending: false });
   const hint = (kind: string) => identifiers?.find((i) => i.kind === kind)?.hint ?? null;
   const fact = (c: string) => facts?.find((f) => f.category === c);
   const info = agent.business_info as { description?: string; hours?: string; faqs?: { q: string; a: string }[] };
@@ -69,6 +71,18 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
               </span>
             </label>
           ))}
+        </section>
+
+        <section className="card space-y-3">
+          <h2 className="font-semibold">Recommendations</h2>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="recommendations_ok" defaultChecked={agent.recommendations_ok} className="mt-1" />
+            <span>
+              Friends can ask me for recommendations
+              <span className="block hint">When a contact asks around (“does anyone know a good plumber?”), you&apos;re asked too. You can always say “I don&apos;t know”; they&apos;re never told.</span>
+            </span>
+          </label>
+          <input type="hidden" name="recommendations_form" value="1" />
         </section>
 
         <section className="card space-y-3">
@@ -129,6 +143,16 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         )}
         <button className="btn-primary">Save</button>
       </form>
+
+      {agent.type === "personal" && (
+        <section className="card space-y-3" aria-label="Saved tips">
+          <div>
+            <h2 className="font-semibold">Saved tips</h2>
+            <p className="hint">Your agent shares these by itself when a friend asks around about that topic (only with your contacts). Everything else, you answer yourself.</p>
+          </div>
+          <SavedTips tips={tips ?? []} />
+        </section>
+      )}
 
       <Link href="/history" className="card flex items-center justify-between hover:bg-accent-soft" data-testid="activity-link">
         <span>

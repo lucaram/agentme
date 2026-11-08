@@ -11,7 +11,8 @@ export type LLMPurpose =
   | "coordination_reply" // answer another agent's availability/preference request
   | "proposal" // turn collected replies into a plan
   | "owner_chat" // talk to the agent's own owner
-  | "business_faq"; // answer a question from business-provided info only
+  | "business_faq" // answer a question from business-provided info only
+  | "ask_around_summary"; // summarise friends' recommendations for the owner
 
 export type LLMTier = "smart" | "fast";
 

@@ -12,6 +12,7 @@ import { runPoll } from "./blocks/poll";
 import { runQuestion } from "./blocks/question";
 import { runAssign } from "./blocks/assign";
 import { runAnnounce } from "./blocks/announce";
+import { runAskAround } from "./blocks/askAround";
 import type { StepHandler, StepType, TaskParsed, TaskRow } from "./types";
 
 // ------------------------------------------------------------- the plan engine
@@ -37,6 +38,7 @@ const HANDLERS: Partial<Record<StepType, StepHandler>> = {
   question: runQuestion,
   assign: runAssign,
   announce: runAnnounce,
+  ask_around: runAskAround,
 };
 
 class LeaseLost extends Error {}
@@ -97,7 +99,7 @@ export async function continueWithoutWaiting(taskId: string, userId: string): Pr
     .from("plan_steps")
     .select("id, config")
     .eq("task_id", taskId)
-    .in("type", ["collect", "question"])
+    .in("type", ["collect", "question", "ask_around"])
     .eq("status", "waiting");
   for (const step of steps ?? []) {
     await updateStep(step.id, { config: { ...(step.config as CollectConfig), proceedWithoutWaiting: true } });

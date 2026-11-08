@@ -165,3 +165,25 @@ export async function saveGuestAccountAction(_prev: Out | undefined, form: FormD
   revalidatePath("/", "layout");
   redirect("/settings?saved=account");
 }
+
+// ------------------------------------------------------------- saved tips (ask around)
+
+/** A tip your agent may share by itself when a friend asks around about this topic. */
+export async function addTipAction(topic: string, tip: string): Promise<Out> {
+  const { agent } = await requireAgent();
+  const t = String(topic ?? "").trim().slice(0, 80);
+  const text = String(tip ?? "").trim().slice(0, 500);
+  if (t.length < 2 || !text) return { error: "Add a topic and your tip." };
+  const { count } = await adminClient().from("agent_tips").select("*", { count: "exact", head: true }).eq("agent_id", agent.id);
+  if ((count ?? 0) >= 100) return { error: "You can keep up to 100 tips." };
+  await adminClient().from("agent_tips").insert({ agent_id: agent.id, topic: t, tip: text });
+  revalidatePath("/settings");
+  return {};
+}
+
+export async function removeTipAction(id: string): Promise<Out> {
+  const { agent } = await requireAgent();
+  await adminClient().from("agent_tips").delete().eq("id", String(id ?? "")).eq("agent_id", agent.id);
+  revalidatePath("/settings");
+  return {};
+}
