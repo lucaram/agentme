@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -77,6 +78,8 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
     ];
   }
   const others = conv.conversation_members.filter((m) => m.user_id !== user.id).map((m) => byOwner.get(m.user_id));
+  // The other person left this direct message: keep it readable, but closed.
+  const dmClosed = conv.kind === "dm" && others.length === 0;
   const title =
     conv.kind === "my_agent"
       ? "My Agent"
@@ -90,7 +93,9 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
         ? "You're talking to an AI agent over A2A. It answers only from information its owner published."
         : conv.kind === "group"
           ? `Members: ${["you", ...others.map((o) => (o ? `@${o.handle}` : "someone"))].join(", ")}`
-          : "Direct message";
+          : dmClosed
+            ? "They left this chat"
+            : "Direct message";
 
   return (
     <div className="flex flex-1 flex-col">
@@ -214,6 +219,12 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
         })}
       </ol>
 
+      {dmClosed ? (
+        <p className="mt-4 rounded-2xl border border-border bg-surface px-4 py-3 text-center text-sm text-muted" data-testid="dm-closed">
+          You can&apos;t send messages here any more. To talk again, open them from{" "}
+          <Link href="/contacts" className="text-accent underline">Contacts</Link> and start a new chat.
+        </p>
+      ) : (
       <Composer
         conversationId={id}
         placeholder={
@@ -226,6 +237,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
         thinkingLabel={conv.kind === "dm" || conv.kind === "group" ? undefined : "Agent is thinking…"}
         examples={examples}
       />
+      )}
     </div>
   );
 }

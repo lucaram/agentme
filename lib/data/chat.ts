@@ -16,6 +16,11 @@ export async function isMember(conversationId: string, userId: string): Promise<
   return Boolean(data);
 }
 
+export async function memberCount(conversationId: string): Promise<number> {
+  const { count } = await adminClient().from("conversation_members").select("*", { count: "exact", head: true }).eq("conversation_id", conversationId);
+  return count ?? 0;
+}
+
 export async function getConversation(id: string) {
   const { data } = await adminClient().from("conversations").select("*").eq("id", id).maybeSingle();
   return data;
