@@ -413,3 +413,36 @@ test("the composer: a template becomes an editable plan of blocks, run in one gr
   await luca.close();
   await marco.close();
 });
+
+test("@agent in a group: private answers, a poll posted into the chat, a draft sent as me", async ({ browser }) => {
+  const luca = await as(browser, "luca");
+  await luca.page.getByRole("link", { name: /^👥 Dinner — Italian/ }).click();
+
+  // Private summary: only Luca sees the command and the answer.
+  await send(luca.page, "@agent summarise");
+  await expect(luca.page.getByTestId("private-message").filter({ hasText: "📝" })).toBeVisible();
+  const marco = await as(browser, "marco");
+  await marco.page.getByRole("link", { name: /^👥 Dinner — Italian/ }).click();
+  await expect(marco.page.getByText("@agent summarise")).toHaveCount(0);
+  await expect(marco.page.getByTestId("private-message")).toHaveCount(0);
+
+  // A poll with the chat's members: the approval card is private, the poll is posted here.
+  await send(luca.page, "@agent poll: pizza or sushi?");
+  const task = luca.page.getByRole("region", { name: "Agent task" }).last();
+  await expect(task.getByTestId("poll-options")).toHaveText("pizza · sushi");
+  await expect(marco.page.getByRole("region", { name: "Agent task" })).toHaveCount(0);
+  await task.getByRole("button", { name: "Approve" }).click();
+  await expect(marco.page.getByTestId("poll").last()).toContainText("pizza", { timeout: 15_000 });
+
+  // A draft reply: private until Luca taps "Send as me".
+  await send(luca.page, "@agent draft say I'm in");
+  const draft = luca.page.getByRole("form", { name: "Draft reply" }).last();
+  await expect(draft.getByLabel("Edit draft")).toHaveValue("Sounds good — say I'm in");
+  await expect(marco.page.getByText("Sounds good — say I'm in")).toHaveCount(0);
+  await draft.getByRole("button", { name: "Send as me" }).click();
+  const sent = marco.page.getByRole("listitem").filter({ hasText: "Sounds good — say I'm in" });
+  await expect(sent).toBeVisible({ timeout: 10_000 });
+  await expect(sent.getByTitle("Written by an AI agent")).toHaveCount(0); // Luca sent it as himself
+  await luca.close();
+  await marco.close();
+});

@@ -221,14 +221,14 @@ isOneToOne: false
                   ]
                 },"messages": {
                   Row: {
-                    "content": string,"conversation_id": string,"created_at": string,"id": string,"is_ai_generated": boolean,"metadata": NonNullable<Json>,"sender_agent_id": string | null,"sender_user_id": string | null
+                    "content": string,"conversation_id": string,"created_at": string,"id": string,"is_ai_generated": boolean,"metadata": NonNullable<Json>,"sender_agent_id": string | null,"sender_user_id": string | null,"visible_to": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "content": string,"conversation_id": string,"created_at"?: string,"id"?: string,"is_ai_generated": boolean,"metadata"?: NonNullable<Json>,"sender_agent_id"?: string | null,"sender_user_id"?: string | null
+                    "content": string,"conversation_id": string,"created_at"?: string,"id"?: string,"is_ai_generated": boolean,"metadata"?: NonNullable<Json>,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"visible_to"?: string | null
                   }
                   Update: {
-                    "content"?: string,"conversation_id"?: string,"created_at"?: string,"id"?: string,"is_ai_generated"?: boolean,"metadata"?: NonNullable<Json>,"sender_agent_id"?: string | null,"sender_user_id"?: string | null
+                    "content"?: string,"conversation_id"?: string,"created_at"?: string,"id"?: string,"is_ai_generated"?: boolean,"metadata"?: NonNullable<Json>,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"visible_to"?: string | null
                   }
                   Relationships: [
                     {

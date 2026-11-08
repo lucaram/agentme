@@ -71,3 +71,11 @@ body {
     @apply text-xs text-muted;
   }
 }
+
+/* Horizontal chip rows: scroll by swipe/trackpad without a visible scrollbar. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

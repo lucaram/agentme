@@ -135,7 +135,10 @@ export function TaskCard({
 }) {
   const kind = task.parsed.kind ?? "coordinate";
   const ordered = [...steps].sort((a, b) => a.position - b.position);
-  const hasProposal = ordered.some((s) => s.type === "proposal");
+  // Plans made before the step engine only have a migrated RSVP step: show
+  // their original "find a time -> proposal -> who's in" flow from what was saved.
+  const legacy = (task.parsed.kind ?? "coordinate") === "coordinate" && !ordered.some((s) => s.type === "collect");
+  const hasProposal = legacy || ordered.some((s) => s.type === "proposal");
   // Retried/interrupted attempts stay in History; the card shows the latest per person.
   const latest = [...new Map(exchanges.map((e) => [e.to_agent ?? e.id, e])).values()];
   const editable = canAct && task.status === "awaiting_approval";
@@ -156,6 +159,15 @@ export function TaskCard({
         <dd>{task.parsed.participants.map((h) => `@${h}`).join(", ")}</dd>
       </dl>
       <ol className="mt-2 space-y-1" aria-label="Steps">
+        {legacy && (
+          <>
+            <li className="text-xs" data-testid="step-collect">
+              🗓️ Ask their agents for {(task.parsed.categories ?? []).map((x) => CATEGORY_LABELS[x as FactCategory]?.toLowerCase() ?? x).join(" and ") || "availability"} for{" "}
+              {task.parsed.event} ({task.parsed.window}).
+            </li>
+            <li className="text-xs" data-testid="step-proposal">📝 Draft a plan for you to approve before anyone sees it.</li>
+          </>
+        )}
         {ordered.map((s) => (
           <StepLine key={s.id} step={s} parsed={task.parsed} hasProposal={hasProposal} />
         ))}

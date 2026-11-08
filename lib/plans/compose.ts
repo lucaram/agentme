@@ -56,8 +56,8 @@ export const emptyStep = (type: ComposableStep): StepDraft => ({
 const stripArticle = (s: string) => s.replace(/^(a|an|the|some)\s+/i, "").trim();
 
 /** Used by the mock model and as a fallback when the real model fails. */
-export function heuristicCompose(text: string): PlanDraft {
-  const intent = heuristicIntent(text);
+export function heuristicCompose(text: string, chatMembers: string[] = []): PlanDraft {
+  const intent = heuristicIntent(text, chatMembers);
   if (intent.kind === "chat") return { kind: "chat", title: "", steps: [] };
   const steps: StepDraft[] = [];
   const step = (type: ComposableStep, fields: Partial<StepDraft>) => steps.push({ ...emptyStep(type), ...fields });

@@ -9,6 +9,7 @@ import { PollCard } from "./PollCard";
 import { AssignCard } from "./AssignCard";
 import { leaveConversation } from "../../actions";
 import { MarkRead } from "@/components/MarkRead";
+import { DraftReply } from "./DraftReply";
 
 export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
   const { id } = await params;
@@ -112,7 +113,8 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
 
       <ol className="flex flex-1 flex-col gap-3" aria-label="Messages">
         {(messages ?? []).map((m) => {
-          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string };
+          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean };
+          const isPrivate = Boolean(m.visible_to);
           const mine = m.sender_user_id === user.id;
           const senderAgent = m.sender_agent_id ? byId.get(m.sender_agent_id) : undefined;
           const senderUser = m.sender_user_id ? byOwner.get(m.sender_user_id) : undefined;
@@ -143,14 +145,21 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
                 ) : (
                   `${senderUser?.avatar ?? ""} ${senderUser?.display_name ?? "Someone"}`
                 )}
+                {isPrivate && (
+                  <span className="text-[10px]" data-testid="private-label" title="Only you can see this message">
+                    · 🔒 only visible to you
+                  </span>
+                )}
               </span>
               <div
-                className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ${
+                className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ${isPrivate ? "border border-dashed opacity-90" : ""} ${
                   m.is_ai_generated ? "border border-agent-border bg-agent" : mine ? "bg-accent text-white dark:text-black" : "border border-border bg-surface"
                 }`}
+                data-testid={isPrivate ? "private-message" : undefined}
               >
                 {m.content}
               </div>
+              {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}
               {task && (
                 <TaskCard
                   task={task as TaskView}
@@ -205,7 +214,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
             ? "e.g. Arrange dinner with @marco and @paul on Saturday evening"
             : conv.kind === "agent_chat"
               ? `Ask @${target?.handle ?? "agent"} a question`
-              : "Message"
+              : "Message — or @agent to ask your agent (only you see it)"
         }
         thinkingLabel={conv.kind === "dm" || conv.kind === "group" ? undefined : "Agent is thinking…"}
         examples={examples}

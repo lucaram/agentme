@@ -1,7 +1,7 @@
 import "server-only";
 import { adminClient } from "@/lib/supabase/admin";
 import { postMessage } from "@/lib/data/chat";
-import { ensurePlanGroup } from "../group";
+import { ensurePlanGroup, whereShared } from "../group";
 import type { StepHandler } from "../types";
 
 export type AnnounceConfig = { message: string; participants: string[] };
@@ -28,7 +28,7 @@ export const runAnnounce: StepHandler = async ({ task, step, organiser }) => {
       conversationId: task.conversation_id,
       from: "agent",
       agentId: organiser.id,
-      content: `Sent your message to everyone in “${group.title ?? title}”.`,
+      content: `Sent your message to everyone in ${whereShared(group, title)}.`,
       metadata: { kind: "info", task_id: task.id },
     });
   }

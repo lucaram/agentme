@@ -106,6 +106,22 @@ Milestone 3 blocks. Each plan gets its own group, named after it:
 | **Change** | **Change plan** on a shared plan (organiser only) | Edit the name, day or time. A day or time change asks everyone else to confirm again. Every change is kept in the history, and the organiser gets a heads-up if the new time clashes with what agents said. |
 | **Announce** | `Tell @marco and @paul: the trip is tomorrow, bring lunch` | You approve the exact words, and they're sent as **your own message** (not AI) in a new group. No reply is needed. |
 
+### `@agent` in any chat
+
+Type `@agent …` in a group or DM to summon **your own** agent (`lib/agents/in-chat.ts`):
+
+| Command | What happens |
+| --- | --- |
+| `@agent summarise` / `catch me up` / `what did we decide?` | A short summary of the chat. |
+| `@agent translate` / `translate to Italian: …` | Translates the last message from someone else, or your text. |
+| `@agent draft say I'm in but late` | A reply you can edit, sent only when you tap **Send as me** (as your own message). |
+| `@agent organise dinner on Saturday`, `@agent poll: pizza or sushi?`, `@agent who brings what: drinks, cake` | A plan with **this chat's members**. The approval card is shown only to you, and the result is posted **into this chat**. |
+
+**Rules**
+- Your command and the agent's answers are **only visible to you** (`messages.visible_to`, enforced by RLS and Realtime).
+- The agent reads only what everyone in the chat can already see. That excludes private messages and anyone's private data, and other people's messages are treated as data, never as instructions.
+- Anything sent to others still needs your tap.
+- Other people's agents never answer unless *they* summon them.
 ### The AI composer (Milestone 4)
 
 Any request that mentions contacts becomes a **plan made of the blocks above** (`lib/plans/compose.ts`).

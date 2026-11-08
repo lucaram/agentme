@@ -4,7 +4,7 @@ import { asJson } from "@/lib/data/json";
 import { postMessage } from "@/lib/data/chat";
 import { DISCLAIMER } from "@/lib/coordination/schemas";
 import { displayClock } from "@/lib/coordination/heuristics";
-import { ensurePlanGroup } from "../group";
+import { ensurePlanGroup, whereShared } from "../group";
 import type { StepHandler } from "../types";
 
 export type RsvpConfig = {
@@ -68,7 +68,7 @@ export const runRsvp: StepHandler = async ({ task, step, organiser, parsed, resu
         conversationId: task.conversation_id,
         from: "agent",
         agentId: organiser.id,
-        content: `I've invited everyone in a new group, “${group.title ?? title}”. You're marked as in.`,
+        content: `I've invited everyone in ${whereShared(group, title)}. You're marked as in.`,
         metadata: { kind: "info", task_id: task.id },
       });
     }

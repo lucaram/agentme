@@ -17,6 +17,7 @@ export function Composer({
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [summoned, setSummoned] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
 
   function submit() {
@@ -24,6 +25,7 @@ export function Composer({
     if (!text || pending) return;
     ref.current!.value = "";
     setError(null);
+    setSummoned(/^\s*@agent\b/i.test(text));
     startTransition(async () => {
       const result = await sendMessage(conversationId, text);
       if (result?.error) {
@@ -37,7 +39,7 @@ export function Composer({
   return (
     <div className="sticky bottom-0 mt-4 bg-background pb-3 pt-2">
       {examples && (
-        <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="Templates">
+        <div className="no-scrollbar mb-2 flex gap-1.5 overflow-x-auto" aria-label="Templates">
           {examples.map((ex) => (
             <button
               key={ex.label}
@@ -54,7 +56,9 @@ export function Composer({
           ))}
         </div>
       )}
-      {pending && thinkingLabel && <p className="mb-1 text-xs text-muted" aria-live="polite">{thinkingLabel}</p>}
+      {pending && (thinkingLabel || summoned) && (
+        <p className="mb-1 text-xs text-muted" aria-live="polite">{thinkingLabel ?? "Your agent is thinking… (only you will see the answer)"}</p>
+      )}
       {error && <p className="mb-1 text-xs text-danger" role="alert">{error}</p>}
       <form
         className="flex items-end gap-2"
