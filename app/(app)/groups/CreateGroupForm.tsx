@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { createGroupAction } from "../social-actions";
 import { AvatarPicker } from "@/components/social/Controls";
+import { ContactSearch } from "./ContactSearch";
 
 type Person = { id: string; avatar: string; display_name: string; handle: string };
 
@@ -30,17 +31,7 @@ export function CreateGroupForm({ contacts, avatars }: { contacts: Person[]; ava
       </div>
       <fieldset>
         <legend className="label">Members (from your contacts)</legend>
-        {contacts.length ? (
-          <div className="flex flex-wrap gap-2">
-            {contacts.map((a) => (
-              <label key={a.id} className="flex cursor-pointer items-center gap-1 rounded-full border border-border px-3 py-1 text-sm">
-                <input type="checkbox" name="members" value={a.id} /> {a.avatar} {a.display_name}
-              </label>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted">Add contacts first (Discover or Contacts).</p>
-        )}
+        <ContactSearch contacts={contacts} />
       </fieldset>
       {state?.error && <p role="alert" className="text-sm text-danger">{state.error}</p>}
       <div className="flex gap-2">
