@@ -67,7 +67,7 @@ export default async function MyBusinessPage() {
         <span className="text-3xl" aria-hidden>📷</span>
         <span className="min-w-0 flex-1">
           <span className="block font-semibold">Your QR code for customers</span>
-          <span className="block text-xs text-muted">Use it in your shop (window, tables, till, menu) or online (website, social media). Scanning it lets people ask your agent anything.</span>
+          <span className="block text-xs text-muted">Use it anywhere you meet customers: in your shop, on your website or on social media. One scan and they can ask your agent anything.</span>
         </span>
         <Link href="/print/qr" className="btn-primary">🖨️ Print poster</Link>
       </section>
