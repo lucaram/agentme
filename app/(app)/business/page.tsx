@@ -5,6 +5,8 @@ import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { BusinessInfoForm, SourcesManager, TryIt } from "./BusinessForms";
 import { QuestionsAnswers } from "./QuestionsAnswers";
 import { AddBusinessIntro } from "./AddBusinessIntro";
+import { WaysEditor } from "./WaysEditor";
+import { waysOf } from "@/lib/business/booking";
 import { adminClient } from "@/lib/supabase/admin";
 import { ActionButton } from "@/components/ActionButton";
 import { answerPartnerInviteAction, leavePlacementAction } from "../social-actions";
@@ -91,6 +93,17 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
           <span className="block text-xs text-muted">Use it anywhere you meet customers: in your shop, on your website or on social media. One scan and they can ask your agent anything.</span>
         </span>
         <Link href="/print/qr" className="btn-primary">🖨️ Print poster</Link>
+      </section>
+
+      <section className="card space-y-3" aria-label="Book or order">
+        <div>
+          <h2 className="font-semibold">How customers book or order</h2>
+          <p className="hint">
+            Your agent never books or takes orders itself: it sends people to your own booking page, shop, phone or WhatsApp. These show as buttons
+            on your page, in your agent&apos;s answers, and in friends&apos; plans that pick your place.
+          </p>
+        </div>
+        <WaysEditor initial={waysOf(agent.business_info)} />
       </section>
 
       <section className="card space-y-3" aria-label="In your own words">

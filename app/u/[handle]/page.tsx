@@ -6,6 +6,8 @@ import { verifyLiveConnectToken } from "@/lib/people/crypto";
 import { ActionButton } from "@/components/ActionButton";
 import { connectNowAction } from "@/app/(app)/people-actions";
 import { openAgentChat, requestContact } from "@/app/(app)/actions";
+import { BusinessWays } from "@/components/BusinessWays";
+import { waysOf } from "@/lib/business/booking";
 
 /**
  * Someone's personal AGENTME link (agentme.app/u/luca), also behind their QR
@@ -26,6 +28,7 @@ export default async function PersonalLinkPage({ params, searchParams }: PagePro
   // A business's page (what its permanent QR code opens): ask its agent first, become a customer second.
   if (other.type === "business") {
     const bio = other.bio ?? (other.business_info as { description?: string } | null)?.description ?? null;
+    const ways = waysOf(other.business_info);
     return (
       <main className="mx-auto flex w-full max-w-sm flex-1 flex-col items-center justify-center gap-5 px-6 py-16 text-center">
         <div className="text-6xl">{other.avatar}</div>
@@ -34,6 +37,8 @@ export default async function PersonalLinkPage({ params, searchParams }: PagePro
           <p className="text-sm text-muted">@{other.handle} · Business</p>
           {bio && <p className="mt-2 text-sm">{bio}</p>}
         </div>
+        {/* The business's own ways to book or order: open to anyone, no account needed. */}
+        <BusinessWays ways={ways} block primary={false} />
         {!me ? (
           <div className="flex w-full flex-col gap-2">
             <Link href={`/signup?next=${encodeURIComponent(here)}`} className="btn-primary">💬 Ask us anything</Link>

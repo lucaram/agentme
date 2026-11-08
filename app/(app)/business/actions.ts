@@ -12,6 +12,7 @@ import { allowLocal } from "@/lib/business/fetch";
 import { draftBusinessAnswer } from "@/lib/agents/respond";
 import { withUsageContext } from "@/lib/usage/context";
 import { describeRetry, hit } from "@/lib/limits";
+import { MAX_WAYS, normaliseWay, type Way } from "@/lib/business/booking";
 
 type Out = { error?: string };
 const MAX_LINKS = 20;
@@ -162,4 +163,21 @@ export async function updateFaqAction(index: number, question: string, answer: s
   await adminClient().from("agents").update({ business_info: asJson({ ...info, faqs }) }).eq("id", agent.id);
   revalidatePath("/business");
   return {};
+}
+
+/** "How customers book or order": the business's own ways (AGENTME never books or takes orders). */
+export async function saveWaysAction(input: { kind: string; value: string }[]): Promise<Out & { saved?: boolean }> {
+  const { agent } = await requireBusiness();
+  const rows = (Array.isArray(input) ? input : []).filter((w) => String(w?.value ?? "").trim());
+  if (rows.length > MAX_WAYS) return { error: `Add up to ${MAX_WAYS} ways.` };
+  const ways: Way[] = [];
+  for (const row of rows) {
+    const checked = normaliseWay(String(row.kind), String(row.value));
+    if (!checked.ok) return { error: checked.error };
+    ways.push(checked.way);
+  }
+  const info = (agent.business_info ?? {}) as Info;
+  await adminClient().from("agents").update({ business_info: asJson({ ...info, ways }) }).eq("id", agent.id);
+  revalidatePath("/business");
+  return { saved: true };
 }

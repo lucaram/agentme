@@ -26,6 +26,8 @@ export type TaskParsed = {
   items?: string[];
   /** announce: the exact message the organiser approved. */
   message?: string;
+  /** The place: a business @mentioned in the request (its own ways to book show on the plan). */
+  venue?: { agent_id: string; handle: string; name: string } | null;
 };
 
 /**

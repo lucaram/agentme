@@ -38,7 +38,7 @@ export const runProposal: StepHandler = async ({ task, organiser, parsed, result
     await renew();
     const inserted = await db
       .from("proposals")
-      .insert({ task_id: task.id, content: asJson({ ...proposal, disclaimer: DISCLAIMER }) })
+      .insert({ task_id: task.id, content: asJson({ ...proposal, disclaimer: DISCLAIMER, venue: parsed.venue ?? null }) })
       .select("id, content, status")
       .single();
     // Unique violation: a concurrent worker saved one first. Use it.

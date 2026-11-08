@@ -5,9 +5,21 @@ import type { Database } from "@/lib/database.types";
 import { decideProposalAction } from "../../actions";
 import { RsvpControl } from "./RsvpControl";
 import { ChangePlanForm } from "./ChangePlanForm";
+import { BusinessWays } from "@/components/BusinessWays";
+import type { Way } from "@/lib/business/booking";
 
 export type ProposalView = Database["public"]["Tables"]["proposals"]["Row"] & {
-  content: { title: string; day: string; time: string; cuisine: string | null; participants: string[]; rationale: string; disclaimer: string };
+  content: {
+    title: string;
+    day: string;
+    time: string;
+    cuisine: string | null;
+    participants: string[];
+    rationale: string;
+    disclaimer: string;
+    /** A business @mentioned in the request: the place. */
+    venue?: { agent_id: string; handle: string; name: string } | null;
+  };
 };
 type StepResponse = Database["public"]["Tables"]["step_responses"]["Row"];
 type AgentLite = { handle: string; avatar: string };
@@ -22,6 +34,7 @@ export function ProposalCard({
   myHandle,
   inGroup,
   canChange,
+  venueWays = [],
 }: {
   proposal: ProposalView;
   rsvpStepId: string | null;
@@ -32,6 +45,8 @@ export function ProposalCard({
   myHandle: string;
   inGroup: boolean;
   canChange: boolean;
+  /** The venue's own ways to book or order (loaded on the server). */
+  venueWays?: Way[];
 }) {
   const c = proposal.content;
   const isOrganiserView = !inGroup;
@@ -59,6 +74,15 @@ export function ProposalCard({
       <p className="mt-1 text-xs text-muted">{c.participants.map((p) => `@${p}`).join(", ")}</p>
       {c.rationale && <p className="mt-2 text-xs text-muted">{c.rationale}</p>}
       <p className="mt-2 rounded-lg bg-accent-soft px-2 py-1 text-xs">{c.disclaimer}</p>
+      {c.venue && (
+        <div className="mt-2 space-y-1 rounded-lg border border-border p-2" data-testid="plan-venue">
+          <p className="text-xs">
+            📍 At <a className="font-medium text-accent underline" href={`/u/${c.venue.handle}`}>{c.venue.name}</a>
+            {venueWays.length ? `: book or order directly with ${c.venue.name}` : ` (@${c.venue.handle})`}
+          </p>
+          <BusinessWays ways={venueWays} />
+        </div>
+      )}
 
       {proposal.status === "accepted" && (
         <>

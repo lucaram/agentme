@@ -16,6 +16,8 @@ import { LocalTime } from "@/components/LocalTime";
 import { InviteLink } from "./InviteLink";
 import { MessageActions } from "./MessageActions";
 import { OpenRequests } from "@/components/requests/OpenRequests";
+import { adminClient } from "@/lib/supabase/admin";
+import { waysOf } from "@/lib/business/booking";
 import { canPost, communityMembership, groupRole, isGroupAdmin, isModerator, type ConvRow } from "@/lib/social/shared";
 
 export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
@@ -59,6 +61,10 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
     proposalIds.length ? supabase.from("proposals").select("*").in("id", proposalIds) : Promise.resolve({ data: [] }),
     supabase.from("agent_facts").select("category, value"),
   ]);
+  // A plan's place: that business's own ways to book or order (public; read on the server).
+  const venueIds = [...new Set((proposals ?? []).map((p) => (p.content as { venue?: { agent_id?: string } | null }).venue?.agent_id).filter((v): v is string => Boolean(v)))];
+  const { data: venueRows } = venueIds.length ? await adminClient().from("agents").select("id, business_info").in("id", venueIds).eq("type", "business") : { data: [] };
+  const venueWays = new Map((venueRows ?? []).map((v) => [v.id, waysOf(v.business_info)]));
   // Steps & answers: visible to the plan owner and members of the plan's group (RLS can_see_task).
   const planTaskIds = [...new Set([...taskIds, ...(proposals ?? []).map((p) => p.task_id)])];
   const { data: steps } = planTaskIds.length
@@ -264,6 +270,7 @@ export default async function ChatPage({ params }: PageProps<"/chats/[id]">) {
                   myAgentId={agent.id}
                   myHandle={agent.handle}
                   inGroup={conv.kind === "group"}
+                  venueWays={venueWays.get((proposal as ProposalView).content.venue?.agent_id ?? "") ?? []}
                 />
               )}
               {assignStep && (

@@ -12,6 +12,7 @@ import {
 import { BUSINESS_FAQ_SYSTEM, COORDINATION_REPLY_SYSTEM, wrapUntrusted } from "./prompts";
 import { matchTips } from "@/lib/people/askAround";
 import { businessKnowledge, type KnowledgeSource } from "@/lib/business/knowledge";
+import { waysOf, withWays } from "@/lib/business/booking";
 
 export type Tip = { topic: string; tip: string };
 
@@ -238,7 +239,7 @@ export async function draftBusinessAnswer(
 ) {
   const trimmed = question.trim().slice(0, 1000);
   const { info, websites } = businessKnowledge(recipient, sources, audience);
-  return llm().generateObject({
+  const reply = await llm().generateObject({
     purpose: "business_faq",
     tier: "fast",
     system: BUSINESS_FAQ_SYSTEM,
@@ -249,6 +250,8 @@ export async function draftBusinessAnswer(
     maxTokens: 600,
     mockContext: { question: trimmed, businessInfo: recipient.business_info, knowledge: `${info}\n${websites}` },
   });
+  // Booking or ordering: the business's own ways are always in the answer (code, not the model).
+  return withWays(trimmed, reply, waysOf(recipient.business_info));
 }
 
 async function answerBusinessQuestion(recipient: RecipientAgent, question: string, incoming: IncomingA2A, business: BusinessContext): Promise<AgentResponse> {
