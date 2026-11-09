@@ -26,6 +26,9 @@ export const HOUSE_RULES = [
 export type HouseRuleId = (typeof HOUSE_RULES)[number]["id"];
 export const MAX_HOUSE_RULES = 5;
 export const MIN_DESCRIPTION = 20;
+export const MAX_DESCRIPTION = 500;
+/** Long names get cut off in lists and the header. */
+export const MAX_NAME = 40;
 
 export const LANGUAGES = [
   { code: "en", name: "English", flag: "🇬🇧" },

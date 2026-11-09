@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { createCommunityAction, updateCommunityAction } from "../social-actions";
 import { AvatarPicker } from "@/components/social/Controls";
-import { CORE_RULES, HOUSE_RULES, LANGUAGES, MAX_HOUSE_RULES, MIN_DESCRIPTION, houseRuleLabel } from "@/lib/social/rules";
+import { CORE_RULES, HOUSE_RULES, LANGUAGES, MAX_DESCRIPTION, MAX_HOUSE_RULES, MAX_NAME, MIN_DESCRIPTION, houseRuleLabel } from "@/lib/social/rules";
 
 type Values = { name: string; description: string; avatar: string; visibility: "public" | "private"; houseRules: string[]; language: string | null };
 
@@ -58,6 +58,9 @@ function RulesPicker({ initial, language }: { initial: string[]; language: strin
 }
 
 function Fields({ values, avatars, isOwner, detectLanguage }: { values: Values; avatars: string[]; isOwner: boolean; detectLanguage?: boolean }) {
+  const [name, setName] = useState(values.name);
+  const [description, setDescription] = useState(values.description);
+  const descriptionOk = description.trim().length >= MIN_DESCRIPTION;
   // New communities: the language starts as the creator's browser language (if it's one we list).
   const [language, setLanguage] = useState<string | null>(() => {
     if (values.language || !detectLanguage || typeof navigator === "undefined") return values.language;
@@ -68,23 +71,53 @@ function Fields({ values, avatars, isOwner, detectLanguage }: { values: Values; 
     <>
       {isOwner && <AvatarPicker options={avatars} initial={values.avatar} />}
       <div>
-        <label className="label" htmlFor="c-name">Name</label>
-        <input className="input" id="c-name" name="name" defaultValue={values.name} minLength={3} maxLength={60} required disabled={!isOwner} placeholder="e.g. Manchester United fans" />
+        <div className="flex items-baseline justify-between gap-2">
+          <label className="label" htmlFor="c-name">Name <span className="font-normal text-muted">· required</span></label>
+          <span className={`text-xs tabular-nums ${name.length >= MAX_NAME - 5 ? "text-amber-600 dark:text-amber-400" : "text-muted"}`} data-testid="name-counter" aria-live="polite">
+            {name.length} / {MAX_NAME}
+          </span>
+        </div>
+        <input
+          className="input"
+          id="c-name"
+          name="name"
+          value={name}
+          onChange={(e) => setName(e.target.value.slice(0, MAX_NAME))}
+          minLength={3}
+          maxLength={MAX_NAME}
+          required
+          disabled={!isOwner}
+          placeholder="e.g. Manchester United fans"
+        />
       </div>
       <div>
-        <label className="label" htmlFor="c-description">What is it about?</label>
+        <div className="flex items-baseline justify-between gap-2">
+          <label className="label" htmlFor="c-description">What is it about? <span className="font-normal text-muted">· required</span></label>
+          <span className={`text-xs tabular-nums ${descriptionOk ? "text-accent" : "text-amber-600 dark:text-amber-400"}`} data-testid="description-counter" aria-live="polite">
+            {descriptionOk ? `✓ ${description.trim().length} / ${MAX_DESCRIPTION}` : `${description.trim().length} of ${MIN_DESCRIPTION} minimum`}
+          </span>
+        </div>
         <textarea
           className="input"
           id="c-description"
           name="description"
-          defaultValue={values.description}
+          value={description}
+          onChange={(e) => {
+            setDescription(e.target.value);
+            e.currentTarget.setCustomValidity("");
+          }}
+          // Too short: point to what's missing, not a generic error.
+          onInvalid={(e) => {
+            const missing = MIN_DESCRIPTION - e.currentTarget.value.trim().length;
+            e.currentTarget.setCustomValidity(missing > 0 ? `Add ${missing} more ${missing === 1 ? "character" : "characters"}, so people know what it's about.` : "");
+          }}
           rows={2}
           minLength={MIN_DESCRIPTION}
-          maxLength={500}
+          maxLength={MAX_DESCRIPTION}
           required
           placeholder="e.g. Match days, transfers and banter for fans in London"
         />
-        <p className="hint mt-1">Shown before people join, and used to keep chats on topic. At least {MIN_DESCRIPTION} characters.</p>
+        <p className="hint mt-1">Shown before people join, and used to keep chats on topic.</p>
       </div>
       <div>
         <label className="label" htmlFor="c-language">Main language <span className="font-normal text-muted">· optional</span></label>

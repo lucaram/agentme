@@ -1,5 +1,5 @@
 import "server-only";
-import { cleanRules, MIN_DESCRIPTION, rulesText } from "./rules";
+import { cleanRules, MAX_NAME, MIN_DESCRIPTION, rulesText } from "./rules";
 import { adminClient } from "@/lib/supabase/admin";
 import { getAgentForUser, type AgentRow } from "@/lib/data/agents";
 import { createConversation, postMessage } from "@/lib/data/chat";
@@ -23,7 +23,7 @@ async function channels(communityId: string) {
 function clean(input: CommunityInput): Result<{
   values: { name: string; description: string; rules: string; house_rules: string[]; language: string | null; avatar: string; visibility: "public" | "private" };
 }> {
-  const name = input.name.trim().replace(/\s+/g, " ").slice(0, 60);
+  const name = input.name.trim().replace(/\s+/g, " ").slice(0, MAX_NAME);
   const description = input.description.trim().slice(0, 500);
   if (name.length < 3) return { ok: false, error: "The name needs at least 3 characters." };
   if (description.length < MIN_DESCRIPTION) return { ok: false, error: `Say what it's about in at least ${MIN_DESCRIPTION} characters, so people know before joining.` };
