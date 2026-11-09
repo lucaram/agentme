@@ -44,3 +44,6 @@ create unique index agents_verified_domain_key on public.agents (verified_domain
 -- My Business updates: changes on the website, and questions it doesn't answer.
 alter table public.notices drop constraint notices_area_check;
 alter table public.notices add constraint notices_area_check check (area in ('groups', 'communities', 'business'));
+-- The badge is public (shown on the business page, in search and in chats): signed-in
+-- users may read this column too (agents use column grants, see agents_private_columns).
+grant select (verified_domain) on public.agents to authenticated;
