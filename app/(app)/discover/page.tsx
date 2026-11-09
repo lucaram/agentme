@@ -10,6 +10,7 @@ import { loadContactList } from "@/lib/people/imports";
 import { personalLink } from "@/lib/people/links";
 import { maskEmail } from "@/lib/people/normalise";
 import { AgentName } from "@/components/AgentName";
+import { Fold } from "@/components/Fold";
 
 /** Problems coming back from Gmail / Outlook. */
 function syncNotice(synced: unknown): string | null {
@@ -49,77 +50,103 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/discove
   return (
     <div className="space-y-4">
       <PeopleTabs active="find" />
-      {!agent.guest && (
-        <section className="card" aria-label="Find people you know">
-          <h2 className="text-lg font-semibold">Find people you know</h2>
-          <p className="mt-1 text-sm text-muted">🔒 You choose who to add. Your contacts are only used to show you this list, then deleted.</p>
-          {notice && (
-            <p className="mt-3 text-sm text-danger" role="alert">
-              {notice}
-            </p>
-          )}
-          <div className="mt-2">
-            {list ? (
-              <ContactList list={list} myLink={personalLink(agent.handle)} myName={agent.display_name} />
-            ) : (
-              <FindPeople
-                sources={(agent.contact_sources ?? {}) as Record<string, string>}
-                unsupported={synced === "unsupported" ? (user.email?.split("@")[1] ?? "your email") : null}
-              />
-            )}
-          </div>
-          <div className="mt-4 border-t border-border pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Friends can find you by</p>
-            <div className="mt-2 flex flex-wrap gap-2 text-sm">
-              {!agent.discoverable ? (
-                <Link href="/settings/privacy#find-me" className="rounded-full border border-dashed border-border px-3 py-1 text-muted hover:bg-accent-soft">
-                  🙈 Nobody: you&apos;re hidden (change)
-                </Link>
-              ) : user.email && user.emailConfirmed ? (
-                <span className="rounded-full bg-accent-soft px-3 py-1" data-testid="findable-email">✉️ {maskEmail(user.email)} ✓</span>
-              ) : (
-                <span className="rounded-full border border-dashed border-border px-3 py-1 text-muted">✉️ Email not verified yet</span>
+      {/* Tap-to-open sections, one at a time: finding people you know opens first; a search opens its results. */}
+      <div className="space-y-3">
+        {!agent.guest && (
+          <Fold
+            name="find-sections"
+            icon="📇"
+            title="Find people you know"
+            testId="fold-find-known"
+            open={!query}
+            summary="From your contacts, or a few emails or numbers. You choose who to add."
+          >
+            <div className="space-y-2 px-5 py-5 sm:px-6" aria-label="Find people you know">
+              <p className="text-sm text-muted">🔒 You choose who to add. Your contacts are only used to show you this list, then deleted.</p>
+              {notice && (
+                <p className="text-sm text-danger" role="alert">
+                  {notice}
+                </p>
               )}
-              {!agent.discoverable ? null : hint("phone") ? (
-                <span className="rounded-full bg-accent-soft px-3 py-1">📱 {hint("phone")} ✓</span>
+              {list ? (
+                <ContactList list={list} myLink={personalLink(agent.handle)} myName={agent.display_name} />
               ) : (
-                <Link href="/settings/privacy#find-me" className="rounded-full border border-dashed border-accent px-3 py-1 text-accent hover:bg-accent-soft">
-                  📱 Add your phone number
-                </Link>
+                <FindPeople
+                  sources={(agent.contact_sources ?? {}) as Record<string, string>}
+                  unsupported={synced === "unsupported" ? (user.email?.split("@")[1] ?? "your email") : null}
+                />
               )}
             </div>
+          </Fold>
+        )}
+
+        <Fold
+          name="find-sections"
+          icon="🔍"
+          title="Search by name or @address"
+          testId="fold-search"
+          open={Boolean(query)}
+          summary={query ? `${results.length} ${results.length === 1 ? "result" : "results"} for “${query}”` : "Anyone on AGENTME, or any business"}
+        >
+          <div className="space-y-3 px-5 py-5 sm:px-6">
+            <form className="flex gap-2" role="search">
+              <input className="input" name="q" defaultValue={query} placeholder="Search by name or @address" aria-label="Search agents" />
+              <button className="btn-primary">Search</button>
+            </form>
+            {query && results.length === 0 && <p className="text-sm text-muted">No agents found for “{query}”.</p>}
           </div>
-        </section>
-      )}
-      <form className="flex gap-2" role="search">
-        <input className="input" name="q" defaultValue={query} placeholder="Search by name or @address" aria-label="Search agents" />
-        <button className="btn-primary">Search</button>
-      </form>
-      {query && results.length === 0 && <p className="text-sm text-muted">No agents found for “{query}”.</p>}
-      <ul className="divide-y divide-border rounded-2xl border border-border bg-surface empty:hidden">
-        {results.map((a) => {
-          const status = statusOf(a.id);
-          return (
-            <li key={a.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-              <AgentName agent={a} className="text-2xl">{a.avatar}</AgentName>
-              <span className="min-w-0 flex-1">
-                <AgentName agent={a} className="block font-medium" pageHint>{a.display_name}</AgentName>
-                <span className="block text-xs text-muted">@{a.handle}{a.type === "business" ? ` · Business${a.bio ? ` · ${a.bio}` : ""}` : ""}</span>
-              </span>
-              <span className="flex gap-2">
-                {a.type === "business" && <ActionButton action={openAgentChat.bind(null, a.id)} label="Ask agent" />}
-                {status === "accepted" ? (
-                  <span className="text-xs text-muted">Contact</span>
-                ) : status === "pending" ? (
-                  <span className="text-xs text-muted">Requested</span>
-                ) : status === "blocked" ? null : (
-                  <ActionButton action={requestContact.bind(null, a.handle)} label="Add contact" variant="btn-primary" />
+          <ul className="divide-y divide-border border-t border-border empty:hidden">
+            {results.map((a) => {
+              const status = statusOf(a.id);
+              return (
+                <li key={a.id} className="flex flex-wrap items-center gap-3 px-5 py-3 sm:px-6">
+                  <AgentName agent={a} className="text-2xl">{a.avatar}</AgentName>
+                  <span className="min-w-0 flex-1">
+                    <AgentName agent={a} className="block font-medium" pageHint>{a.display_name}</AgentName>
+                    <span className="block text-xs text-muted">@{a.handle}{a.type === "business" ? ` · Business${a.bio ? ` · ${a.bio}` : ""}` : ""}</span>
+                  </span>
+                  <span className="flex gap-2">
+                    {a.type === "business" && <ActionButton action={openAgentChat.bind(null, a.id)} label="Ask agent" />}
+                    {status === "accepted" ? (
+                      <span className="text-xs text-muted">Contact</span>
+                    ) : status === "pending" ? (
+                      <span className="text-xs text-muted">Requested</span>
+                    ) : status === "blocked" ? null : (
+                      <ActionButton action={requestContact.bind(null, a.handle)} label="Add contact" variant="btn-primary" />
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Fold>
+
+        {!agent.guest && (
+          <Fold name="find-sections" icon="👀" title="How friends can find you" testId="fold-findable" summary={!agent.discoverable ? "Nobody: you're hidden" : [user.email && user.emailConfirmed ? `✉️ ${maskEmail(user.email)} ✓` : "✉️ email not verified", hint("phone") ? `📱 ${hint("phone")} ✓` : "📱 no phone yet"].join(" · ")}>
+            <div className="space-y-3 px-5 py-5 sm:px-6">
+              <p className="text-sm text-muted">People who have your email or number in their contacts can find you. Your details are never shown to them.</p>
+              <div className="flex flex-wrap gap-2 text-sm">
+                {!agent.discoverable ? (
+                  <Link href="/settings/privacy#find-me" className="rounded-full border border-dashed border-border px-3 py-1 text-muted hover:bg-accent-soft">
+                    🙈 Nobody: you&apos;re hidden (change)
+                  </Link>
+                ) : user.email && user.emailConfirmed ? (
+                  <span className="rounded-full bg-accent-soft px-3 py-1" data-testid="findable-email">✉️ {maskEmail(user.email)} ✓</span>
+                ) : (
+                  <span className="rounded-full border border-dashed border-border px-3 py-1 text-muted">✉️ Email not verified yet</span>
                 )}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+                {!agent.discoverable ? null : hint("phone") ? (
+                  <span className="rounded-full bg-accent-soft px-3 py-1">📱 {hint("phone")} ✓</span>
+                ) : (
+                  <Link href="/settings/privacy#find-me" className="rounded-full border border-dashed border-accent px-3 py-1 text-accent hover:bg-accent-soft">
+                    📱 Add your phone number
+                  </Link>
+                )}
+              </div>
+            </div>
+          </Fold>
+        )}
+      </div>
     </div>
   );
 }

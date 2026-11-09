@@ -8,7 +8,7 @@ import { requireAgent } from "@/lib/auth";
 import { adminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentByHandle, getAgentById, getContactRow } from "@/lib/data/agents";
-import { createConversation, findConversation, getConversation, getOrCreateMyAgentConversation, isMember, memberCount, postMessage } from "@/lib/data/chat";
+import { createConversation, findConversation, getConversation, getOrCreateMyAgentConversation, isMember, postMessage } from "@/lib/data/chat";
 import { asJson } from "@/lib/data/json";
 import {
   approveTask,
@@ -33,6 +33,7 @@ import { tellOwner } from "@/lib/requests/notify";
 import { canPost, type ConvRow } from "@/lib/social/shared";
 import { handOverIfOwnerLeft } from "@/lib/social/groups";
 import { answerMentions } from "@/lib/social/businesses";
+import { DM_CLOSED, dmState } from "@/lib/people/dm";
 import { guardCommunityPost } from "@/lib/social/guard-server";
 import { autopilot } from "@/lib/social/moderation-server";
 import { renameThread, resolveThread } from "@/lib/agents/threads";
@@ -61,8 +62,10 @@ export async function sendMessage(
   if (!(await isMember(conversationId, user.id))) throw new Error("Not found");
   const conv = await getConversation(conversationId);
   if (!conv) throw new Error("Not found");
-  if (conv.kind === "dm" && (await memberCount(conversationId)) < 2) {
-    return { error: "The other person left this chat. Message them again from Contacts." };
+  // Direct messages are for contacts: removed or blocked closes the chat (also for "@agent" there).
+  if (conv.kind === "dm") {
+    const { state } = await dmState(conversationId, user.id, agent.id);
+    if (state !== "open") return { error: DM_CLOSED[state] };
   }
 
   // "@agent ..." in a group, DM or community chat summons the sender's own agent (privately).
