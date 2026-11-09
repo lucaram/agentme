@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import type { PlanDraft, StepDraft } from "@/lib/plans/compose";
 import { updateDraftAction } from "../../actions";
+import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
 const LABELS: Record<string, string> = {
   collect: "🗓️ Find a time with their agents",
@@ -134,7 +135,7 @@ export function DraftEditor({ taskId, initial }: { taskId: string; initial: Plan
           {s.type === "announce" && (
             <label className="block text-xs">
               Message (sent exactly as written)
-              <textarea className="input mt-1" rows={2} value={s.message} maxLength={1000} onChange={(e) => set(i, { message: e.target.value })} />
+              <AutoGrowTextarea className="input mt-1" minRows={2} maxRows={8} value={s.message} maxLength={1000} onChange={(e) => set(i, { message: e.target.value })} />
             </label>
           )}
         </fieldset>

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ShareLink } from "@/app/(app)/contacts/ShareLink";
 import { ContactSearch } from "./ContactSearch";
+import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
 type Out = { error?: string } | undefined | void;
 
@@ -121,7 +122,7 @@ export function ReportForm({ action, withLeave, label = "Report" }: { action: (r
   }
   return (
     <div className="w-full space-y-2 rounded-xl border border-border p-3">
-      <textarea className="input" rows={2} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What's wrong? (spam, abuse, …)" aria-label="Reason" />
+      <AutoGrowTextarea className="input" minRows={2} maxRows={5} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What's wrong? (spam, abuse, …)" aria-label="Reason" />
       {withLeave && (
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={leave} onChange={(e) => setLeave(e.target.checked)} /> Also leave and block this group

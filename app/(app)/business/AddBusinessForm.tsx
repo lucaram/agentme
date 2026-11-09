@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { checkHandle } from "@/app/onboarding/actions";
 import { addBusinessAction } from "../identity-actions";
 import { MAX_BUSINESS_NAME, MIN_NAME } from "@/lib/social/limits";
+import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
 const AVATARS = ["🏪", "🍝", "☕", "🍕", "💇", "🛠️", "🏋️", "🛍️", "🎨", "🩺"];
 const suggest = (name: string) =>
@@ -101,11 +102,12 @@ export function AddBusinessForm() {
       </div>
       <div>
         <label className="label" htmlFor="biz-about">In a few words <span className="font-normal text-muted">· optional, public</span></label>
-        <textarea
+        <AutoGrowTextarea
           id="biz-about"
           name="about"
           className="input"
-          rows={4}
+          minRows={3}
+          maxRows={10}
           maxLength={8000}
           placeholder={"Family-run Italian restaurant in Camden.\nOpen Tue–Sun 12–15 and 18–23."}
         />

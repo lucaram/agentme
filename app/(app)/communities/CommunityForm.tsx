@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { createCommunityAction, updateCommunityAction } from "../social-actions";
 import { AvatarPicker } from "@/components/social/Controls";
 import { CORE_RULES, HOUSE_RULES, LANGUAGES, MAX_DESCRIPTION, MAX_HOUSE_RULES, MAX_NAME, MIN_DESCRIPTION, houseRuleLabel } from "@/lib/social/rules";
+import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
 type Values = { name: string; description: string; avatar: string; visibility: "public" | "private"; houseRules: string[]; language: string | null };
 
@@ -97,7 +98,7 @@ function Fields({ values, avatars, isOwner, detectLanguage }: { values: Values; 
             {descriptionOk ? `✓ ${description.trim().length} / ${MAX_DESCRIPTION}` : `${description.trim().length} of ${MIN_DESCRIPTION} minimum`}
           </span>
         </div>
-        <textarea
+        <AutoGrowTextarea
           className="input"
           id="c-description"
           name="description"
@@ -111,7 +112,8 @@ function Fields({ values, avatars, isOwner, detectLanguage }: { values: Values; 
             const missing = MIN_DESCRIPTION - e.currentTarget.value.trim().length;
             e.currentTarget.setCustomValidity(missing > 0 ? `Add ${missing} more ${missing === 1 ? "character" : "characters"}, so people know what it's about.` : "");
           }}
-          rows={2}
+          minRows={2}
+          maxRows={8}
           minLength={MIN_DESCRIPTION}
           maxLength={MAX_DESCRIPTION}
           required

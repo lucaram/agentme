@@ -4,6 +4,7 @@ import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LocalTime } from "@/components/LocalTime";
 import { addSourceAction, removeSourceAction, rereadSourceAction, saveBusinessInfoAction, setSourceVisibilityAction, tryQuestionAction } from "./actions";
+import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
 /** "About your business" (public) and "For customers only", in your own words. */
 export function BusinessInfoForm({ about, customers }: { about: string; customers: string }) {
@@ -12,11 +13,12 @@ export function BusinessInfoForm({ about, customers }: { about: string; customer
     <form action={action} className="space-y-4">
       <div>
         <label className="label" htmlFor="about">About your business <span className="font-normal text-muted">· public</span></label>
-        <textarea
+        <AutoGrowTextarea
           id="about"
           name="about"
           className="input"
-          rows={7}
+          minRows={5}
+          maxRows={16}
           maxLength={8000}
           defaultValue={about}
           placeholder={"Family-run Italian restaurant in Camden.\nOpen Tue–Sun 12–15 and 18–23, closed Mondays.\nDogs welcome. Gluten-free pasta on request. Step-free entrance."}
@@ -29,7 +31,7 @@ export function BusinessInfoForm({ about, customers }: { about: string; customer
       </div>
       <div>
         <label className="label" htmlFor="customers">For customers only <span className="font-normal text-muted">· your contacts</span></label>
-        <textarea id="customers" name="customers" className="input" rows={3} maxLength={4000} defaultValue={customers} placeholder="e.g. Private events: £35 per person, minimum 20 people." />
+        <AutoGrowTextarea id="customers" name="customers" className="input" minRows={2} maxRows={8} maxLength={4000} defaultValue={customers} placeholder="e.g. Private events: £35 per person, minimum 20 people." />
         <p className="hint mt-1">
           Only for people in your Contacts, when they ask your agent directly. Never shown in groups or communities, where others can read the
           answer.

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addFaqAction, removeFaqAction, updateFaqAction } from "./actions";
+import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
 type Faq = { q: string; a: string };
 
@@ -14,7 +15,7 @@ function FaqEditor({ initial, onSave, onCancel, saveLabel }: { initial: Faq; onS
   return (
     <div className="space-y-2 rounded-xl border border-border p-3">
       <input className="input" value={q} onChange={(e) => setQ(e.target.value)} maxLength={300} placeholder="Question, e.g. Do you have vegetarian options?" aria-label="Question" />
-      <textarea className="input" rows={2} value={a} onChange={(e) => setA(e.target.value)} maxLength={1000} placeholder="Your answer" aria-label="Answer" />
+      <AutoGrowTextarea className="input" minRows={2} maxRows={8} value={a} onChange={(e) => setA(e.target.value)} maxLength={1000} placeholder="Your answer" aria-label="Answer" />
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
       <div className="flex gap-2">
         <button
