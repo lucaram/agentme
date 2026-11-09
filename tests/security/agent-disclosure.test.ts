@@ -334,3 +334,44 @@ describe("business agents: booking and ordering", () => {
     expect(JSON.stringify(res)).not.toContain("javascript:");
   });
 });
+
+describe("new topics: hobbies, budget, practical needs, your own topics", () => {
+  const PRIVATE_BUDGET = "Tight budget this month";
+  const PRIVATE_NEED = "Recovering from surgery, no stairs";
+  const PRIVATE_TOPIC = "Therapy on Thursdays";
+  const paul: RecipientAgent = { ...marco, id: "paul-id", handle: "paul", display_name: "Paul" };
+  const paulFacts: Fact[] = [
+    { category: "availability", value: "Saturdays after 7 PM", disclosure: "contacts" },
+    { category: "away", value: "Away until 20 Dec", disclosure: "contacts" },
+    { category: "interests", value: "Climbing", disclosure: "contacts" },
+    { category: "custom", label: "Music I like", value: "Jazz", disclosure: "contacts" },
+    { category: "custom", label: "Private", value: PRIVATE_TOPIC, disclosure: "private" },
+    { category: "budget", value: PRIVATE_BUDGET, disclosure: "private" },
+    { category: "practical", value: PRIVATE_NEED, disclosure: "private" },
+  ];
+  const ask = (categories: string[]) => request({ categories });
+
+  it("shares shared hobbies (and your own shared topics) and time away, when asked", async () => {
+    const r = useRecorder();
+    const res = await respondAsAgent(paul, { callerHandle: "luca", relationship: "accepted", text: "", data: ask(["availability", "interests"]) }, paulFacts);
+    expect(res.status).toBe("completed");
+    const seen = JSON.stringify(r.calls.map((c) => c.messages));
+    expect(seen).toContain("Away until 20 Dec");
+    expect(seen).toContain("Music I like: Jazz");
+    for (const secret of [PRIVATE_BUDGET, PRIVATE_NEED, PRIVATE_TOPIC]) expect(seen).not.toContain(secret);
+  });
+
+  it("never gives private budget or practical needs, even when asked and even with a hostile model", async () => {
+    setLLMProviderForTesting({
+      name: "hostile",
+      generateText: async () => PRIVATE_NEED,
+      generateObject: async <T,>(req: LLMObjectRequest<T>) =>
+        req.schema.parse({ availability: "always", food: null, location: null, interests: "x", budget: PRIVATE_BUDGET, practical: PRIVATE_NEED, summary: "ok" }),
+    });
+    const res = await respondAsAgent(paul, { callerHandle: "luca", relationship: "accepted", text: "", data: ask(["availability", "budget", "practical"]) }, paulFacts);
+    const out = JSON.stringify(res);
+    expect(out).not.toContain(PRIVATE_BUDGET);
+    expect(out).not.toContain(PRIVATE_NEED);
+    expect((res as { data?: Record<string, unknown> }).data).toMatchObject({ budget: null, practical: null, interests: null });
+  });
+});

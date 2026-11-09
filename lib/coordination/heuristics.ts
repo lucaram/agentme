@@ -196,7 +196,7 @@ export function relevantClause(text: string, window: string): string {
 }
 
 export function heuristicReply(
-  facts: Partial<Record<"availability" | "food" | "location", string>>,
+  facts: Partial<Record<"availability" | "food" | "location" | "interests" | "budget" | "practical", string>>,
   window: string,
 ): CoordinationReply {
   const availability = facts.availability ? relevantClause(facts.availability, window) : null;
@@ -204,18 +204,32 @@ export function heuristicReply(
     availability && `Availability: ${availability}`,
     facts.food && `Food: ${facts.food}`,
     facts.location && `Area: ${facts.location}`,
+    facts.interests && `Interests: ${facts.interests}`,
+    facts.budget && `Budget: ${facts.budget}`,
+    facts.practical && `Needs: ${facts.practical}`,
   ].filter(Boolean);
   return {
     availability,
     food: facts.food ?? null,
     location: facts.location ?? null,
+    interests: facts.interests ?? null,
+    budget: facts.budget ?? null,
+    practical: facts.practical ?? null,
     summary: parts.length ? parts.join(". ") : "My owner hasn't shared anything for this request.",
   };
 }
 
 // ---------------------------------------------------------------- planning
 
-export type ParticipantReply = { handle: string; availability: string | null; food: string | null };
+export type ParticipantReply = {
+  handle: string;
+  availability: string | null;
+  food: string | null;
+  /** Only when shared and asked for: to choose the activity or place, never to be repeated. */
+  interests?: string | null;
+  budget?: string | null;
+  practical?: string | null;
+};
 
 const CUISINES = [
   "italian", "japanese", "sushi", "indian", "thai", "chinese", "mexican", "french", "greek",

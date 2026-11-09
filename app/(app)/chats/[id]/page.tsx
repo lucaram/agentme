@@ -17,6 +17,7 @@ import { InviteLink } from "./InviteLink";
 import { MessageActions } from "./MessageActions";
 import { OpenRequests } from "@/components/requests/OpenRequests";
 import { MyAgentHome } from "./MyAgentHome";
+import { FactSuggestion } from "./FactSuggestion";
 import { businessIdeas, chatIdeas, personalIdeas, type Idea } from "@/lib/agents/ideas";
 import { ThreadTitle } from "./ThreadTitle";
 import type { Database } from "@/lib/database.types";
@@ -224,7 +225,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
 
       <ol className="flex flex-1 flex-col gap-3" aria-label="Messages">
         {(messages ?? []).map((m) => {
-          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean };
+          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string };
           const isPrivate = Boolean(m.visible_to);
           const mine = m.sender_user_id === user.id;
           const senderAgent = m.sender_agent_id ? byId.get(m.sender_agent_id) : undefined;
@@ -287,6 +288,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                 )}
               </div>
               {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}
+              {meta.kind === "fact_suggestion" && isMyAgent && <FactSuggestion messageId={m.id} decided={meta.decided} />}
               {task && (
                 <TaskCard
                   task={task as TaskView}

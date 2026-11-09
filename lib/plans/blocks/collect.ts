@@ -46,7 +46,7 @@ export const runCollect: StepHandler = async ({ task, step, organiser, parsed })
 
 const toReply = (handle: string, data: unknown): Answer => {
   const reply = CoordinationReplySchema.safeParse(data);
-  return reply.success ? { kind: "reply", reply: { handle, availability: reply.data.availability, food: reply.data.food } } : { kind: "none" };
+  return reply.success ? { kind: "reply", reply: { handle, availability: reply.data.availability, food: reply.data.food, interests: reply.data.interests, budget: reply.data.budget, practical: reply.data.practical } } : { kind: "none" };
 };
 
 async function askParticipant(opts: {

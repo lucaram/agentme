@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { CATEGORY_LABELS, FACT_CATEGORIES } from "@/lib/policy/disclosure";
 import { deleteAccount, saveSettings } from "../actions";
 import { PhoneVerify } from "./PhoneVerify";
 import { SaveAccount } from "./SaveAccount";
@@ -20,7 +19,6 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
   ]);
   const { data: tips } = await supabase.from("agent_tips").select("id, topic, tip").order("created_at", { ascending: false });
   const hint = (kind: string) => identifiers?.find((i) => i.kind === kind)?.hint ?? null;
-  const fact = (c: string) => facts?.find((f) => f.category === c);
   // A business added from a personal account has an internal login: nothing to find it by.
   const managedBusiness = isManagedLogin(user.email);
   const person = await realPerson(user, agent);
@@ -108,29 +106,17 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         </section>
 
         {agent.type === "personal" ? (
-          <section className="card space-y-4">
-            <div>
-              <h2 className="font-semibold">What your agent knows and may share</h2>
-              <p className="hint">
-                Shared items are only given to your contacts&apos; agents, only when they ask for that specific kind of information as part of a
-                plan. Private items are never given to any other agent.
-              </p>
-            </div>
-            {FACT_CATEGORIES.map((c) => (
-              <div key={c}>
-                <label className="label" htmlFor={c}>{CATEGORY_LABELS[c]}</label>
-                <input className="input" id={c} name={c} defaultValue={fact(c)?.value ?? ""} maxLength={500} />
-                {c === "notes" ? (
-                  <p className="mt-1 hint">🔒 Always private.</p>
-                ) : (
-                  <label className="mt-1 flex items-center gap-2 text-xs">
-                    <input type="checkbox" name={`share_${c}`} defaultChecked={fact(c)?.disclosure === "contacts"} />
-                    Share with contacts&apos; agents
-                  </label>
-                )}
-              </div>
-            ))}
-          </section>
+          <Link href="/settings/about" className="card flex items-center justify-between hover:bg-accent-soft" data-testid="about-you-link">
+            <span>
+              <span className="block font-semibold">🧠 What your agent knows about you</span>
+              <span className="block text-xs text-muted">
+                {(facts ?? []).length
+                  ? `${(facts ?? []).length} ${(facts ?? []).length === 1 ? "topic" : "topics"} · ${(facts ?? []).filter((f) => f.disclosure === "contacts").length} shared with contacts' agents when asked`
+                  : "When you're free, food & drink, hobbies, where you are, budget, practical needs, and your own topics."}
+              </span>
+            </span>
+            <span className="text-accent">›</span>
+          </Link>
         ) : (
           <Link href="/business" className="card flex items-center justify-between hover:bg-accent-soft">
             <span>

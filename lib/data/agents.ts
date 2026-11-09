@@ -22,11 +22,13 @@ export async function getAgentForUser(userId: string): Promise<AgentRow | null> 
   return data;
 }
 
+/** What the agent knows about its owner (entries that have expired, e.g. "away until…", are left out). */
 export async function getFacts(agentId: string): Promise<Fact[]> {
   const { data, error } = await adminClient()
     .from("agent_facts")
-    .select("category, value, disclosure")
-    .eq("agent_id", agentId);
+    .select("category, value, disclosure, label")
+    .eq("agent_id", agentId)
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
   if (error) throw error;
   return (data ?? []) as Fact[];
 }

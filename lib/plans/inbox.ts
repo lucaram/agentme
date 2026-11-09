@@ -74,6 +74,9 @@ export async function answerInboxItem(itemId: string, ownerId: string, raw: Reco
       availability: requested.includes("availability") ? value("availability") : null,
       food: requested.includes("food") ? value("food") : null,
       location: requested.includes("location") ? value("location") : null,
+      interests: requested.includes("interests") ? value("interests") : null,
+      budget: requested.includes("budget") ? value("budget") : null,
+      practical: requested.includes("practical") ? value("practical") : null,
       summary: `@${agent?.handle ?? "they"} answered personally.`,
     });
     response = { text: reply.summary, data: { type: "agentme.coordination.reply", ...reply } };
@@ -85,8 +88,8 @@ export async function answerInboxItem(itemId: string, ownerId: string, raw: Reco
       const remembered = requested.filter((c) => parsedAnswers.data[c]?.trim());
       if (remembered.length) {
         await db.from("agent_facts").upsert(
-          remembered.map((category) => ({ agent_id: item.agent_id, category, value: parsedAnswers.data[category].trim(), disclosure: "contacts" as const })),
-          { onConflict: "agent_id,category" },
+          remembered.map((category) => ({ agent_id: item.agent_id, category, label: "", value: parsedAnswers.data[category].trim(), disclosure: "contacts" as const })),
+          { onConflict: "agent_id,category,label" },
         );
       }
     }

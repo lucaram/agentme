@@ -25,14 +25,14 @@ export type Database = {
           Tables: {
             "agent_facts": {
                   Row: {
-                    "agent_id": string,"category": string,"disclosure": Database["public"]['Enums']["disclosure_level"],"id": string,"updated_at": string,"value": string
+                    "agent_id": string,"category": string,"disclosure": Database["public"]['Enums']["disclosure_level"],"expires_at": string | null,"id": string,"label": string,"updated_at": string,"value": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "agent_id": string,"category": string,"disclosure"?: Database["public"]['Enums']["disclosure_level"],"id"?: string,"updated_at"?: string,"value": string
+                    "agent_id": string,"category": string,"disclosure"?: Database["public"]['Enums']["disclosure_level"],"expires_at"?: string | null,"id"?: string,"label"?: string,"updated_at"?: string,"value": string
                   }
                   Update: {
-                    "agent_id"?: string,"category"?: string,"disclosure"?: Database["public"]['Enums']["disclosure_level"],"id"?: string,"updated_at"?: string,"value"?: string
+                    "agent_id"?: string,"category"?: string,"disclosure"?: Database["public"]['Enums']["disclosure_level"],"expires_at"?: string | null,"id"?: string,"label"?: string,"updated_at"?: string,"value"?: string
                   }
                   Relationships: [
                     {
