@@ -106,9 +106,9 @@ export default async function ContactsPage() {
         )}
         {accepted.map((r) => (
           <Row key={r.id} agent={r.other}>
-            {/* A business: its agent answers straight away, so that comes first. */}
-            {r.other.type === "business" && <ActionButton action={openAgentChat.bind(null, r.other.id)} label="Ask agent" variant="btn-primary" />}
-            <ActionButton action={openDirectMessage.bind(null, r.other.id)} label="Message" variant={r.other.type === "business" ? "btn-ghost" : "btn-primary"} />
+            {/* A business: its agent comes first; Message stays the main (green) action, as for people. */}
+            {r.other.type === "business" && <ActionButton action={openAgentChat.bind(null, r.other.id)} label="Ask agent" />}
+            <ActionButton action={openDirectMessage.bind(null, r.other.id)} label="Message" variant="btn-primary" />
 
             <details className="relative">
               <summary className="btn-ghost cursor-pointer list-none">⋯</summary>
