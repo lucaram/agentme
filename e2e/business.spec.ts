@@ -243,3 +243,39 @@ test("my agent asks a business for me: with @ straight away, named without @ onl
   await expect(luca.page.getByText("I asked @trattoria")).toHaveCount(2);
   await luca.close();
 });
+
+test("↪ Forward: I pass on a business's answer myself, labelled as forwarded from its agent", async ({ browser }) => {
+  const luca = await as(browser, "luca");
+  await luca.page.goto("/chats");
+  await luca.page.getByRole("link", { name: /My Agent/ }).click();
+  await send(luca.page, "@trattoria do you take group bookings?");
+  await expect(luca.page.getByText(/groups of up to 12/).last()).toBeVisible();
+
+  // I choose where it goes (up to 5 chats); people will see where it came from.
+  await luca.page.getByTestId("forward-button").last().click();
+  const picker = luca.page.getByTestId("forward-picker");
+  await expect(picker).toContainText("↪ Forwarded · from @trattoria's agent");
+  await picker.getByRole("checkbox", { name: "Marco", exact: true }).check();
+  await picker.getByRole("checkbox", { name: "Paul", exact: true }).check();
+  await picker.getByRole("button", { name: "↪ Forward to 2 chats" }).click();
+  await expect(picker.getByTestId("forward-results")).toContainText("✓ Sent to Marco");
+  await expect(picker.getByTestId("forward-results")).toContainText("✓ Sent to Paul");
+  await picker.getByRole("button", { name: "Done" }).click();
+
+  // My own agent's replies can be forwarded too (from ⋯), labelled as written by my agent.
+  await send(luca.page, "What can you do for me?");
+  const reply = luca.page.getByRole("listitem").filter({ hasText: "I can coordinate plans" }).last();
+  await reply.getByLabel("Message options").click();
+  await reply.getByRole("button", { name: "↪ Forward" }).click();
+  await expect(luca.page.getByTestId("forward-picker")).toContainText("↪ Forwarded · from @luca's agent");
+  await luca.page.getByTestId("forward-picker").getByRole("button", { name: "Close" }).click();
+
+  // Marco gets it in our direct chat: from Luca, labelled, without my agent's "I asked" line.
+  const marco = await as(browser, "marco");
+  await marco.page.getByRole("link", { name: /groups of up to 12/ }).first().click();
+  const forwarded = marco.page.getByRole("listitem").filter({ hasText: "groups of up to 12" }).last();
+  await expect(forwarded.getByTestId("forwarded-label")).toHaveText("↪ Forwarded · from @trattoria's agent");
+  await expect(forwarded).not.toContainText("I asked");
+  await expect(forwarded.getByTitle("Written by an AI agent")).toHaveCount(0);
+  await Promise.all([luca.close(), marco.close()]);
+});

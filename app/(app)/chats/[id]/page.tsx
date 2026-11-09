@@ -20,6 +20,8 @@ import { MyAgentHome } from "./MyAgentHome";
 import { FactSuggestion } from "./FactSuggestion";
 import { BusinessSuggestion } from "./BusinessSuggestion";
 import { ActionButton } from "@/components/ActionButton";
+import { canForward as canForwardMessage, forwardLabel, type Forwarded } from "@/lib/social/forward";
+import { ForwardButton } from "./Forward";
 import { HiddenAppeal } from "./HiddenAppeal";
 import { touchSeen } from "@/lib/social/digest";
 import { dmState } from "@/lib/people/dm";
@@ -244,12 +246,14 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
 
       <ol className="flex flex-1 flex-col gap-3" aria-label="Messages">
         {(messages ?? []).map((m) => {
-          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string; flags?: string[]; auto_hidden?: boolean; appeal?: string; business_id?: string; handle?: string };
+          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string; flags?: string[]; auto_hidden?: boolean; appeal?: string; business_id?: string; handle?: string; forwarded?: Forwarded };
           const isPrivate = Boolean(m.visible_to);
           const mine = m.sender_user_id === user.id;
           const senderAgent = m.sender_agent_id ? byId.get(m.sender_agent_id) : undefined;
           const senderUser = m.sender_user_id ? byOwner.get(m.sender_user_id) : undefined;
           const system = !m.sender_agent_id && !m.sender_user_id;
+          // Plan cards, drafts, suggestions and app notes can't be forwarded; messages can.
+          const forwardOk = canForwardMessage({ ...m, system }).ok;
 
           if (system) {
             return (
@@ -307,19 +311,43 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                   }`}
                   data-testid={isPrivate ? "private-message" : m.removed_at ? "removed-message" : undefined}
                 >
+                  {meta.forwarded && !m.removed_at && (
+                    <span className="mb-0.5 block text-[11px] italic opacity-80" data-testid="forwarded-label">
+                      {forwardLabel(meta.forwarded)}
+                    </span>
+                  )}
                   {m.is_ai_generated && !m.removed_at ? <RichText text={m.content} /> : m.content}
                 </div>
-                {shared && !isPrivate && !m.removed_at && (
-                  <MessageActions messageId={m.id} conversationId={id} canReport={!mine} canRemove={mine || canModerate} />
-                )}
+                {!m.removed_at &&
+                  // ⋯ on messages in direct chats, groups and communities; and, to forward them (labelled
+                  // "from @you's agent"), your own agent's replies in My Agent and your private @agent answers.
+                  (((shared || conv.kind === "dm") && !isPrivate) ||
+                    (m.is_ai_generated && forwardOk && ((isPrivate && m.visible_to === user.id) || (isMyAgent && meta.kind !== "business_answer")))) && (
+                    <MessageActions
+                      messageId={m.id}
+                      conversationId={id}
+                      canReport={shared && !mine && !isPrivate}
+                      canRemove={shared && !isPrivate && (mine || canModerate)}
+                      canForward={forwardOk}
+                    />
+                  )}
               </div>
               {m.removed_at && meta.auto_hidden && mine && <HiddenAppeal messageId={m.id} conversationId={id} status={meta.appeal} />}
               {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}
               {meta.kind === "fact_suggestion" && isMyAgent && <FactSuggestion messageId={m.id} decided={meta.decided} />}
               {meta.kind === "business_suggestion" && isMyAgent && <BusinessSuggestion messageId={m.id} handle={meta.handle ?? ""} decided={meta.decided} />}
               {meta.kind === "business_answer" && isMyAgent && meta.business_id && (
-                <div className="mt-1" data-testid="continue-with-business">
-                  <ActionButton action={openAgentChat.bind(null, meta.business_id)} label={`💬 Continue with @${meta.handle ?? "them"}`} />
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <span data-testid="continue-with-business">
+                    <ActionButton action={openAgentChat.bind(null, meta.business_id)} label={`💬 Continue with @${meta.handle ?? "them"}`} />
+                  </span>
+                  {/* Passing it on is yours to do: labelled as forwarded, from the business's agent. */}
+                  <ForwardButton messageId={m.id} />
+                </div>
+              )}
+              {conv.kind === "agent_chat" && !mine && !m.removed_at && forwardOk && (
+                <div className="mt-1">
+                  <ForwardButton messageId={m.id} />
                 </div>
               )}
               {task && (
