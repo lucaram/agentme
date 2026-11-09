@@ -203,3 +203,25 @@ test("how to book: the business adds its own ways; its page, its agent and frien
 
   await Promise.all([shop.close(), luca.close(), marco.close()]);
 });
+
+test("my agent asks a business for me: with @ straight away, named without @ only if I tap", async ({ browser }) => {
+  const luca = await as(browser, "luca");
+  await luca.page.goto("/chats");
+  await luca.page.getByRole("link", { name: /My Agent/ }).click();
+  await expect(luca.page.getByRole("heading", { name: "My Agent" })).toBeVisible();
+
+  // With the @: my agent asks the business's agent and brings the answer back.
+  await send(luca.page, "@trattoria do you have vegetarian options?");
+  await expect(luca.page.getByText("I asked @trattoria").last()).toBeVisible();
+  await expect(luca.page.getByText(/about half the menu is vegetarian/).last()).toBeVisible();
+  await expect(luca.page.getByTestId("continue-with-business").last()).toContainText("Continue with @trattoria");
+
+  // Named without the @, in a question: my agent offers first, and asks only when I tap.
+  await send(luca.page, "Is Trattoria Sole open on Mondays?");
+  const offer = luca.page.getByTestId("business-suggestion").last();
+  await expect(luca.page.getByText("Trattoria Sole (@trattoria) is on AGENTME").last()).toBeVisible();
+  await offer.getByRole("button", { name: "Ask @trattoria" }).click();
+  await expect(luca.page.getByText("✓ Asked @trattoria").last()).toBeVisible();
+  await expect(luca.page.getByText("I asked @trattoria")).toHaveCount(2);
+  await luca.close();
+});

@@ -41,6 +41,7 @@ import { autopilot } from "@/lib/social/moderation-server";
 import { renameThread, resolveThread } from "@/lib/agents/threads";
 import { withThread } from "@/lib/agents/thread-context";
 import { answerSuggestion, offerProfileSave } from "@/lib/profile/offer";
+import { answerBusinessSuggestion } from "@/lib/agents/ask-business";
 import { businessesOnlyOwnedBy, forgetPerson, realPerson, signInAs } from "@/lib/identities";
 
 const Id = z.uuid();
@@ -131,6 +132,19 @@ export async function answerFactSuggestionAction(messageId: string, accept: bool
   const result = await answerSuggestion(user.id, agent, messageId, Boolean(accept));
   revalidatePath("/chats", "layout");
   revalidatePath("/settings/about");
+  return result.ok ? {} : { error: result.error };
+}
+
+/** "Shall I ask its agent?" in My Agent: your agent asks the business for you, or not. */
+export async function answerBusinessSuggestionAction(messageId: string, ask: boolean): Promise<{ error?: string }> {
+  const { user, agent } = await requireAgent();
+  if (!Id.safeParse(messageId).success) return { error: "Not found." };
+  if (ask) {
+    const limit = await hit("agentMessagesPerUser", user.id);
+    if (!limit.allowed) return { error: `You're sending messages to agents too quickly. Try again in ${describeRetry(limit.retryAfterSeconds)}.` };
+  }
+  const result = await withUsageContext({ userId: user.id, agentId: agent.id }, () => answerBusinessSuggestion(user.id, agent, messageId, Boolean(ask)));
+  revalidatePath("/chats", "layout");
   return result.ok ? {} : { error: result.error };
 }
 
