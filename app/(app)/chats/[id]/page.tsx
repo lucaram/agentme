@@ -22,7 +22,7 @@ import { BusinessSuggestion } from "./BusinessSuggestion";
 import { ActionButton } from "@/components/ActionButton";
 import { canForward as canForwardMessage, forwardLabel, type Forwarded } from "@/lib/social/forward";
 import { ForwardButton } from "./Forward";
-import { QuoteBlock, ReplyButton } from "./Reply";
+import { ForwardIcon, QuoteBlock, ReplyButton } from "./Reply";
 import { canQuote, quoteSnippet } from "@/lib/social/quote";
 import { HiddenAppeal } from "./HiddenAppeal";
 import { touchSeen } from "@/lib/social/digest";
@@ -277,6 +277,15 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
           const replyTarget = canReplyHere && canQuote(m) ? { id: m.id, author: authorOf(m), snippet: quoteSnippet(m.content) } : undefined;
           const quoted = m.reply_to ? quotedById.get(m.reply_to) : undefined;
           const quoteState = !quoted || (quoted.visible_to && quoted.visible_to !== user.id) ? "missing" : quoted.removed_at ? "removed" : "ok";
+          // Actions on this message: in direct chats, groups and communities; and, to reply or forward (labelled
+          // "from @you's agent"), your own agent's replies in My Agent and your private @agent answers.
+          const showActions =
+            !m.removed_at &&
+            Boolean(
+              ((shared || conv.kind === "dm") && !isPrivate) ||
+                replyTarget ||
+                (m.is_ai_generated && forwardOk && ((isPrivate && m.visible_to === user.id) || (isMyAgent && meta.kind !== "business_answer"))),
+            );
 
           if (system) {
             return (
@@ -350,12 +359,11 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                   )}
                   {m.is_ai_generated && !m.removed_at ? <RichText text={m.content} /> : m.content}
                 </div>
-                {!m.removed_at &&
-                  // ⋯ on messages in direct chats, groups and communities; and, to forward them (labelled
-                  // "from @you's agent"), your own agent's replies in My Agent and your private @agent answers.
-                  (((shared || conv.kind === "dm") && !isPrivate) ||
-                    replyTarget ||
-                    (m.is_ai_generated && forwardOk && ((isPrivate && m.visible_to === user.id) || (isMyAgent && meta.kind !== "business_answer")))) && (
+                {showActions && (
+                  // With a mouse: ↩ Reply · ↪ Forward · ⋯ appear on hover. On phones: ⋯ (with everything in it).
+                  <div className={`msg-actions flex items-center gap-0.5 self-center ${mine ? "flex-row-reverse" : ""}`}>
+                    {replyTarget && <ReplyButton conversationId={id} target={replyTarget} />}
+                    {forwardOk && <ForwardIcon messageId={m.id} />}
                     <MessageActions
                       messageId={m.id}
                       conversationId={id}
@@ -364,8 +372,8 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                       canForward={forwardOk}
                       reply={replyTarget}
                     />
-                  )}
-                {replyTarget && <ReplyButton conversationId={id} target={replyTarget} />}
+                  </div>
+                )}
               </div>
               {m.removed_at && meta.auto_hidden && mine && <HiddenAppeal messageId={m.id} conversationId={id} status={meta.appeal} />}
               {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}

@@ -1,20 +1,31 @@
 "use client";
 
+import { useState } from "react";
 import { replyTo } from "@/lib/client/reply";
 import type { ReplyTarget } from "@/lib/social/quote";
+import { ForwardPicker } from "./Forward";
 
-/** The small ↩ that appears next to a message on hover (desktop); on phones, use ⋯ → ↩ Reply. */
+const ICON = "hover-only rounded-full px-1.5 py-0.5 text-sm text-muted hover:bg-accent-soft hover:text-foreground";
+
+/** ↩ next to a message (desktop, on hover). On phones these live in ⋯. */
 export function ReplyButton({ conversationId, target }: { conversationId: string; target: ReplyTarget }) {
   return (
-    <button
-      type="button"
-      className="self-center rounded-full px-1.5 text-sm text-muted opacity-0 transition hover:bg-accent-soft hover:text-foreground focus:opacity-100 group-hover:opacity-100"
-      aria-label="Reply"
-      title="Reply"
-      onClick={() => replyTo(conversationId, target)}
-    >
+    <button type="button" className={ICON} aria-label="Reply" title="Reply" onClick={() => replyTo(conversationId, target)}>
       ↩
     </button>
+  );
+}
+
+/** ↪ next to a message (desktop, on hover): forward it yourself, labelled. */
+export function ForwardIcon({ messageId }: { messageId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className={ICON} aria-label="Forward" title="Forward" onClick={() => setOpen(true)}>
+        ↪
+      </button>
+      {open && <ForwardPicker messageId={messageId} onClose={() => setOpen(false)} />}
+    </>
   );
 }
 
