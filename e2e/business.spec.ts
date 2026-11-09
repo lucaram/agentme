@@ -262,6 +262,14 @@ test("↪ Forward: I pass on a business's answer myself, labelled as forwarded f
   await expect(picker.getByTestId("forward-results")).toContainText("✓ Sent to Paul");
   await picker.getByRole("button", { name: "Done" }).click();
 
+  // My own agent's replies can be forwarded too (from ⋯), labelled as written by my agent.
+  await send(luca.page, "What can you do for me?");
+  const reply = luca.page.getByRole("listitem").filter({ hasText: "I can coordinate plans" }).last();
+  await reply.getByLabel("Message options").click();
+  await reply.getByRole("button", { name: "↪ Forward" }).click();
+  await expect(luca.page.getByTestId("forward-picker")).toContainText("↪ Forwarded · from @luca's agent");
+  await luca.page.getByTestId("forward-picker").getByRole("button", { name: "Close" }).click();
+
   // Marco gets it in our direct chat: from Luca, labelled, without my agent's "I asked" line.
   const marco = await as(browser, "marco");
   await marco.page.getByRole("link", { name: /groups of up to 12/ }).first().click();

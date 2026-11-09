@@ -252,6 +252,8 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
           const senderAgent = m.sender_agent_id ? byId.get(m.sender_agent_id) : undefined;
           const senderUser = m.sender_user_id ? byOwner.get(m.sender_user_id) : undefined;
           const system = !m.sender_agent_id && !m.sender_user_id;
+          // Plan cards, drafts, suggestions and app notes can't be forwarded; messages can.
+          const forwardOk = canForwardMessage({ ...m, system }).ok;
 
           if (system) {
             return (
@@ -316,15 +318,19 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                   )}
                   {m.is_ai_generated && !m.removed_at ? <RichText text={m.content} /> : m.content}
                 </div>
-                {(shared || conv.kind === "dm") && !isPrivate && !m.removed_at && (
-                  <MessageActions
-                    messageId={m.id}
-                    conversationId={id}
-                    canReport={shared && !mine}
-                    canRemove={shared && (mine || canModerate)}
-                    canForward={canForwardMessage({ ...m, system: !m.sender_agent_id && !m.sender_user_id }).ok}
-                  />
-                )}
+                {!m.removed_at &&
+                  // ⋯ on messages in direct chats, groups and communities; and, to forward them (labelled
+                  // "from @you's agent"), your own agent's replies in My Agent and your private @agent answers.
+                  (((shared || conv.kind === "dm") && !isPrivate) ||
+                    (m.is_ai_generated && forwardOk && ((isPrivate && m.visible_to === user.id) || (isMyAgent && meta.kind !== "business_answer")))) && (
+                    <MessageActions
+                      messageId={m.id}
+                      conversationId={id}
+                      canReport={shared && !mine && !isPrivate}
+                      canRemove={shared && !isPrivate && (mine || canModerate)}
+                      canForward={forwardOk}
+                    />
+                  )}
               </div>
               {m.removed_at && meta.auto_hidden && mine && <HiddenAppeal messageId={m.id} conversationId={id} status={meta.appeal} />}
               {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}
@@ -339,7 +345,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                   <ForwardButton messageId={m.id} />
                 </div>
               )}
-              {conv.kind === "agent_chat" && !mine && !m.removed_at && canForwardMessage({ ...m, system: !m.sender_agent_id && !m.sender_user_id }).ok && (
+              {conv.kind === "agent_chat" && !mine && !m.removed_at && forwardOk && (
                 <div className="mt-1">
                   <ForwardButton messageId={m.id} />
                 </div>

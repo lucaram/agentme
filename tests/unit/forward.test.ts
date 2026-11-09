@@ -30,6 +30,12 @@ describe("↪ Forward: always a person's action, labelled", () => {
     expect(nextForward(msg({ is_ai_generated: true, content: "🏪 I asked @everyeye: …", metadata: { kind: "business_answer", handle: "everyeye" } }))).toEqual({ count: 1, from_ai: "everyeye" });
     expect(nextForward(msg({ is_ai_generated: true, content: "👤 The team at Everyeye answered: yes", metadata: { kind: "business_answer", handle: "everyeye" } }))).toEqual({ count: 1, from_ai: null });
     expect(nextForward(msg({ is_ai_generated: true, senderHandle: "luca" }))).toEqual({ count: 1, from_ai: "luca" });
+    // Your own agent's reply in My Agent, or your private @agent answer in a chat.
+    expect(nextForward(msg({ is_ai_generated: true, senderHandle: "luca", metadata: { kind: "agent_reply" } }))).toEqual({ count: 1, from_ai: "luca" });
+    expect(canForward(msg({ is_ai_generated: true, metadata: { kind: "agent_reply" } })).ok).toBe(true);
+    // A draft is sent with "Send as me", not forwarded; your private command isn't a message to pass on.
+    expect(canForward(msg({ metadata: { kind: "draft" } })).ok).toBe(false);
+    expect(canForward(msg({ metadata: { kind: "agent_command" } })).ok).toBe(false);
     expect(nextForward(msg())).toEqual({ count: 1, from_ai: null });
     // Forwarded again: one more, and the original AI stays named.
     expect(nextForward(msg({ metadata: { forwarded: { count: 2, from_ai: "everyeye" } } }))).toEqual({ count: 3, from_ai: "everyeye" });
