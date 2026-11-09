@@ -216,6 +216,17 @@ test("my agent asks a business for me: with @ straight away, named without @ onl
   await expect(luca.page.getByText(/about half the menu is vegetarian/).last()).toBeVisible();
   await expect(luca.page.getByTestId("continue-with-business").last()).toContainText("Continue with @trattoria");
 
+  // Sharing that answer with a contact: an approval card with the exact text; nothing is sent before Approve.
+  await send(luca.page, "please share this with @marco");
+  const task = luca.page.getByRole("region", { name: "Agent task" }).last();
+  await expect(task).toContainText("about half the menu is vegetarian");
+  await expect(task.getByTestId("task-status")).toHaveText("Waiting for your approval");
+  await task.getByRole("button", { name: "Approve" }).click();
+  const marco = await as(browser, "marco");
+  await marco.page.getByRole("link", { name: /📣 Yes, about half the menu/ }).first().click();
+  await expect(marco.page.getByRole("listitem").filter({ hasText: "about half the menu is vegetarian" })).toContainText("Luca");
+  await marco.close();
+
   // Named without the @, in a question: my agent offers first, and asks only when I tap.
   await send(luca.page, "Is Trattoria Sole open on Mondays?");
   const offer = luca.page.getByTestId("business-suggestion").last();

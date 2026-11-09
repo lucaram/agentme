@@ -7,7 +7,7 @@ import {
 import { recordUsage } from "@/lib/usage/meter";
 import { mockModeration } from "@/lib/social/moderation";
 import { describeRecall, type RecallPlan } from "@/lib/agents/recall-format";
-import { heuristicCompose } from "@/lib/plans/compose";
+import { heuristicCompose, type RecentMessage } from "@/lib/plans/compose";
 import { mockChanges, mockLearn, type PageText } from "@/lib/business/learn";
 import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest } from "./types";
 
@@ -81,7 +81,7 @@ export class MockProvider implements LLMProvider {
     let value: unknown;
     switch (req.purpose) {
       case "compose":
-        value = heuristicCompose(String(ctx.text ?? ""), (ctx.chatMembers ?? []) as string[]);
+        value = heuristicCompose(String(ctx.text ?? ""), (ctx.chatMembers ?? []) as string[], (ctx.recent ?? []) as RecentMessage[]);
         break;
       case "intent":
         value = heuristicIntent(String(ctx.text ?? ""));

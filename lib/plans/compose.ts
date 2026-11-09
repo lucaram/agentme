@@ -59,7 +59,30 @@ export const emptyStep = (type: ComposableStep): StepDraft => ({
 const stripArticle = (s: string) => s.replace(/^(a|an|the|some)\s+/i, "").trim();
 
 /** Used by the mock model and as a fallback when the real model fails. */
-export function heuristicCompose(text: string, chatMembers: string[] = []): PlanDraft {
+/** A recent message in the owner's chat with their agent (for "share this with @marco"). */
+export type RecentMessage = { from: "owner" | "agent"; text: string };
+
+/**
+ * "Share this with @marco", "forward that to @paul", "send him the answer above": refers to an
+ * earlier message. A colon means the user wrote the message themselves ("Tell @marco: …").
+ */
+const REFERS_BACK = /^\s*(?:please\s+)?(?:share|forward|send|pass|give)\b[^:]*\b(?:this|that|it|above|answer|info|information)\b/i;
+
+/** The text "this" refers to: your agent's latest message, without its "🏪 I asked @x:" heading. */
+export function referredText(recent: RecentMessage[]): string {
+  const last = [...recent].reverse().find((m) => m.from === "agent" && m.text.trim());
+  if (!last) return "";
+  const lines = last.text.trim().split("\n");
+  if (lines.length > 1 && lines[0].trim().endsWith(":")) lines.shift();
+  return lines.join("\n").trim().slice(0, 1000);
+}
+
+export function heuristicCompose(text: string, chatMembers: string[] = [], recent: RecentMessage[] = []): PlanDraft {
+  // "Share this with @marco": announce what "this" is (your agent's last message), word for word.
+  if (REFERS_BACK.test(text) && /@[a-z0-9_]+/i.test(text)) {
+    const message = referredText(recent);
+    if (message) return { kind: "plan", title: "Shared message", steps: [{ ...emptyStep("announce"), message }] };
+  }
   const intent = heuristicIntent(text, chatMembers);
   if (intent.kind === "chat") return { kind: "chat", title: "", steps: [] };
   const steps: StepDraft[] = [];
