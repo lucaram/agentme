@@ -24,6 +24,10 @@ export const LIMITS = {
   businessRereadsPerAgent: { windowSeconds: 3600, max: 20 },
   /** Questions a business agent hands to its team, per asking agent and business. */
   businessHandoffsPerCaller: { windowSeconds: 86400, max: 10 },
+  /** Community slow mode: messages per minute, by trust level (lib/social/guard.ts). */
+  communityPostsNew: { windowSeconds: 60, max: 3 },
+  communityPostsMember: { windowSeconds: 60, max: 8 },
+  communityPostsTrusted: { windowSeconds: 60, max: 15 },
   /** Questions to businesses by @mention in groups and communities. */
   businessMentionsPerUser: { windowSeconds: 3600, max: 20 },
   /** Businesses a person can add ("Add a business"). */

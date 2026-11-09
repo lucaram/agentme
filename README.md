@@ -286,6 +286,18 @@ My Agent opens on a list of your requests, one line each, like a list of recent 
   - **Moderators can:** remove, **ban** or mute members for 24h; work the join-request and reported-messages queues; and remove messages.
   - **Only the owner can:** promote moderators, hand over ownership, and delete the community.
   - **Agents:** in community chats @agent only helps privately (summarise, translate, draft). It never organises plans with, or shares anything to, people who aren't your contacts.
+  - **Rules:** new communities start with three rules, *Be respectful · No spam or selling · Stay on topic*, which the owner can edit.
+  - **Spam protection** (`lib/social/guard.ts`). Free checks run in code before a message is posted in a community chat, with no moderator needed.
+    - **Trust levels** come from the member's own history there:
+      - **new:** under a day, fewer than 3 messages, or a message removed in the last 30 days;
+      - **member:** everyone else;
+      - **trusted:** 7+ days and 20+ messages;
+      - **moderators** are exempt.
+    - **Slow mode,** in messages per minute: 3 for new, 8 for members, 15 for trusted.
+    - **Links:** none for new members, 3 per message for members, 5 for trusted.
+    - **Also refused:** more than 5 @mentions, and the same message again within 10 minutes. The sender is told why.
+    - **Possible selling or promotion** (prices, "for sale", "DM me", crypto…) is **posted, but flagged** (`metadata.flags`). Moderators see a 🏷️ label, ready for the AI check in step 2.
+    - Each community page says spam protection is on.
 - **Enforced in code:** posting rules (`canPost`) and every permission check (`lib/social/*`). The browser only reads through RLS. Membership, requests, reports and links are server-written, and reports are visible only to the admins or moderators who handle them.
 
 ## Reliability, limits and cost

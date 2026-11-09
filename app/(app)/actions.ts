@@ -33,6 +33,7 @@ import { tellOwner } from "@/lib/requests/notify";
 import { canPost, type ConvRow } from "@/lib/social/shared";
 import { handOverIfOwnerLeft } from "@/lib/social/groups";
 import { answerMentions } from "@/lib/social/businesses";
+import { guardCommunityPost } from "@/lib/social/guard-server";
 import { renameThread, resolveThread } from "@/lib/agents/threads";
 import { withThread } from "@/lib/agents/thread-context";
 import { answerSuggestion, offerProfileSave } from "@/lib/profile/offer";
@@ -73,6 +74,14 @@ export async function sendMessage(conversationId: string, text: string, threadId
     }
   }
 
+  // Communities: free spam checks before posting (slow mode, links, mentions, repeats), by trust level.
+  let flags: string[] = [];
+  if (conv.kind === "channel" && conv.community_id && !summoned) {
+    const guard = await guardCommunityPost(conv.community_id, user.id, content);
+    if (!guard.ok) return { error: guard.error };
+    flags = guard.flags;
+  }
+
   // My Agent: one thread per request; everything the agent says while handling this stays in it.
   const thread = conv.kind === "my_agent" ? await resolveThread({ userId: user.id, conversationId, threadId, text: content }) : null;
 
@@ -88,7 +97,7 @@ export async function sendMessage(conversationId: string, text: string, threadId
     } else if (summoned) {
       await handleAgentCommand({ userId: user.id, agent, conversation: conv, text: content });
     } else {
-      await postMessage({ conversationId, from: "human", userId: user.id, content });
+      await postMessage({ conversationId, from: "human", userId: user.id, content, ...(flags.length ? { metadata: { flags } } : {}) });
       // Businesses placed in this group or community answer when @mentioned (after the reply is sent).
       if (conv.kind === "group" || conv.kind === "channel") {
         after(() => withUsageContext({ userId: user.id, agentId: agent.id }, () => answerMentions({ conversation: conv, userId: user.id, agent, text: content })));

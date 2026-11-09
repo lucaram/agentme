@@ -85,6 +85,10 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
           <p className="mt-1 whitespace-pre-wrap rounded-lg bg-accent-soft px-3 py-2 text-sm">{community.rules}</p>
         </details>
       )}
+      <p className="text-xs text-muted" data-testid="spam-protection">
+        🛡️ Spam protection is on: new members can&apos;t post links for their first day, repeated messages and floods of links or mentions are
+        blocked, and messages that look like selling are flagged to moderators.
+      </p>
     </section>
   );
 

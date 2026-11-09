@@ -225,7 +225,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
 
       <ol className="flex flex-1 flex-col gap-3" aria-label="Messages">
         {(messages ?? []).map((m) => {
-          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string };
+          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string; flags?: string[] };
           const isPrivate = Boolean(m.visible_to);
           const mine = m.sender_user_id === user.id;
           const senderAgent = m.sender_agent_id ? byId.get(m.sender_agent_id) : undefined;
@@ -261,6 +261,10 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                   "You"
                 ) : (
                   `${senderUser?.avatar ?? ""} ${senderUser?.display_name ?? "Someone"}`
+                )}
+                {/* Flagged by the community spam guard: shown to moderators only. */}
+                {canModerate && meta.flags?.includes("selling") && (
+                  <span className="rounded bg-danger/10 px-1 text-[10px] text-danger" data-testid="flag-selling" title="Looks like selling or promotion">🏷️ possible selling</span>
                 )}
                 {isPrivate && (
                   <span className="text-[10px]" data-testid="private-label" title="Only you can see this message">

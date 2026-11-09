@@ -4,6 +4,8 @@ import { useActionState, useState } from "react";
 import { createCommunityAction, updateCommunityAction } from "../social-actions";
 import { AvatarPicker } from "@/components/social/Controls";
 
+const DEFAULT_RULES = "Be respectful.\nNo spam or selling.\nStay on topic.";
+
 type Values = { name: string; description: string; rules: string; avatar: string; visibility: "public" | "private" };
 
 function Fields({ values, avatars, isOwner }: { values: Values; avatars: string[]; isOwner: boolean }) {
@@ -20,7 +22,7 @@ function Fields({ values, avatars, isOwner }: { values: Values; avatars: string[
       </div>
       <div>
         <label className="label" htmlFor="c-rules">Rules (members accept them to join)</label>
-        <textarea className="input" id="c-rules" name="rules" defaultValue={values.rules} rows={3} maxLength={2000} placeholder={"Be respectful.\nNo spam or selling.\nStay on topic."} />
+        <textarea className="input" id="c-rules" name="rules" defaultValue={values.rules} rows={3} maxLength={2000} placeholder={DEFAULT_RULES} />
       </div>
       {isOwner && (
         <fieldset className="space-y-1">
@@ -52,7 +54,8 @@ export function CreateCommunityForm({ avatars }: { avatars: string[] }) {
   return (
     <form action={action} className="card space-y-4" aria-label="New community">
       <h2 className="font-semibold">New community</h2>
-      <Fields values={{ name: "", description: "", rules: "", avatar: avatars[0], visibility: "public" }} avatars={avatars} isOwner />
+      {/* The three universal rules come filled in (and are checked automatically); the owner can edit them. */}
+      <Fields values={{ name: "", description: "", rules: DEFAULT_RULES, avatar: avatars[0], visibility: "public" }} avatars={avatars} isOwner />
       {state?.error && <p role="alert" className="text-sm text-danger">{state.error}</p>}
       <div className="flex gap-2">
         <button className="btn-primary" disabled={pending}>{pending ? "Creating…" : "Create community"}</button>
