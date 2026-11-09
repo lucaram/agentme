@@ -131,6 +131,7 @@ test("add a business from a personal account and switch between the two", async 
   await expect(page.getByTestId("business-welcome")).toContainText(`live at @gina_bakery_${id}`);
   await expect(switcher).toContainText("Business");
   await expect(page.getByRole("navigation").first().getByRole("link", { name: "My Business" })).toBeVisible();
+  await openSection(page, "fold-own-words");
   await expect(page.getByRole("textbox", { name: /About your business/ })).toHaveValue(/Sourdough and pastries/);
 
   // A visitor asks something the business didn't say: it waits for the business, not for Gina's personal account.
