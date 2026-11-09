@@ -24,6 +24,8 @@ export async function Notices({ area }: { area: "groups" | "communities" }) {
       title="Updates"
       testId="notices"
       open={unseen > 0}
+      // New updates in green; otherwise how many there are (last 30 days).
+      badge={unseen > 0 ? { count: unseen, tone: "new" } : { count: notices.length, tone: "total" }}
       summary={unseen ? `${unseen} new · ${notices[0].text}` : `Latest: ${notices[0].text}`}
     >
       {unseen > 0 && <MarkNoticesSeen area={area} />}

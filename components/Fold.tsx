@@ -9,6 +9,7 @@ export function Fold({
   name,
   open = false,
   testId,
+  badge,
   children,
 }: {
   icon: string;
@@ -17,6 +18,8 @@ export function Fold({
   name?: string;
   open?: boolean;
   testId?: string;
+  /** A counter next to the arrow: green for new things, grey for a total. */
+  badge?: { count: number; tone: "new" | "total" };
   children: React.ReactNode;
 }) {
   return (
@@ -32,6 +35,15 @@ export function Fold({
           <span className="block font-semibold">{title}</span>
           <span className="block truncate text-xs text-muted">{summary}</span>
         </span>
+        {badge && badge.count > 0 && (
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${badge.tone === "new" ? "bg-accent text-white dark:text-black" : "bg-accent-soft text-muted"}`}
+            aria-label={badge.tone === "new" ? `${badge.count} new` : `${badge.count} in total`}
+            data-testid={testId ? `${testId}-badge` : undefined}
+          >
+            {badge.count > 99 ? "99+" : badge.count}
+          </span>
+        )}
         <span className="text-muted transition group-open:rotate-90" aria-hidden>›</span>
       </summary>
       <div className="border-t border-border">{children}</div>
