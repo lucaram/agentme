@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { AutoGrowTextarea } from "./AutoGrowTextarea";
 
-/** An optional input or textarea that stops at its limit and shows a counter only once it's nearly full (80%). */
+/** An optional one-line input, or a growing box (multiline), that stops at its limit and shows a counter only once it's nearly full (80%). */
 export function LimitedField({
   name,
   max,
   multiline,
-  rows = 2,
+  rows = 1,
+  maxRows = 5,
   value: controlled,
   onChange,
   className = "",
@@ -16,7 +18,9 @@ export function LimitedField({
   name: string;
   max: number;
   multiline?: boolean;
+  /** Growing box: starting and maximum height in lines. */
   rows?: number;
+  maxRows?: number;
   value?: string;
   onChange?: (value: string) => void;
   className?: string;
@@ -38,7 +42,7 @@ export function LimitedField({
   return (
     <div>
       {multiline ? (
-        <textarea {...props} rows={rows} onChange={(e) => set(e.target.value)} />
+        <AutoGrowTextarea {...props} minRows={rows} maxRows={maxRows} onChange={(e) => set(e.target.value)} />
       ) : (
         <input {...props} onChange={(e) => set(e.target.value)} />
       )}

@@ -102,7 +102,7 @@ export function OnboardingForm({ suggestedHandle, next }: { suggestedHandle: str
         <fieldset className="space-y-3">
           <legend className="label">What should your agent know? (optional)</legend>
           <div>
-            <LimitedField name="description" multiline max={SIGNUP_LIMITS.description} aria-label="What your business does" placeholder="What your business does" />
+            <LimitedField name="description" multiline rows={2} maxRows={6} max={SIGNUP_LIMITS.description} aria-label="What your business does" placeholder="What your business does" />
             <p className="hint mt-1">A short start. You can add much more later in Business → About your business.</p>
           </div>
           <LimitedField name="hours" max={SIGNUP_LIMITS.hours} aria-label="Opening hours" placeholder="Opening hours, e.g. Tue–Sun 12:00–23:00" />
@@ -125,7 +125,7 @@ function Fact({ name, label, placeholder, shareDefault }: { name: string; label:
   return (
     <div>
       <label className="text-sm" htmlFor={name}>{label}</label>
-      <LimitedField id={name} name={name} max={SIGNUP_LIMITS.fact} placeholder={placeholder} className="mt-1" />
+      <LimitedField id={name} name={name} multiline max={SIGNUP_LIMITS.fact} placeholder={placeholder} className="mt-1" />
       {shareDefault !== undefined && (
         <label className="mt-1 flex items-center gap-2 text-xs text-muted">
           <input type="checkbox" name={`share_${name}`} defaultChecked={shareDefault} />
@@ -146,7 +146,7 @@ function FaqPair({ i }: { i: number }) {
     <div>
       <div className="grid gap-2 sm:grid-cols-2">
         <LimitedField name={`faq_q_${i}`} max={SIGNUP_LIMITS.faqQuestion} value={q} onChange={setQ} required={half && !q.trim()} aria-label={`FAQ ${i} question`} aria-describedby={half ? hintId : undefined} placeholder={`FAQ ${i}: question`} />
-        <LimitedField name={`faq_a_${i}`} max={SIGNUP_LIMITS.faqAnswer} value={a} onChange={setA} required={half && !a.trim()} aria-label={`FAQ ${i} answer`} aria-describedby={half ? hintId : undefined} placeholder="Answer" />
+        <LimitedField name={`faq_a_${i}`} multiline max={SIGNUP_LIMITS.faqAnswer} value={a} onChange={setA} required={half && !a.trim()} aria-label={`FAQ ${i} answer`} aria-describedby={half ? hintId : undefined} placeholder="Answer" />
       </div>
       {half && (
         <p id={hintId} className="mt-1 text-xs text-amber-600 dark:text-amber-400" data-testid="faq-half">
