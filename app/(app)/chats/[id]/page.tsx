@@ -8,7 +8,7 @@ import { TaskCard, type TaskView } from "./TaskCard";
 import { ProposalCard, type ProposalView } from "./ProposalCard";
 import { PollCard } from "./PollCard";
 import { AssignCard } from "./AssignCard";
-import { leaveConversation } from "../../actions";
+import { leaveConversation, openAgentChat } from "../../actions";
 import { MarkRead } from "@/components/MarkRead";
 import { DraftReply } from "./DraftReply";
 import { RichText } from "@/components/RichText";
@@ -18,6 +18,8 @@ import { MessageActions } from "./MessageActions";
 import { OpenRequests } from "@/components/requests/OpenRequests";
 import { MyAgentHome } from "./MyAgentHome";
 import { FactSuggestion } from "./FactSuggestion";
+import { BusinessSuggestion } from "./BusinessSuggestion";
+import { ActionButton } from "@/components/ActionButton";
 import { HiddenAppeal } from "./HiddenAppeal";
 import { touchSeen } from "@/lib/social/digest";
 import { dmState } from "@/lib/people/dm";
@@ -242,7 +244,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
 
       <ol className="flex flex-1 flex-col gap-3" aria-label="Messages">
         {(messages ?? []).map((m) => {
-          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string; flags?: string[]; auto_hidden?: boolean; appeal?: string };
+          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string; flags?: string[]; auto_hidden?: boolean; appeal?: string; business_id?: string; handle?: string };
           const isPrivate = Boolean(m.visible_to);
           const mine = m.sender_user_id === user.id;
           const senderAgent = m.sender_agent_id ? byId.get(m.sender_agent_id) : undefined;
@@ -314,6 +316,12 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
               {m.removed_at && meta.auto_hidden && mine && <HiddenAppeal messageId={m.id} conversationId={id} status={meta.appeal} />}
               {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}
               {meta.kind === "fact_suggestion" && isMyAgent && <FactSuggestion messageId={m.id} decided={meta.decided} />}
+              {meta.kind === "business_suggestion" && isMyAgent && <BusinessSuggestion messageId={m.id} handle={meta.handle ?? ""} decided={meta.decided} />}
+              {meta.kind === "business_answer" && isMyAgent && meta.business_id && (
+                <div className="mt-1" data-testid="continue-with-business">
+                  <ActionButton action={openAgentChat.bind(null, meta.business_id)} label={`💬 Continue with @${meta.handle ?? "them"}`} />
+                </div>
+              )}
               {task && (
                 <TaskCard
                   task={task as TaskView}
