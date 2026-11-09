@@ -3,6 +3,8 @@ import { recoverStuckTasks } from "@/lib/plans/engine";
 import { pruneRateLimits } from "@/lib/limits";
 import { pruneContactLists } from "@/lib/people/imports";
 import { refreshDueSources } from "@/lib/business/sources";
+import { autoResolveAppeals } from "@/lib/social/appeals";
+import { nudgeInactiveModerators, sendDigests } from "@/lib/social/digest";
 
 const SWEEP_EVERY_MS = 30_000;
 const PRUNE_EVERY_MS = 15 * 60_000;
@@ -33,6 +35,10 @@ export function startSweeper() {
         await pruneRateLimits();
         await pruneContactLists();
         await refreshDueSources();
+        // Communities: appeals nobody answered in 3 days, the daily digest, quiet moderators.
+        await autoResolveAppeals();
+        await sendDigests();
+        await nudgeInactiveModerators();
       }
     } catch (error) {
       console.error("[agentme] sweeper error", error instanceof Error ? error.message : error);

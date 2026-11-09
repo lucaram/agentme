@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ActionButton } from "@/components/ActionButton";
 import { ConfirmButton, JoinLinkBox } from "@/components/social/Controls";
 import { LocalTime } from "@/components/LocalTime";
-import { COMMUNITY_AVATARS, MAX_COMMUNITY_PEOPLE, stillMuted } from "@/lib/social/shared";
+import { COMMUNITY_AVATARS, MAX_COMMUNITY_PEOPLE, daysAgo, stillMuted } from "@/lib/social/shared";
 import {
   communityLinkAction,
   decideRequestAction,
@@ -16,6 +16,7 @@ import {
   muteMemberAction,
   removeFromCommunityAction,
   removeMessageAction,
+  resolveAppealAction,
   removePartnerAction,
   revokeCommunityLinkAction,
   searchBusinessesAction,
@@ -26,6 +27,14 @@ import {
 import { EditCommunityForm } from "../CommunityForm";
 import { JoinCommunity } from "./JoinCommunity";
 import { BusinessHandleForm } from "@/components/social/BusinessHandleForm";
+import { Fold } from "@/components/Fold";
+import { digestCounts, suggestModerators, touchSeen } from "@/lib/social/digest";
+
+const AUTOPILOT_ACTION: Record<string, string> = {
+  refused: "Kept out",
+  hidden_after_reports: "Hidden after reports",
+  posted_after_nudge: "Posted after a nudge",
+};
 
 const ROLE_LABEL = { owner: "Owner", moderator: "Moderator", member: "" } as const;
 
@@ -126,6 +135,19 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
       ])
     : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
   const byOwner = new Map((agents ?? []).map((a) => [a.owner_id, a]));
+  // Autopilot (moderators only; RLS: moderation_events are for this community's moderators).
+  if (me) await touchSeen(id, user.id);
+  const weekAgo = daysAgo(7);
+  const [autopilotWeek, { data: autopilotRows }, suggested] = isMod
+    ? await Promise.all([
+        digestCounts(id, weekAgo),
+        supabase.from("moderation_events").select("id, action, verdict, excerpt, user_id, created_at, appeal_status, appealed_at").eq("community_id", id).gt("created_at", weekAgo).order("created_at", { ascending: false }).limit(50),
+        // A couple of moderators is enough; otherwise suggest active members with a clean record.
+        (people ?? []).filter((p) => p.role !== "member").length < 3 ? suggestModerators(id) : Promise.resolve([]),
+      ])
+    : [{ refused: 0, hidden: 0, nudged: 0, appeals: 0 }, { data: [] }, []];
+  const appealsWaiting = (autopilotRows ?? []).filter((e) => e.appeal_status === "pending");
+  const autopilotRecent = (autopilotRows ?? []).filter((e) => e.action !== "nudged").slice(0, 20);
   const who = (userId: string) => {
     const a = byOwner.get(userId);
     return a ? `${a.avatar} ${a.display_name} @${a.handle}` : "Someone";
@@ -138,14 +160,21 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
 
       <section className="card space-y-2" aria-label="Chats">
         <h2 className="font-semibold">Chats</h2>
-        <ul className="divide-y divide-border">
+        {/* Each chat is a row you tap (highlighted on hover, like Settings); Mute stays separate. */}
+        <ul className="space-y-2">
           {ordered.map((c) => (
-            <li key={c.id} className="flex flex-wrap items-center gap-3 py-2">
-              <Link href={`/chats/${c.id}`} className="min-w-0 flex-1 hover:underline">
-                <span className="block font-medium">{c.channel === "announcements" ? "📣 Announcements" : "💬 General"}</span>
-                <span className="block text-xs text-muted">{c.channel === "announcements" ? "Moderators post, everyone reads" : "Everyone can talk"}</span>
+            <li key={c.id} className="flex items-center gap-2 rounded-xl border border-border bg-background transition hover:border-accent/60 hover:bg-accent-soft">
+              <Link href={`/chats/${c.id}`} className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3" data-testid={`channel-${c.channel}`}>
+                <span className="text-xl" aria-hidden>{c.channel === "announcements" ? "📣" : "💬"}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">{c.channel === "announcements" ? "Announcements" : "General"}</span>
+                  <span className="block text-xs text-muted">{c.channel === "announcements" ? "Moderators post, everyone reads" : "Everyone can talk"}</span>
+                </span>
+                <span className="text-accent" aria-hidden>›</span>
               </Link>
-              <ActionButton action={setMutedAction.bind(null, c.id, !mutedChannels.has(c.id))} label={mutedChannels.has(c.id) ? "🔔 Unmute" : "🔕 Mute"} />
+              <span className="pr-3">
+                <ActionButton action={setMutedAction.bind(null, c.id, !mutedChannels.has(c.id))} label={mutedChannels.has(c.id) ? "🔔 Unmute" : "🔕 Mute"} />
+              </span>
             </li>
           ))}
         </ul>
@@ -157,9 +186,96 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
       </section>
 
       {isMod && (
-        <>
-          <section className="card space-y-4" aria-label="Moderation">
-            <h2 className="font-semibold">Moderation</h2>
+        <div className="space-y-3">
+          <Fold
+            name="community-sections"
+            icon="🤖"
+            title="Autopilot"
+            testId="autopilot"
+            open={appealsWaiting.length > 0}
+            summary={[
+              `${autopilotWeek.refused} kept out this week`,
+              appealsWaiting.length ? `${appealsWaiting.length} ${appealsWaiting.length === 1 ? "appeal waits" : "appeals wait"} for you` : "nothing waiting",
+            ].join(" · ")}
+          >
+            <div className="space-y-4 px-5 py-5 sm:px-6" aria-label="Autopilot">
+              <p className="hint">
+                Your community&apos;s agent keeps spam out, hides messages several members report when it agrees, and nudges members before they post
+                something rude. It works even if nobody moderates; you get one summary a day. Undo anything in one tap.
+              </p>
+            <p className="text-sm" data-testid="autopilot-week">
+              Last 7 days: {autopilotWeek.refused} kept out · {autopilotWeek.hidden} hidden after reports · {autopilotWeek.nudged} nudged
+            </p>
+            {appealsWaiting.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold">Appeals ({appealsWaiting.length})</h3>
+                <p className="hint">Optional: if nobody answers within 3 days, members with a good history here get their message back automatically.</p>
+                <ul className="divide-y divide-border">
+                  {appealsWaiting.map((e) => (
+                    <li key={e.id} className="space-y-1 py-2" data-testid="appeal-item">
+                      <p className="rounded-lg bg-accent-soft px-2 py-1 text-sm">“{e.excerpt}”</p>
+                      <p className="text-xs text-muted">
+                        {who(e.user_id ?? "")} · {e.action === "refused" ? "not posted" : "hidden after reports"} ({e.verdict}) · appealed <LocalTime iso={e.appealed_at ?? e.created_at} />
+                      </p>
+                      <span className="flex gap-2">
+                        <ActionButton action={resolveAppealAction.bind(null, e.id, id, true)} label={e.action === "refused" ? "Accept: post it" : "Accept: restore it"} variant="btn-primary" />
+                        <ActionButton action={resolveAppealAction.bind(null, e.id, id, false)} label="Reject" />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {autopilotRecent.length > 0 && (
+              <details>
+                <summary className="cursor-pointer text-sm font-medium">What it did recently ({autopilotRecent.length})</summary>
+                <ul className="mt-1 divide-y divide-border">
+                  {autopilotRecent.map((e) => (
+                    <li key={e.id} className="flex flex-wrap items-center gap-2 py-2 text-sm" data-testid="autopilot-event">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">“{e.excerpt}”</span>
+                        <span className="block text-xs text-muted">
+                          {AUTOPILOT_ACTION[e.action] ?? e.action} ({e.verdict}) · {who(e.user_id ?? "")} · <LocalTime iso={e.created_at} />
+                          {e.appeal_status === "accepted" && " · undone"}
+                        </span>
+                      </span>
+                      {(e.action === "refused" || e.action === "hidden_after_reports") && e.appeal_status !== "accepted" && e.appeal_status !== "rejected" && (
+                        <ActionButton action={resolveAppealAction.bind(null, e.id, id, true)} label="Undo" />
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+            {isOwner && suggested.length > 0 && (
+              <div className="space-y-2" data-testid="suggested-moderators">
+                <h3 className="text-sm font-semibold">Need a hand?</h3>
+                <p className="hint">Active members with a clean record here, who could help as moderators.</p>
+                <ul className="divide-y divide-border">
+                  {suggested.map((s) => (
+                    <li key={s.userId} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                      <span className="min-w-0 flex-1">{who(s.userId)} <span className="text-xs text-muted">· {s.messages} messages this month</span></span>
+                      <ActionButton action={setCommunityRoleAction.bind(null, id, s.userId, "moderator")} label="Make moderator" />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            </div>
+          </Fold>
+
+          <Fold
+            name="community-sections"
+            icon="🛡️"
+            title="Moderation"
+            testId="fold-moderation"
+            open={Boolean(requests?.length || reports?.length)}
+            summary={[
+              requests?.length ? `${requests.length} asking to join` : "Invite link",
+              reports?.length ? `${reports.length} reported` : "nothing reported",
+            ].join(" · ")}
+          >
+            <div className="space-y-4 px-5 py-5 sm:px-6" aria-label="Moderation">
             <JoinLinkBox create={communityLinkAction.bind(null, id)} revoke={revokeCommunityLinkAction.bind(null, id)} what={community.name} />
 
             {requests && requests.length > 0 && (
@@ -198,13 +314,18 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
                 <p className="text-sm text-muted">Nothing reported. 🎉</p>
               )}
             </div>
-          </section>
-
-          <section className="card space-y-3" aria-label="Official partners">
-            <div>
-              <h2 className="font-semibold">Official partners</h2>
-              <p className="hint">Invite a local business your members use. Once it accepts, members can mention it in the chats and it answers from its public information.</p>
             </div>
+          </Fold>
+
+          <Fold
+            name="community-sections"
+            icon="🤝"
+            title="Official partners"
+            testId="fold-partners"
+            summary={partners.length ? `${partners.filter((p) => p.status === "active").length} active · ${partners.filter((p) => p.status === "invited").length} invited` : "Invite a local business your members use"}
+          >
+            <div className="space-y-4 px-5 py-5 sm:px-6" aria-label="Official partners">
+              <p className="hint">Invite a local business your members use. Once it accepts, members can mention it in the chats and it answers from its public information.</p>
             {partners.length > 0 && (
               <ul className="divide-y divide-border">
                 {partners.map((p) => (
@@ -225,10 +346,17 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
               button="Invite"
               done="invitation sent. It appears as a partner once they accept."
             />
-          </section>
+            </div>
+          </Fold>
 
-          <section className="card space-y-2" aria-label="Members">
-            <h2 className="font-semibold">Members</h2>
+          <Fold
+            name="community-sections"
+            icon="👥"
+            title="Members"
+            testId="fold-members"
+            summary={[`${members} ${members === 1 ? "member" : "members"}`, ...(bans?.length ? [`${bans.length} banned`] : [])].join(" · ")}
+          >
+            <div className="space-y-4 px-5 py-5 sm:px-6" aria-label="Members">
             <ul className="divide-y divide-border">
               {(people ?? []).map((p) => {
                 const isMe = p.user_id === user.id;
@@ -272,11 +400,11 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
                 </ul>
               </details>
             )}
-          </section>
+            </div>
+          </Fold>
 
-          <details className="card">
-            <summary className="cursor-pointer font-semibold">Edit community</summary>
-            <div className="mt-3">
+          <Fold name="community-sections" icon="✏️" title="Edit community" testId="fold-edit" summary="Name, description, rules, picture and who can join">
+            <div className="px-5 py-5 sm:px-6">
               <EditCommunityForm
                 id={id}
                 isOwner={isOwner}
@@ -284,8 +412,8 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
                 values={{ name: community.name, description: community.description ?? "", rules: community.rules ?? "", avatar: community.avatar, visibility: community.visibility as "public" | "private" }}
               />
             </div>
-          </details>
-        </>
+          </Fold>
+        </div>
       )}
 
       <section className="card flex flex-wrap gap-2" aria-label="Leave">

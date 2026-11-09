@@ -157,8 +157,25 @@ export function stillMuted(until: string | null | undefined): boolean {
 }
 
 /** An update shown in the Groups/Communities tab (and counted in its badge until seen). */
-export async function notify(userIds: string[], area: "groups" | "communities", text: string, link: string | null = null) {
-  const rows = [...new Set(userIds)].map((user_id) => ({ user_id, area, text: text.slice(0, 300), link }));
+export async function notify(
+  userIds: string[],
+  area: "groups" | "communities",
+  text: string,
+  link: string | null = null,
+  /** kind: groups repeats; needsAction: pinned at the top (with "Review") until handled. */
+  opts: { kind?: string; needsAction?: boolean } = {},
+) {
+  // Which group or community it's about, from its link (to filter, group repeats and respect mute).
+  const ref = link?.match(/^\/(?:groups|communities)\/([0-9a-f-]{36})/)?.[1] ?? null;
+  const rows = [...new Set(userIds)].map((user_id) => ({
+    user_id,
+    area,
+    text: text.slice(0, 300),
+    link,
+    ref_id: ref,
+    kind: opts.kind ?? "info",
+    needs_action: Boolean(opts.needsAction),
+  }));
   for (let i = 0; i < rows.length; i += 500) await adminClient().from("notices").insert(rows.slice(i, i + 500));
 }
 

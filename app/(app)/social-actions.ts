@@ -9,6 +9,8 @@ import { createClient } from "@/lib/supabase/server";
 import * as groups from "@/lib/social/groups";
 import * as communities from "@/lib/social/communities";
 import * as businesses from "@/lib/social/businesses";
+import * as appeals from "@/lib/social/appeals";
+import { dismissNotices } from "@/lib/social/notices";
 import {
   communityMembership,
   createJoinLink,
@@ -286,4 +288,42 @@ export async function leavePlacementAction(placementId: string): Promise<Out> {
 export async function searchBusinessesAction(query: string, exclude: string[]): Promise<businesses.BusinessHit[]> {
   await requireAgent();
   return businesses.searchBusinesses(String(query ?? ""), ids(exclude));
+}
+
+// ------------------------------------------------------------- community autopilot: appeals
+
+/** The author appeals something the community's agent did (a message not posted, or hidden). */
+export async function appealAction(eventId: string): Promise<Out> {
+  const { userId } = await me();
+  if (!Id.safeParse(eventId).success) return { error: "Not found." };
+  return done(["/communities", "/chats"], await appeals.appeal(eventId, userId));
+}
+
+/** Appeal a hidden message from the chat (its event is looked up on the server). */
+export async function appealHiddenMessageAction(messageId: string, conversationId: string): Promise<Out> {
+  const { userId } = await me();
+  if (!Id.safeParse(messageId).success) return { error: "Not found." };
+  const { data } = await adminClient().from("moderation_events").select("id").eq("message_id", messageId).eq("user_id", userId).eq("action", "hidden_after_reports").maybeSingle();
+  if (!data) return { error: "Not found." };
+  return done([`/chats/${conversationId}`], await appeals.appeal(data.id, userId));
+}
+
+/** A moderator accepts (or undoes) / rejects what the agent did. */
+export async function resolveAppealAction(eventId: string, communityId: string, accept: boolean): Promise<Out> {
+  const { userId } = await me();
+  if (!Id.safeParse(eventId).success) return { error: "Not found." };
+  return done([`/communities/${communityId}`], await appeals.resolveAppeal(eventId, userId, Boolean(accept)));
+}
+
+// ------------------------------------------------------------- updates (notices)
+
+/** Clear one update (✕) or all of them in a tab ("Clear all"). */
+export async function dismissNoticeAction(area: "groups" | "communities", id?: string): Promise<Out> {
+  const { userId } = await me();
+  if (area !== "groups" && area !== "communities") return { error: "Not found." };
+  if (id && !Id.safeParse(id).success) return { error: "Not found." };
+  await dismissNotices(userId, area, id);
+  revalidatePath(`/${area}`);
+  revalidatePath(`/updates/${area}`);
+  return {};
 }

@@ -31,3 +31,16 @@ describe("community autopilot: code decides what happens", () => {
     expect(mockModeration("What a goal on Saturday!")).toMatchObject({ verdict: "ok" });
   });
 });
+
+describe("the daily digest for moderators", async () => {
+  // digest.ts is server-only in the app; its text builder is plain.
+  const { digestText } = await import("@/lib/social/digest");
+  it("one line that says what the agent did, and what needs you", () => {
+    expect(digestText("FC Fans", { refused: 4, hidden: 1, nudged: 3, appeals: 1 })).toBe(
+      "🤖 FC Fans: your community's agent kept 4 messages out, hid 1 after members' reports and nudged 3 members to rethink a message in the last day. 1 appeal needs you (optional).",
+    );
+    expect(digestText("FC Fans", { refused: 1, hidden: 0, nudged: 0, appeals: 0 })).toBe("🤖 FC Fans: your community's agent kept 1 message out in the last day.");
+    expect(digestText("FC Fans", { refused: 0, hidden: 0, nudged: 0, appeals: 2 })).toBe("🤖 FC Fans: 2 appeals need you (optional).");
+    expect(digestText("FC Fans", { refused: 0, hidden: 0, nudged: 0, appeals: 0 })).toBeNull();
+  });
+});
