@@ -7,6 +7,8 @@ import { getOrCreateMyAgentConversation, postMessage } from "@/lib/data/chat";
 import { composePlan } from "@/lib/coordination/orchestrator";
 import { CHAT_ASSIST_SYSTEM, wrapUntrusted } from "./prompts";
 import { parseAgentCommand } from "./commands";
+import { quoteContext } from "@/lib/social/quote";
+import type { ReplyInfo } from "@/lib/social/quote-server";
 
 type Conversation = { id: string; kind: string; title: string | null };
 
@@ -19,13 +21,15 @@ type Conversation = { id: string; kind: string; title: string | null };
  *  - anything sent to others (a plan, a poll, a reply) still needs the
  *    owner's explicit approval.
  */
-export async function handleAgentCommand(opts: { userId: string; agent: AgentRow; conversation: Conversation; text: string }) {
+export async function handleAgentCommand(opts: { userId: string; agent: AgentRow; conversation: Conversation; text: string; reply?: ReplyInfo | null }) {
   const { userId, agent, conversation, text } = opts;
   const command = parseAgentCommand(text);
   const db = adminClient();
 
-  // The command itself is private to the owner.
-  await postMessage({ conversationId: conversation.id, from: "human", userId, content: text, visibleTo: userId, metadata: { kind: "agent_command" } });
+  // The command itself is private to the owner (with the message it's about, if one was quoted).
+  await postMessage({ conversationId: conversation.id, from: "human", userId, content: text, visibleTo: userId, replyTo: opts.reply?.id, metadata: { kind: "agent_command" } });
+  // ↩ Reply: "@agent translate" / "draft a reply" about one message in particular (as data).
+  const about = opts.reply ? `\n\nThe owner means this message in particular:\n${wrapUntrusted("replying_to", quoteContext(opts.reply.author, opts.reply.text))}` : "";
   const reply = (content: string, metadata: Record<string, unknown> = {}) =>
     postMessage({ conversationId: conversation.id, from: "agent", agentId: agent.id, content, visibleTo: userId, metadata: { kind: "agent_reply", ...metadata } });
 
@@ -73,13 +77,13 @@ export async function handleAgentCommand(opts: { userId: string; agent: AgentRow
 
   switch (command.mode) {
     case "summarise": {
-      const summary = await assist("summarise", chatBlock, {});
+      const summary = await assist("summarise", `${chatBlock}${about}`, {});
       return reply(`📝 Summary
 ${summary}`);
     }
     case "translate": {
       const lastFromOthers = [...messages].reverse().find((m) => m.sender_user_id !== userId && (m.sender_user_id || m.sender_agent_id));
-      const source = command.text || lastFromOthers?.content || "";
+      const source = command.text || opts.reply?.text || lastFromOthers?.content || "";
       if (!source) return reply("There's nothing to translate yet.");
       const translation = await assist("translate", `Translate into ${command.language}:\n${wrapUntrusted("text", source)}`, {
         language: command.language,
@@ -88,7 +92,7 @@ ${summary}`);
       return reply(`🌐 ${command.language}: ${translation}`);
     }
     case "draft": {
-      const draft = await assist("draft", `${chatBlock}\n\nThe owner's instruction: ${command.instruction}`, { instruction: command.instruction });
+      const draft = await assist("draft", `${chatBlock}${about}\n\nThe owner's instruction: ${command.instruction}`, { instruction: command.instruction });
       return reply(`✍️ Draft reply (only you can see this):\n${draft}`, { kind: "draft", draft });
     }
     case "plan": {
@@ -111,7 +115,7 @@ ${summary}`);
         card: { conversationId: conversation.id, visibleTo: userId },
         taskConversationId: myAgentChat.id,
         groupConversationId: conversation.id,
-        onChat: async () => reply(`🤖 ${await assist("ask", `${chatBlock}\n\nThe owner asks: ${command.request}`, {})}`),
+        onChat: async () => reply(`🤖 ${await assist("ask", `${chatBlock}${about}\n\nThe owner asks: ${command.request}`, {})}`),
       });
     }
   }

@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { sendMessage } from "../../actions";
 import { appealAction } from "../../social-actions";
+import { setReply, useReply } from "@/lib/client/reply";
 
 const MAX_HEIGHT = 200; // about 8 lines
 
@@ -38,6 +39,8 @@ export function Composer({
   const [nudge, setNudge] = useState<{ rule: string; message: string; text: string } | null>(null);
   /** Not posted by the community's agent: the author can appeal (once). */
   const [appeal, setAppeal] = useState<{ id: string; sent: boolean } | null>(null);
+  /** ↩ Reply: the message this one will quote (set from a message's ↩). */
+  const replying = useReply(conversationId);
 
   /** Grow with the text (like ChatGPT/Claude), up to about 8 lines; then scroll. */
   function fit() {
@@ -58,7 +61,9 @@ export function Composer({
     setError(null);
     setSummoned(/^\s*@agent\b/i.test(text));
     startTransition(async () => {
-      const result = await sendMessage(conversationId, text, threadId, { confirmed });
+      const result = await sendMessage(conversationId, text, threadId, { confirmed, replyTo: replying?.id ?? null });
+      // Sent (or handed to the agent): the quote is done. Kept when it comes back (nudge or error).
+      if (!result?.nudge && !result?.error) setReply(null);
       if (result?.nudge) {
         // Not posted yet: the text comes back, with Edit / Post anyway.
         setNudge({ ...result.nudge, text });
@@ -149,6 +154,17 @@ export function Composer({
         </p>
       )}
       {/* One rounded box with the send button inside, like ChatGPT / Claude / Gemini. */}
+      {replying && (
+        <div className="mb-1.5 flex items-center gap-2 rounded-2xl border-l-4 border-accent bg-surface px-3 py-1.5 text-xs" data-testid="replying-to">
+          <span className="min-w-0 flex-1">
+            <span className="font-semibold">↩ Replying to {replying.author}</span>
+            <span className="block truncate text-muted">{replying.snippet}</span>
+          </span>
+          <button type="button" className="rounded-full px-2 py-1 text-muted hover:bg-accent-soft" aria-label="Cancel reply" onClick={() => setReply(null)}>
+            ✕
+          </button>
+        </div>
+      )}
       <form
         className="flex items-end gap-2 rounded-3xl border border-border bg-surface py-2 pl-4 pr-2 shadow-sm transition-colors focus-within:border-accent"
         onSubmit={(e) => {
@@ -168,6 +184,8 @@ export function Composer({
               e.preventDefault();
               submit();
             }
+            // Esc cancels a reply.
+            if (e.key === "Escape" && replying) setReply(null);
           }}
         />
         <button

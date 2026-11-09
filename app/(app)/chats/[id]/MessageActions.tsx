@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { removeMessageAction, reportMessageAction } from "../../social-actions";
 import { ClosableDetails } from "@/components/ClosableDetails";
 import { ForwardPicker } from "./Forward";
+import { replyTo } from "@/lib/client/reply";
+import type { ReplyTarget } from "@/lib/social/quote";
 
 /** ⋯ on a message: forward it (you, never your agent), report it, or remove it (own message / admins / moderators). */
 export function MessageActions({
@@ -12,17 +14,20 @@ export function MessageActions({
   canReport,
   canRemove,
   canForward = false,
+  reply,
 }: {
   messageId: string;
   conversationId: string;
   canReport: boolean;
   canRemove: boolean;
   canForward?: boolean;
+  /** ↩ Reply: quote this message in the message box. */
+  reply?: ReplyTarget;
 }) {
   const [pending, start] = useTransition();
   const [note, setNote] = useState<string | null>(null);
   const [forwarding, setForwarding] = useState(false);
-  if (!canReport && !canRemove && !canForward) return null;
+  if (!canReport && !canRemove && !canForward && !reply) return null;
   return (
     <>
       {forwarding && (
@@ -39,7 +44,19 @@ export function MessageActions({
           ⋯
         </summary>
         <div className="absolute z-10 mt-1 flex min-w-36 flex-col rounded-xl border border-border bg-surface p-1 text-sm shadow">
-          {canForward && (
+          {reply && (
+          <button
+            type="button"
+            className="rounded-lg px-2 py-1 text-left hover:bg-accent-soft"
+            onClick={(e) => {
+              e.currentTarget.closest("details")?.removeAttribute("open");
+              replyTo(conversationId, reply);
+            }}
+          >
+            ↩ Reply
+          </button>
+        )}
+        {canForward && (
             <button
               type="button"
               className="rounded-lg px-2 py-1 text-left hover:bg-accent-soft"

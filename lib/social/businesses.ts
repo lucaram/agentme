@@ -6,6 +6,7 @@ import { sendAgentMessage } from "@/lib/a2a/client";
 import { tellOwner } from "@/lib/requests/notify";
 import { hit } from "@/lib/limits";
 import { communityMembership, groupRole, isGroupAdmin, isModerator, type Result } from "./shared";
+import { withReplyContext } from "./quote";
 
 /**
  * Businesses in groups and communities. A business is never a member: it's
@@ -169,8 +170,11 @@ export async function answerMentions(opts: {
   userId: string;
   agent: AgentRow;
   text: string;
+  /** ↩ Reply: the message this one replies to ("and on Sundays?" after the business's earlier answer). */
+  replyContext?: string;
 }): Promise<void> {
   const { conversation, userId, agent, text } = opts;
+  const question = withReplyContext(text, opts.replyContext);
   const handles = mentionedHandles(text);
   if (!handles.length) return;
   const db = adminClient();
@@ -197,7 +201,7 @@ export async function answerMentions(opts: {
   }
   await Promise.all(
     asked.map(async (business) => {
-      const result = await sendAgentMessage({ fromAgentId: agent.id, toHandle: business.handle, text, data: { audience: "public", context: "group" } });
+      const result = await sendAgentMessage({ fromAgentId: agent.id, toHandle: business.handle, text: question, data: { audience: "public", context: "group" } });
       if (!result.ok) {
         await privately(`${business.display_name} couldn't answer right now: ${result.error}`);
         return;

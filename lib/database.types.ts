@@ -589,14 +589,14 @@ isOneToOne: false
                   ]
                 },"messages": {
                   Row: {
-                    "content": string,"conversation_id": string,"created_at": string,"id": string,"is_ai_generated": boolean,"metadata": NonNullable<Json>,"removed_at": string | null,"removed_by": string | null,"sender_agent_id": string | null,"sender_user_id": string | null,"thread_id": string | null,"visible_to": string | null
+                    "content": string,"conversation_id": string,"created_at": string,"id": string,"is_ai_generated": boolean,"metadata": NonNullable<Json>,"removed_at": string | null,"removed_by": string | null,"reply_to": string | null,"sender_agent_id": string | null,"sender_user_id": string | null,"thread_id": string | null,"visible_to": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "content": string,"conversation_id": string,"created_at"?: string,"id"?: string,"is_ai_generated": boolean,"metadata"?: NonNullable<Json>,"removed_at"?: string | null,"removed_by"?: string | null,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"thread_id"?: string | null,"visible_to"?: string | null
+                    "content": string,"conversation_id": string,"created_at"?: string,"id"?: string,"is_ai_generated": boolean,"metadata"?: NonNullable<Json>,"removed_at"?: string | null,"removed_by"?: string | null,"reply_to"?: string | null,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"thread_id"?: string | null,"visible_to"?: string | null
                   }
                   Update: {
-                    "content"?: string,"conversation_id"?: string,"created_at"?: string,"id"?: string,"is_ai_generated"?: boolean,"metadata"?: NonNullable<Json>,"removed_at"?: string | null,"removed_by"?: string | null,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"thread_id"?: string | null,"visible_to"?: string | null
+                    "content"?: string,"conversation_id"?: string,"created_at"?: string,"id"?: string,"is_ai_generated"?: boolean,"metadata"?: NonNullable<Json>,"removed_at"?: string | null,"removed_by"?: string | null,"reply_to"?: string | null,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"thread_id"?: string | null,"visible_to"?: string | null
                   }
                   Relationships: [
                     {
@@ -604,6 +604,12 @@ isOneToOne: false
       columns: ["conversation_id"]
 isOneToOne: false
       referencedRelation: "conversations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "messages_reply_to_fkey"
+      columns: ["reply_to"]
+isOneToOne: false
+      referencedRelation: "messages"
       referencedColumns: ["id"]
     },{
       foreignKeyName: "messages_sender_agent_id_fkey"

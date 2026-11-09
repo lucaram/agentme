@@ -22,6 +22,8 @@ import { BusinessSuggestion } from "./BusinessSuggestion";
 import { ActionButton } from "@/components/ActionButton";
 import { canForward as canForwardMessage, forwardLabel, type Forwarded } from "@/lib/social/forward";
 import { ForwardButton } from "./Forward";
+import { QuoteBlock, ReplyButton } from "./Reply";
+import { canQuote, quoteSnippet } from "@/lib/social/quote";
 import { HiddenAppeal } from "./HiddenAppeal";
 import { touchSeen } from "@/lib/social/digest";
 import { dmState } from "@/lib/people/dm";
@@ -168,6 +170,23 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
   if (community) await touchSeen(community.id, user.id);
   // Who may post here, and who may remove other people's messages.
   const posting = shared ? await canPost(conv as unknown as ConvRow, user.id) : { ok: true as const };
+
+  // ↩ Reply: the messages quoted here (some may be older than what's shown; RLS decides what you can see).
+  type QuoteSource = { id: string; content: string; sender_user_id: string | null; sender_agent_id: string | null; is_ai_generated: boolean; removed_at: string | null; visible_to: string | null };
+  const loadedIds = new Set((messages ?? []).map((m) => m.id));
+  const olderIds = [...new Set((messages ?? []).flatMap((m) => (m.reply_to && !loadedIds.has(m.reply_to) ? [m.reply_to] : [])))];
+  const { data: olderQuoted } = olderIds.length
+    ? await supabase.from("messages").select("id, content, sender_user_id, sender_agent_id, is_ai_generated, removed_at, visible_to").in("id", olderIds)
+    : { data: [] as QuoteSource[] };
+  const quotedById = new Map<string, QuoteSource>([...(messages ?? []), ...(olderQuoted ?? [])].map((q) => [q.id, q]));
+  // You can reply where you can post (not in a closed direct chat).
+  const canReplyHere = ["my_agent", "dm", "group", "channel"].includes(conv.kind) && posting.ok && !dmClosed;
+  const authorOf = (q: { sender_user_id: string | null; sender_agent_id: string | null }) =>
+    q.sender_agent_id
+      ? `@${byId.get(q.sender_agent_id)?.handle ?? "an"}'s agent`
+      : q.sender_user_id === user.id
+        ? "You"
+        : byOwner.get(q.sender_user_id ?? "")?.display_name ?? "Someone";
   const canModerate =
     conv.kind === "group" ? isGroupAdmin(await groupRole(id, user.id)) : community ? isModerator((await communityMembership(community.id, user.id))?.role) : false;
   const title =
@@ -254,6 +273,10 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
           const system = !m.sender_agent_id && !m.sender_user_id;
           // Plan cards, drafts, suggestions and app notes can't be forwarded; messages can.
           const forwardOk = canForwardMessage({ ...m, system }).ok;
+          // ↩ Reply: this message can be quoted here; and the message this one quotes (if any).
+          const replyTarget = canReplyHere && canQuote(m) ? { id: m.id, author: authorOf(m), snippet: quoteSnippet(m.content) } : undefined;
+          const quoted = m.reply_to ? quotedById.get(m.reply_to) : undefined;
+          const quoteState = !quoted || (quoted.visible_to && quoted.visible_to !== user.id) ? "missing" : quoted.removed_at ? "removed" : "ok";
 
           if (system) {
             return (
@@ -273,7 +296,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
           const isPlanOwner = (taskId?: string) => Boolean(taskId && (tasks ?? []).some((t) => t.id === taskId && t.owner_id === user.id));
 
           return (
-            <li key={m.id} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
+            <li key={m.id} id={`m-${m.id}`} className={`group flex flex-col ${mine ? "items-end" : "items-start"}`}>
               <span className="mb-0.5 flex items-center gap-1 text-xs text-muted">
                 {m.is_ai_generated ? (
                   <>
@@ -311,6 +334,15 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                   }`}
                   data-testid={isPrivate ? "private-message" : m.removed_at ? "removed-message" : undefined}
                 >
+                  {m.reply_to && !m.removed_at && (
+                    <QuoteBlock
+                      targetId={m.reply_to}
+                      author={quoted ? authorOf(quoted) : ""}
+                      snippet={quoted ? quoteSnippet(quoted.content) : ""}
+                      ai={Boolean(quoted?.is_ai_generated)}
+                      state={quoteState}
+                    />
+                  )}
                   {meta.forwarded && !m.removed_at && (
                     <span className="mb-0.5 block text-[11px] italic opacity-80" data-testid="forwarded-label">
                       {forwardLabel(meta.forwarded)}
@@ -322,6 +354,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                   // ⋯ on messages in direct chats, groups and communities; and, to forward them (labelled
                   // "from @you's agent"), your own agent's replies in My Agent and your private @agent answers.
                   (((shared || conv.kind === "dm") && !isPrivate) ||
+                    replyTarget ||
                     (m.is_ai_generated && forwardOk && ((isPrivate && m.visible_to === user.id) || (isMyAgent && meta.kind !== "business_answer")))) && (
                     <MessageActions
                       messageId={m.id}
@@ -329,8 +362,10 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                       canReport={shared && !mine && !isPrivate}
                       canRemove={shared && !isPrivate && (mine || canModerate)}
                       canForward={forwardOk}
+                      reply={replyTarget}
                     />
                   )}
+                {replyTarget && <ReplyButton conversationId={id} target={replyTarget} />}
               </div>
               {m.removed_at && meta.auto_hidden && mine && <HiddenAppeal messageId={m.id} conversationId={id} status={meta.appeal} />}
               {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}

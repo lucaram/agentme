@@ -234,3 +234,18 @@ body {
     display: none;
   }
 }
+
+/* ↩ Reply: the original message flashes when you jump to it from a quote. */
+.reply-flash {
+  border-radius: 1rem;
+  animation: reply-flash 1.6s ease-out;
+}
+@keyframes reply-flash {
+  0%,
+  40% {
+    background-color: var(--accent-soft);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
