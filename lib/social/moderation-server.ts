@@ -15,8 +15,8 @@ type Event = {
   text: string;
 };
 
-async function logEvent(e: Event) {
-  await adminClient().from("moderation_events").insert({
+async function logEvent(e: Event): Promise<string | null> {
+  const { data } = await adminClient().from("moderation_events").insert({
     community_id: e.communityId,
     conversation_id: e.conversationId,
     message_id: e.messageId ?? null,
@@ -26,7 +26,10 @@ async function logEvent(e: Event) {
     confidence: e.m.confidence,
     reason: e.m.reason.slice(0, 200),
     excerpt: e.text.slice(0, 500),
-  });
+    // Kept so a successful appeal can post or restore it.
+    original_text: e.action === "refused" || e.action === "hidden_after_reports" ? e.text.slice(0, 4000) : null,
+  }).select("id").single();
+  return data?.id ?? null;
 }
 
 /** The AI check of one message against the community's own description and rules. Fails open (posts) if the check is unavailable. */
@@ -54,7 +57,8 @@ export async function checkAgainstRules(communityId: string, text: string): Prom
   }
 }
 
-export type AutopilotOutcome = Decision & { flags: string[] };
+/** eventId: for a message not posted, so its author can appeal. */
+export type AutopilotOutcome = Decision & { flags: string[]; eventId?: string | null };
 
 /**
  * Before a community message is posted: trusted members and moderators skip
@@ -68,8 +72,8 @@ export async function autopilot(opts: { communityId: string; conversationId: str
   const decision = decide(m);
   const base = { communityId: opts.communityId, conversationId: opts.conversationId, userId: opts.userId, m, text: opts.text };
   if (decision.action === "refuse") {
-    await logEvent({ ...base, action: "refused" });
-    return { ...decision, flags: [] };
+    const eventId = await logEvent({ ...base, action: "refused" });
+    return { ...decision, flags: [], eventId };
   }
   if (decision.action === "nudge") {
     if (!opts.confirmed) {
@@ -99,12 +103,17 @@ export async function hideIfReportsAgree(messageId: string): Promise<boolean> {
   if (reporters.size < THRESHOLDS.reportsNeeded) return false;
   const m = await checkAgainstRules(conv.community_id, msg.content);
   if (!m || !agreesWithReports(m)) return false;
+  const eventId = await logEvent({ communityId: conv.community_id, conversationId: msg.conversation_id, messageId, userId: msg.sender_user_id, action: "hidden_after_reports", m, text: msg.content });
   await db
     .from("messages")
-    .update({ content: "🤖 Message hidden automatically: several members reported it and it breaks the community's rules.", removed_at: new Date().toISOString() })
+    .update({
+      content: "🤖 Message hidden automatically: several members reported it and it breaks the community's rules.",
+      removed_at: new Date().toISOString(),
+      // Its author can appeal it from the chat.
+      metadata: { auto_hidden: true, moderation_event: eventId },
+    })
     .eq("id", messageId)
     .is("removed_at", null);
   await db.from("reports").update({ status: "resolved" }).eq("message_id", messageId).eq("status", "open");
-  await logEvent({ communityId: conv.community_id, conversationId: msg.conversation_id, messageId, userId: msg.sender_user_id, action: "hidden_after_reports", m, text: msg.content });
   return true;
 }

@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { sendMessage } from "../../actions";
+import { appealAction } from "../../social-actions";
 
 const MAX_HEIGHT = 200; // about 8 lines
 
@@ -35,6 +36,8 @@ export function Composer({
   const [showExamples, setShowExamples] = useState(!collapseExamples);
   /** Community autopilot: "This might break …" before posting; the author decides. */
   const [nudge, setNudge] = useState<{ rule: string; message: string; text: string } | null>(null);
+  /** Not posted by the community's agent: the author can appeal (once). */
+  const [appeal, setAppeal] = useState<{ id: string; sent: boolean } | null>(null);
 
   /** Grow with the text (like ChatGPT/Claude), up to about 8 lines; then scroll. */
   function fit() {
@@ -49,6 +52,7 @@ export function Composer({
     const text = (confirmed ? nudge?.text : ref.current?.value)?.trim();
     if (!text || pending) return;
     setNudge(null);
+    setAppeal(null);
     ref.current!.value = "";
     fit();
     setError(null);
@@ -68,6 +72,7 @@ export function Composer({
       if (result?.threadId && result.threadId !== threadId) router.push(`/chats/${conversationId}?t=${result.threadId}`);
       if (result?.error) {
         setError(result.error);
+        if (result.appealId) setAppeal({ id: result.appealId, sent: false });
         // Give the text back so nothing is lost.
         if (ref.current && !ref.current.value) {
           ref.current.value = text;
@@ -119,6 +124,30 @@ export function Composer({
         </div>
       )}
       {error && <p className="mb-1 text-xs text-danger" role="alert">{error}</p>}
+      {appeal && (
+        <p className="mb-1 text-xs text-muted" data-testid="appeal">
+          {appeal.sent ? (
+            "Appeal sent. A moderator can post it; if nobody answers within 3 days and you have a good history here, it's posted automatically."
+          ) : (
+            <>
+              Think this is a mistake?{" "}
+              <button
+                type="button"
+                className="font-medium text-accent hover:underline"
+                onClick={() =>
+                  startTransition(async () => {
+                    const r = await appealAction(appeal.id);
+                    if (r.error) setError(r.error);
+                    else setAppeal({ ...appeal, sent: true });
+                  })
+                }
+              >
+                Appeal
+              </button>
+            </>
+          )}
+        </p>
+      )}
       {/* One rounded box with the send button inside, like ChatGPT / Claude / Gemini. */}
       <form
         className="flex items-end gap-2 rounded-3xl border border-border bg-surface py-2 pl-4 pr-2 shadow-sm transition-colors focus-within:border-accent"

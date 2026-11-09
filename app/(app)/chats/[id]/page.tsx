@@ -18,6 +18,8 @@ import { MessageActions } from "./MessageActions";
 import { OpenRequests } from "@/components/requests/OpenRequests";
 import { MyAgentHome } from "./MyAgentHome";
 import { FactSuggestion } from "./FactSuggestion";
+import { HiddenAppeal } from "./HiddenAppeal";
+import { touchSeen } from "@/lib/social/digest";
 import { businessIdeas, chatIdeas, personalIdeas, type Idea } from "@/lib/agents/ideas";
 import { ThreadTitle } from "./ThreadTitle";
 import type { Database } from "@/lib/database.types";
@@ -156,6 +158,8 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
   const dmClosed = conv.kind === "dm" && others.length === 0;
   const shared = conv.kind === "group" || conv.kind === "channel";
   const community = conv.kind === "channel" && conv.community_id ? (await supabase.from("communities").select("id, name, avatar").eq("id", conv.community_id).maybeSingle()).data : null;
+  // Being here counts as being around (moderators who are never around get help: lib/social/digest.ts).
+  if (community) await touchSeen(community.id, user.id);
   // Who may post here, and who may remove other people's messages.
   const posting = shared ? await canPost(conv as unknown as ConvRow, user.id) : { ok: true as const };
   const canModerate =
@@ -234,7 +238,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
 
       <ol className="flex flex-1 flex-col gap-3" aria-label="Messages">
         {(messages ?? []).map((m) => {
-          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string; flags?: string[] };
+          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string; flags?: string[]; auto_hidden?: boolean; appeal?: string };
           const isPrivate = Boolean(m.visible_to);
           const mine = m.sender_user_id === user.id;
           const senderAgent = m.sender_agent_id ? byId.get(m.sender_agent_id) : undefined;
@@ -303,6 +307,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                   <MessageActions messageId={m.id} conversationId={id} canReport={!mine} canRemove={mine || canModerate} />
                 )}
               </div>
+              {m.removed_at && meta.auto_hidden && mine && <HiddenAppeal messageId={m.id} conversationId={id} status={meta.appeal} />}
               {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}
               {meta.kind === "fact_suggestion" && isMyAgent && <FactSuggestion messageId={m.id} decided={meta.decided} />}
               {task && (

@@ -307,7 +307,23 @@ My Agent opens on a list of your requests, one line each, like a list of recent 
       - everything else is posted.
     - **If the check is unavailable,** messages are posted.
     - **Members' reports with AI agreement:** when 3 different members report a community message *and* the check agrees (70% sure or more), it's hidden automatically. One person can't silence anyone.
-    - **Log:** every automatic action is recorded in `moderation_events`, which only that community's moderators can read. Step 3 adds a daily digest and appeals.
+    - **Log:** every automatic action is recorded in `moderation_events`, which only that community's moderators can read.
+  - **Appeals** (`lib/social/appeals.ts`):
+    - **Who and when:** the author can appeal once. From the message box for a message that wasn't posted, or under their own message for one hidden after reports.
+    - **Moderators** can **Accept** (the message is posted, or restored) or **Reject**.
+    - **If nobody answers within 3 days,** the appeal is resolved automatically. It's accepted for members with a good history there (in the community 7+ days, 5+ messages, nothing else refused or hidden in a month), and rejected otherwise.
+    - The author is told the outcome.
+  - **🤖 Autopilot section** on the community page, for moderators:
+    - the last 7 days in numbers;
+    - waiting appeals, with Accept or Reject;
+    - what the agent did recently, with one-tap **Undo**.
+  - **Daily digest** (`lib/social/digest.ts`): moderators get **one notice a day**, not an alert per message. For example: *"🤖 FC Fans: your community's agent kept 4 messages out, hid 1 after members' reports and nudged 3 members… 1 appeal needs you (optional)."*
+  - **Quiet moderators:**
+    - Opening a community or its chats counts as being around.
+    - After **2 weeks** with no owner or moderator around, the owner is reminded. After **a month**, the reminder suggests active members with a clean record.
+    - The community page also lists those members, with **Make moderator**, whenever there are fewer than 3 moderators.
+    - Reminders go out at most every 2 weeks.
+  - **Housekeeping** (3-day appeals, digests, reminders) runs in the sweeper every 15 minutes.
     - **Tests** use a predictable mock model, never the real one.
 - **Enforced in code:** posting rules (`canPost`) and every permission check (`lib/social/*`). The browser only reads through RLS. Membership, requests, reports and links are server-written, and reports are visible only to the admins or moderators who handle them.
 

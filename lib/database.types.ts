@@ -217,14 +217,14 @@ isOneToOne: false
                   ]
                 },"communities": {
                   Row: {
-                    "avatar": string,"created_at": string,"description": string | null,"id": string,"name": string,"owner_id": string | null,"rules": string | null,"visibility": string
+                    "avatar": string,"created_at": string,"description": string | null,"digest_sent_at": string | null,"id": string,"mods_nudged_at": string | null,"name": string,"owner_id": string | null,"rules": string | null,"visibility": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "avatar"?: string,"created_at"?: string,"description"?: string | null,"id"?: string,"name": string,"owner_id"?: string | null,"rules"?: string | null,"visibility"?: string
+                    "avatar"?: string,"created_at"?: string,"description"?: string | null,"digest_sent_at"?: string | null,"id"?: string,"mods_nudged_at"?: string | null,"name": string,"owner_id"?: string | null,"rules"?: string | null,"visibility"?: string
                   }
                   Update: {
-                    "avatar"?: string,"created_at"?: string,"description"?: string | null,"id"?: string,"name"?: string,"owner_id"?: string | null,"rules"?: string | null,"visibility"?: string
+                    "avatar"?: string,"created_at"?: string,"description"?: string | null,"digest_sent_at"?: string | null,"id"?: string,"mods_nudged_at"?: string | null,"name"?: string,"owner_id"?: string | null,"rules"?: string | null,"visibility"?: string
                   }
                   Relationships: [
                     
@@ -251,14 +251,14 @@ isOneToOne: false
                   ]
                 },"community_members": {
                   Row: {
-                    "community_id": string,"joined_at": string,"muted_until": string | null,"role": string,"rules_accepted_at": string,"user_id": string
+                    "community_id": string,"joined_at": string,"last_seen_at": string,"muted_until": string | null,"role": string,"rules_accepted_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "community_id": string,"joined_at"?: string,"muted_until"?: string | null,"role"?: string,"rules_accepted_at"?: string,"user_id": string
+                    "community_id": string,"joined_at"?: string,"last_seen_at"?: string,"muted_until"?: string | null,"role"?: string,"rules_accepted_at"?: string,"user_id": string
                   }
                   Update: {
-                    "community_id"?: string,"joined_at"?: string,"muted_until"?: string | null,"role"?: string,"rules_accepted_at"?: string,"user_id"?: string
+                    "community_id"?: string,"joined_at"?: string,"last_seen_at"?: string,"muted_until"?: string | null,"role"?: string,"rules_accepted_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -601,14 +601,14 @@ isOneToOne: false
                   ]
                 },"moderation_events": {
                   Row: {
-                    "action": string,"community_id": string,"confidence": number | null,"conversation_id": string | null,"created_at": string,"excerpt": string | null,"id": string,"message_id": string | null,"reason": string | null,"user_id": string | null,"verdict": string
+                    "action": string,"appeal_resolved_at": string | null,"appeal_resolved_by": string | null,"appeal_status": string | null,"appealed_at": string | null,"community_id": string,"confidence": number | null,"conversation_id": string | null,"created_at": string,"excerpt": string | null,"id": string,"message_id": string | null,"original_text": string | null,"reason": string | null,"user_id": string | null,"verdict": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "action": string,"community_id": string,"confidence"?: number | null,"conversation_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"message_id"?: string | null,"reason"?: string | null,"user_id"?: string | null,"verdict": string
+                    "action": string,"appeal_resolved_at"?: string | null,"appeal_resolved_by"?: string | null,"appeal_status"?: string | null,"appealed_at"?: string | null,"community_id": string,"confidence"?: number | null,"conversation_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"message_id"?: string | null,"original_text"?: string | null,"reason"?: string | null,"user_id"?: string | null,"verdict": string
                   }
                   Update: {
-                    "action"?: string,"community_id"?: string,"confidence"?: number | null,"conversation_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"message_id"?: string | null,"reason"?: string | null,"user_id"?: string | null,"verdict"?: string
+                    "action"?: string,"appeal_resolved_at"?: string | null,"appeal_resolved_by"?: string | null,"appeal_status"?: string | null,"appealed_at"?: string | null,"community_id"?: string,"confidence"?: number | null,"conversation_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"message_id"?: string | null,"original_text"?: string | null,"reason"?: string | null,"user_id"?: string | null,"verdict"?: string
                   }
                   Relationships: [
                     {

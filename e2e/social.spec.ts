@@ -180,3 +180,36 @@ test("businesses in groups: an admin adds one, it answers only when mentioned, a
 
   await Promise.all([luca.close(), marco.close(), shop.close()]);
 });
+
+test("community autopilot: a message kept out can be appealed; a moderator accepts it and it's posted", async ({ browser }) => {
+  const name = `Autopilot FC ${suffix()}`;
+  const luca = await as(browser, "luca");
+  await luca.page.getByRole("navigation").getByRole("link", { name: "Communities" }).click();
+  await luca.page.getByRole("button", { name: "＋ New community" }).click();
+  const form = luca.page.getByRole("form", { name: "New community" });
+  await form.getByLabel("Name").fill(name);
+  await form.getByRole("button", { name: "Create community" }).click();
+  await expect(luca.page).toHaveURL(/\/communities\/[0-9a-f-]+$/);
+  const communityUrl = luca.page.url();
+
+  const paul = await as(browser, "paul");
+  await paul.page.goto(communityUrl);
+  await paul.page.getByLabel("I accept the rules").check();
+  await paul.page.getByRole("button", { name: "Join community" }).click();
+  await paul.page.getByRole("link", { name: /General/ }).click();
+  await send(paul.page, "Click here for free money: tickets giveaway");
+  await expect(paul.page.getByRole("alert").filter({ hasText: "Not posted: this looks like spam" })).toBeVisible();
+  await paul.page.getByTestId("appeal").getByRole("button", { name: "Appeal" }).click();
+  await expect(paul.page.getByTestId("appeal")).toContainText("Appeal sent");
+
+  // The owner sees it in Autopilot and accepts: it's posted as Paul's message.
+  await luca.page.goto(communityUrl);
+  const autopilot = luca.page.getByTestId("autopilot");
+  const item = autopilot.getByTestId("appeal-item").filter({ hasText: "tickets giveaway" });
+  await item.getByRole("button", { name: "Accept: post it" }).click();
+  await expect(autopilot.getByTestId("appeal-item")).toHaveCount(0);
+  await paul.page.reload();
+  await expect(paul.page.getByRole("listitem").filter({ hasText: "Click here for free money: tickets giveaway" })).toBeVisible();
+  await luca.close();
+  await paul.close();
+});

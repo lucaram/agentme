@@ -54,7 +54,7 @@ export async function sendMessage(
   threadId?: string | null,
   /** Community: the author chose "Post anyway" after a nudge. */
   options: { confirmed?: boolean } = {},
-): Promise<{ error?: string; threadId?: string; nudge?: { rule: string; message: string } }> {
+): Promise<{ error?: string; threadId?: string; nudge?: { rule: string; message: string }; appealId?: string }> {
   const { user, agent } = await requireAgent();
   const content = text.trim().slice(0, 4000);
   if (!content || !Id.safeParse(conversationId).success) return {};
@@ -88,7 +88,7 @@ export async function sendMessage(
     if (!guard.ok) return { error: guard.error };
     // Autopilot: an AI check against the community's rules; code decides (refuse, nudge, or post).
     const auto = await autopilot({ communityId: conv.community_id, conversationId, userId: user.id, text: content, level: guard.level, confirmed: Boolean(options.confirmed) });
-    if (auto.action === "refuse") return { error: auto.message };
+    if (auto.action === "refuse") return { error: auto.message, ...(auto.eventId ? { appealId: auto.eventId } : {}) };
     if (auto.action === "nudge") return { nudge: { rule: auto.rule, message: auto.message } };
     flags = [...new Set([...guard.flags, ...auto.flags])];
   }
