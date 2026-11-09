@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addChip, MAX_CUSTOM_TOPICS, type Topic } from "@/lib/profile/topics";
 import { saveAwayAction, saveTopicAction } from "./actions";
+import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
 /** A topic card; the open one stands out (accent border, raised, shadow), and only one is open at a time (same name). */
 const CARD = "group rounded-2xl border border-border bg-surface transition-shadow open:border-accent/60 open:bg-raised open:shadow-2xl open:ring-1 open:ring-black/10";
@@ -137,7 +138,7 @@ function Chips({ chips, title, onPick }: { chips: string[]; title: string; onPic
   );
 }
 
-const TEXTAREA = "input min-h-24 px-4 py-3 text-[15px] leading-6";
+const TEXTAREA = "input px-4 py-3 text-[15px] leading-6";
 const BODY = "space-y-6 border-t border-border px-5 py-5 sm:px-6";
 
 // ------------------------------------------------------------- cards
@@ -178,7 +179,7 @@ export function TopicCard({
       <div className={BODY}>
         <p className="text-sm text-muted">{topic.hint}</p>
         <Section title={label ? "Details" : SECTION_LABEL[topic.key] ?? "Details"} htmlFor={id}>
-          <textarea id={id} className={TEXTAREA} rows={3} maxLength={500} aria-label={topic.title} placeholder={topic.placeholder} value={value} onChange={(e) => setValue(e.target.value)} />
+          <AutoGrowTextarea id={id} className={TEXTAREA} minRows={3} maxRows={10} maxLength={500} aria-label={topic.title} placeholder={topic.placeholder} value={value} onChange={(e) => setValue(e.target.value)} />
           <Chips chips={topic.chips} title={topic.title} onPick={(chip) => setValue((v) => addChip(v, chip))} />
         </Section>
         {topic.alwaysPrivate ? (
@@ -270,7 +271,7 @@ export function CustomTopics({ topics }: { topics: { label: string; value: strin
               <input id="own-topic-name" className="input px-4 py-2.5" aria-label="Topic name" placeholder="e.g. Music I like" maxLength={40} value={label} onChange={(e) => setLabel(e.target.value)} />
             </Section>
             <Section title="Details" htmlFor="own-topic-details">
-              <textarea id="own-topic-details" className={TEXTAREA} rows={3} aria-label="Topic details" placeholder="e.g. Jazz, 90s hip hop, anything live" maxLength={500} value={value} onChange={(e) => setValue(e.target.value)} />
+              <AutoGrowTextarea id="own-topic-details" className={TEXTAREA} minRows={3} maxRows={10} aria-label="Topic details" placeholder="e.g. Jazz, 90s hip hop, anything live" maxLength={500} value={value} onChange={(e) => setValue(e.target.value)} />
             </Section>
             <Section title="Who can see this">
               <ShareTiles share={share} onChange={setShare} name="share-new-topic" />

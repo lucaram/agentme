@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { answerInboxAction, declineInboxAction } from "@/app/(app)/actions";
+import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
 type Variant = "question" | "askAround" | "business";
 
@@ -45,10 +46,11 @@ export function QuestionForm({ itemId, variant = "question" }: { itemId: string;
       }}
     >
       <label className="label" htmlFor={`${itemId}-answer`}>{t.label}</label>
-      <textarea
+      <AutoGrowTextarea
         id={`${itemId}-answer`}
         className="input"
-        rows={2}
+        minRows={2}
+        maxRows={8}
         maxLength={1000}
         required
         placeholder={t.placeholder}

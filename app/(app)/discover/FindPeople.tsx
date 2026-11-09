@@ -7,6 +7,7 @@ import { extractEntries } from "@/lib/people/normalise";
 import { detectCountryCode } from "@/lib/people/country";
 import { LocalTime } from "@/components/LocalTime";
 import type { RawContact } from "@/lib/people/imports";
+import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
 type Sources = Partial<Record<"google" | "microsoft" | "phone" | "typed", string>>;
 type PickerContact = { name?: string[]; email?: string[]; tel?: string[] };
@@ -119,9 +120,10 @@ export function FindPeople({ sources, unsupported }: { sources: Sources; unsuppo
               Contacts from @{unsupported} can&apos;t be read automatically, so type or paste a few instead.
             </p>
           )}
-          <textarea
+          <AutoGrowTextarea
             className="input"
-            rows={3}
+            minRows={3}
+            maxRows={8}
             autoFocus
             value={text}
             onChange={(e) => setText(e.target.value)}

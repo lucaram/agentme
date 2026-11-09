@@ -5,6 +5,7 @@ import { updateGroupInfoAction, updateGroupSettingsAction } from "../../social-a
 import { AvatarPicker } from "@/components/social/Controls";
 import { NameField } from "@/components/NameField";
 import { MAX_GROUP_NAME } from "@/lib/social/limits";
+import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
 export function GroupInfoForm({ groupId, title, description, avatar, avatars }: { groupId: string; title: string; description: string; avatar: string | null; avatars: string[] }) {
   const [state, action, pending] = useActionState(updateGroupInfoAction.bind(null, groupId), undefined);
@@ -14,7 +15,7 @@ export function GroupInfoForm({ groupId, title, description, avatar, avatars }: 
       <NameField id="title" name="title" label="Name" max={MAX_GROUP_NAME} defaultValue={title} />
       <div>
         <label className="label" htmlFor="description">Description</label>
-        <textarea className="input" id="description" name="description" defaultValue={description} rows={2} maxLength={500} />
+        <AutoGrowTextarea className="input" id="description" name="description" defaultValue={description} minRows={2} maxRows={6} maxLength={500} />
       </div>
       {state?.error && <p className="text-sm text-danger" role="alert">{state.error}</p>}
       <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : "Save"}</button>

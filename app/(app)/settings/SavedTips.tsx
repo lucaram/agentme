@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { addTipAction, removeTipAction } from "../people-actions";
+import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
 type Tip = { id: string; topic: string; tip: string };
 
@@ -28,9 +29,9 @@ export function SavedTips({ tips }: { tips: Tip[] }) {
           ))}
         </ul>
       )}
-      <div className="grid gap-2 sm:grid-cols-[1fr_2fr_auto]">
+      <div className="grid items-start gap-2 sm:grid-cols-[1fr_2fr_auto]">
         <input className="input" value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={80} placeholder="Topic, e.g. plumber" aria-label="Tip topic" />
-        <input className="input" value={tip} onChange={(e) => setTip(e.target.value)} maxLength={500} placeholder="Your tip, e.g. Joe's Plumbing, 020 7946 0000" aria-label="Tip" />
+        <AutoGrowTextarea className="input" minRows={1} maxRows={5} value={tip} onChange={(e) => setTip(e.target.value)} maxLength={500} placeholder="Your tip, e.g. Joe's Plumbing, 020 7946 0000" aria-label="Tip" />
         <button
           type="button"
           className="btn-primary"

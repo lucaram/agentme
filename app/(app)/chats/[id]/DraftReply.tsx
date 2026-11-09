@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { sendDraftAction } from "../../actions";
+import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
 /** A reply drafted by the owner's agent: editable, sent only when the owner taps "Send as me". */
 export function DraftReply({ conversationId, messageId, draft, sent }: { conversationId: string; messageId: string; draft: string; sent: boolean }) {
@@ -22,7 +23,7 @@ export function DraftReply({ conversationId, messageId, draft, sent }: { convers
         });
       }}
     >
-      <textarea className="input" rows={2} value={text} maxLength={4000} onChange={(e) => setText(e.target.value)} aria-label="Edit draft" />
+      <AutoGrowTextarea className="input" minRows={2} maxRows={10} value={text} maxLength={4000} onChange={(e) => setText(e.target.value)} aria-label="Edit draft" />
       {error && <p role="alert" className="text-xs text-danger">{error}</p>}
       <div className="flex items-center gap-2">
         <button className="btn-primary" disabled={pending || !text.trim()}>{pending ? "Sending…" : "Send as me"}</button>

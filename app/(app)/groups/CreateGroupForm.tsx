@@ -6,6 +6,7 @@ import { AvatarPicker } from "@/components/social/Controls";
 import { NameField } from "@/components/NameField";
 import { MAX_GROUP_NAME } from "@/lib/social/limits";
 import { ContactSearch } from "@/components/social/ContactSearch";
+import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
 type Person = { id: string; avatar: string; display_name: string; handle: string };
 
@@ -26,7 +27,7 @@ export function CreateGroupForm({ contacts, avatars }: { contacts: Person[]; ava
       <NameField id="group-title" name="title" label="Group name" max={MAX_GROUP_NAME} placeholder="e.g. Sunday football" />
       <div>
         <label className="label" htmlFor="group-description">Description <span className="font-normal text-muted">· optional</span></label>
-        <textarea className="input" id="group-description" name="description" rows={2} maxLength={500} />
+        <AutoGrowTextarea className="input" id="group-description" name="description" minRows={2} maxRows={6} maxLength={500} />
       </div>
       <fieldset>
         <legend className="label">Members (from your contacts)</legend>
