@@ -72,6 +72,27 @@ official A2A client, so the protocol path is always exercised, and external A2A 
 | RLS on every table. Browsers can only read their own data and can't write directly. | `supabase/migrations` |
 | Deleting an account cascades: agent, facts, contacts, private chats, tasks, audit. | `app/(app)/actions.ts` |
 
+### What your agent knows about you
+
+**Settings → 🧠 What your agent knows about you** (`/settings/about`) is a short list of topics. Each one opens to edit and has quick-pick chips.
+
+| Topic | Default | Answers a contact's plan that asks for |
+| --- | --- | --- |
+| 🗓️ When you're free, with **✈️ Away until** (forgotten by itself after that day) | 👥 shared | `availability` |
+| 🍽️ Food & drink | 👥 shared | `food` |
+| 🎯 Hobbies & interests | 👥 shared | `interests` |
+| 📍 Where you usually are | 🔒 private | `location` |
+| 💸 Budget for going out | 🔒 private | `budget` |
+| 🏠 Practical (kids, a dog, step-free access, no car…) | 🔒 private | `practical` |
+| ✨ Your own topics (up to 5, you name them) | your choice | `interests` |
+| 🔒 Private notes | always private (also a DB check) | never |
+
+- **Your own agent** (My Agent) knows all of it, private items included, to help *you*.
+- **Another agent** only ever gets 👥 items in the topics its plan asked for (`selectDisclosableFacts`). Every reply field outside those topics is stripped in code.
+- **Proposals** use shared hobbies, budget and needs only to choose an activity or place, and never mention them.
+- **👁️ Preview** shows exactly what a friend's agent could get.
+- **"Shall I remember…?"** When you tell your agent something about yourself in My Agent (*"I'm vegetarian now"*, *"I'm away until 20 Dec"*, *"I love climbing"*, *"I don't drink"*), it offers to save it. The detection is deterministic (`lib/profile/suggest.ts`), and nothing is saved until you tap **Save**.
+
 ## Plans, blocks and "ask my human" (V2)
 
 - **Plans are made of steps (blocks)** run by the plan engine (`lib/plans/engine.ts`). Each block has its own handler in

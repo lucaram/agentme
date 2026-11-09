@@ -22,7 +22,7 @@ const inbox = () => import("@/lib/plans/inbox");
 async function setPaulAvailability(value: string, disclosure: "private" | "contacts") {
   await admin()
     .from("agent_facts")
-    .upsert({ agent_id: ids.paul.id, category: "availability", value, disclosure }, { onConflict: "agent_id,category" });
+    .upsert({ agent_id: ids.paul.id, category: "availability", label: "", value, disclosure }, { onConflict: "agent_id,category,label" });
 }
 
 async function startTask() {

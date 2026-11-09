@@ -7,7 +7,7 @@
  */
 import { z } from "zod";
 import { displayClock, heuristicIntent, splitList } from "@/lib/coordination/heuristics";
-import { CATEGORY_LABELS, isRequestableCategory } from "@/lib/policy/disclosure";
+import { CATEGORY_LABELS, REQUESTABLE_CATEGORIES, isRequestableCategory } from "@/lib/policy/disclosure";
 import { MAX_PLAN_PEOPLE, type NewStep, type TaskParsed } from "./types";
 import { stepWords } from "./wording";
 
@@ -20,7 +20,9 @@ export const StepDraftSchema = z.object({
   type: z.enum(COMPOSABLE_STEPS),
   event: z.string().max(60).describe("collect/rsvp: short event name, e.g. 'dinner', 'Five-a-side'."),
   window: z.string().max(80).describe("collect: when, in the owner's words ('Saturday evening'). rsvp: the fixed day."),
-  categories: z.array(z.enum(["availability", "food", "location"])).describe("collect: what to ask agents for."),
+  categories: z
+    .array(z.enum(REQUESTABLE_CATEGORIES))
+    .describe("collect: what to ask agents for (availability, food, location, interests, practical, budget). Ask only for what the plan needs."),
   time: z.string().max(5).describe("rsvp: fixed start time, 24h HH:MM."),
   min: z.number().int().min(0).max(MAX_PLAN_PEOPLE).describe("rsvp: minimum people (incl. owner), 0 if none."),
   max: z.number().int().min(0).max(MAX_PLAN_PEOPLE).describe("rsvp: maximum places (incl. owner), 0 if none."),

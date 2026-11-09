@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { REQUESTABLE_CATEGORIES } from "@/lib/policy/disclosure";
 
 export const INTENT_KINDS = ["coordinate", "rsvp", "poll", "question", "assign", "announce", "chat"] as const;
 export type IntentKind = (typeof INTENT_KINDS)[number];
@@ -13,8 +14,10 @@ export const IntentSchema = z.object({
   window: z.string().max(80).describe('When, in the owner\'s words, e.g. "Saturday evening". Empty if not stated.'),
   participants: z.array(z.string()).describe("Handles mentioned with @, without the @."),
   categories: z
-    .array(z.enum(["availability", "food", "location"]))
-    .describe("coordinate only: which kinds of information the agent needs from the other agents."),
+    .array(z.enum(REQUESTABLE_CATEGORIES))
+    .describe(
+      "coordinate only: which kinds of information the agent needs from the other agents. availability (when they're free), food (dinners, lunches, drinks), location (where they usually are, to pick a place nearby), interests (choosing an activity), practical (needs like step-free access, kids, no car), budget (choosing a place by price). Ask only for what the plan needs.",
+    ),
   question: z
     .string()
     .max(500)
@@ -62,6 +65,10 @@ export const CoordinationReplySchema = z.object({
   availability: z.string().max(200).nullable(),
   food: z.string().max(200).nullable(),
   location: z.string().max(200).nullable(),
+  // Newer topics: optional, so replies stored before they existed still read.
+  interests: z.string().max(200).nullable().default(null),
+  budget: z.string().max(200).nullable().default(null),
+  practical: z.string().max(200).nullable().default(null),
   summary: z.string().max(240),
 });
 export type CoordinationReply = z.infer<typeof CoordinationReplySchema>;

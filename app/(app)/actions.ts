@@ -20,7 +20,6 @@ import {
   updateDraft,
 } from "@/lib/coordination/orchestrator";
 import type { PlanDraft } from "@/lib/plans/compose";
-import { FACT_CATEGORIES } from "@/lib/policy/disclosure";
 import { describeRetry, hit } from "@/lib/limits";
 import { continueWithoutWaiting } from "@/lib/plans/engine";
 import { answerInboxItem, declineInboxItem } from "@/lib/plans/inbox";
@@ -36,6 +35,7 @@ import { handOverIfOwnerLeft } from "@/lib/social/groups";
 import { answerMentions } from "@/lib/social/businesses";
 import { renameThread, resolveThread } from "@/lib/agents/threads";
 import { withThread } from "@/lib/agents/thread-context";
+import { answerSuggestion, offerProfileSave } from "@/lib/profile/offer";
 import { businessesOnlyOwnedBy, forgetPerson, realPerson, signInAs } from "@/lib/identities";
 
 const Id = z.uuid();
@@ -78,7 +78,11 @@ export async function sendMessage(conversationId: string, text: string, threadId
 
   await withUsageContext({ userId: user.id, agentId: agent.id }, async () => {
     if (conv.kind === "my_agent" && thread) {
-      await withThread({ conversationId, threadId: thread }, () => handleOwnerMessage({ userId: user.id, agent, conversationId, text: content }));
+      await withThread({ conversationId, threadId: thread }, async () => {
+        await handleOwnerMessage({ userId: user.id, agent, conversationId, text: content });
+        // "I'm vegetarian now": offer to remember it (nothing is saved until you tap Save).
+        await offerProfileSave(agent, conversationId, content);
+      });
     } else if (conv.kind === "agent_chat") {
       await askAgent({ userId: user.id, agent, conversationId, text: content });
     } else if (summoned) {
@@ -93,6 +97,16 @@ export async function sendMessage(conversationId: string, text: string, threadId
   });
   revalidatePath(`/chats/${conversationId}`);
   return thread ? { threadId: thread } : {};
+}
+
+/** "Shall I remember …?" in My Agent: save it to your profile, or not. */
+export async function answerFactSuggestionAction(messageId: string, accept: boolean): Promise<{ error?: string }> {
+  const { user, agent } = await requireAgent();
+  if (!Id.safeParse(messageId).success) return { error: "Not found." };
+  const result = await answerSuggestion(user.id, agent, messageId, Boolean(accept));
+  revalidatePath("/chats", "layout");
+  revalidatePath("/settings/about");
+  return result.ok ? {} : { error: result.error };
 }
 
 /** Rename a My Agent thread. */
@@ -362,7 +376,6 @@ export async function leaveConversation(conversationId: string) {
 
 // ------------------------------------------------------------- settings / permissions
 
-const FactInput = z.object({ value: z.string().trim().max(500), share: z.boolean() });
 
 export async function saveSettings(form: FormData) {
   const { agent } = await requireAgent();
@@ -381,20 +394,7 @@ export async function saveSettings(form: FormData) {
     })
     .eq("id", agent.id);
 
-  if (agent.type === "personal") {
-    for (const category of FACT_CATEGORIES) {
-      const fact = FactInput.parse({ value: String(form.get(category) ?? ""), share: form.get(`share_${category}`) === "on" });
-      if (!fact.value) {
-        await db.from("agent_facts").delete().eq("agent_id", agent.id).eq("category", category);
-        continue;
-      }
-      await db.from("agent_facts").upsert(
-        // Private notes can never be shared.
-        { agent_id: agent.id, category, value: fact.value, disclosure: category !== "notes" && fact.share ? "contacts" : "private" },
-        { onConflict: "agent_id,category" },
-      );
-    }
-  }
+  // What the agent knows about you is edited in Settings → What your agent knows (its own page).
   // Business details are edited in My Business (they'd be wiped if saved from here).
   revalidatePath("/settings");
   redirect("/settings?saved=1");

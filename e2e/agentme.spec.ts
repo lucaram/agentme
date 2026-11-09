@@ -506,3 +506,65 @@ test("My Agent: one thread per request; an update brings it back with a badge, a
   await luca.close();
   await marco.close();
 });
+
+test("what your agent knows: topics with quick picks, your own topic, a preview, and “Shall I remember…?” from My Agent", async ({ browser }) => {
+  const id = Date.now().toString(36).slice(-6);
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto("/signup");
+  await page.getByLabel("Email").fill(`about${id}@agentme.test`);
+  await page.getByLabel("Password").fill("a-good-password");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByLabel("Your name").fill("Ada");
+  await page.getByLabel("Agent address").fill(`ada${id}`);
+  await page.getByRole("button", { name: "Create my agent" }).click();
+  await expect(page.getByText(`I'm @ada${id}, your agent`)).toBeVisible();
+
+  await page.goto("/settings");
+  await page.getByTestId("about-you-link").click();
+  await expect(page.getByRole("heading", { name: "What your agent knows about you" })).toBeVisible();
+
+  // Hobbies from quick picks, shared by default.
+  const hobbies = page.getByTestId("topic-interests");
+  await hobbies.locator("summary").click();
+  await hobbies.getByRole("button", { name: "＋ Climbing" }).click();
+  await hobbies.getByRole("button", { name: "＋ Cinema" }).click();
+  await expect(hobbies.getByRole("textbox", { name: "Hobbies & interests", exact: true })).toHaveValue("Climbing, Cinema");
+  await expect(hobbies.getByRole("radio", { name: /My contacts' agents/ })).toBeChecked();
+  await hobbies.getByRole("button", { name: "Save" }).click();
+  await expect(hobbies.getByRole("status")).toContainText("Saved");
+
+  // Budget starts private.
+  const budget = page.getByTestId("topic-budget");
+  await budget.locator("summary").click();
+  await budget.getByRole("button", { name: "＋ ££ mid-range" }).click();
+  await expect(budget.getByRole("radio", { name: /Only my agent/ })).toBeChecked();
+  await budget.getByRole("button", { name: "Save" }).click();
+  await expect(budget.getByRole("status")).toContainText("Saved");
+
+  // A topic of your own.
+  const own = page.getByTestId("add-own-topic");
+  await own.locator("summary").click();
+  await own.getByLabel("Topic name").fill("Music I like");
+  await own.getByLabel("Topic details").fill("Jazz");
+  await own.getByRole("button", { name: "Add topic" }).click();
+  await expect(page.getByTestId("topic-custom")).toContainText("Music I like");
+
+  // What friends' agents could get.
+  const preview = page.getByTestId("profile-preview");
+  await preview.locator("summary").click();
+  await expect(preview).toContainText("Climbing, Cinema; Music I like: Jazz");
+  await expect(preview).toContainText("Never shared: 💸 Budget for going out");
+
+  // Telling the agent: it offers to remember, and saves only on Save.
+  await page.goto("/chats");
+  await page.getByRole("link", { name: /My Agent/ }).click();
+  await send(page, "I'm vegetarian now");
+  const offer = page.getByTestId("fact-suggestion");
+  await expect(offer).toBeVisible();
+  await offer.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByTestId("fact-saved")).toBeVisible();
+  await page.goto("/settings/about");
+  await expect(page.getByTestId("topic-food")).toContainText("vegetarian");
+  await context.close();
+});

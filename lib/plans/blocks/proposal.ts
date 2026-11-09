@@ -3,6 +3,7 @@ import { adminClient } from "@/lib/supabase/admin";
 import { llm } from "@/lib/llm";
 import { asJson } from "@/lib/data/json";
 import { getFacts } from "@/lib/data/agents";
+import { factsByRequest } from "@/lib/policy/disclosure";
 import { postMessage } from "@/lib/data/chat";
 import { PROPOSAL_SYSTEM, wrapUntrusted } from "@/lib/agents/prompts";
 import { displayClock, heuristicPlan, relevantClause, type ParticipantReply } from "@/lib/coordination/heuristics";
@@ -31,6 +32,11 @@ export const runProposal: StepHandler = async ({ task, organiser, parsed, result
       handle: organiser.handle,
       availability: ownAvailability ? relevantClause(ownAvailability, parsed.window) : null,
       food: ownFacts.find((f) => f.category === "food")?.value ?? null,
+      // The organiser's interests and needs count too, but only what they chose to share:
+      // the proposal is seen by everyone in the plan.
+      ...Object.fromEntries(
+        (["interests", "budget", "practical"] as const).map((c) => [c, factsByRequest(ownFacts.filter((f) => f.disclosure === "contacts"))[c] ?? null]),
+      ),
     };
 
     const proposal = await draftProposal(organiser.handle, [own, ...collected], parsed);

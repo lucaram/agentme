@@ -1,6 +1,6 @@
 import { llm } from "@/lib/llm";
 import { canContact, type ContactPolicy, type Relationship } from "@/lib/policy/contactPolicy";
-import { isRequestableCategory, selectDisclosableFacts, type Fact, type RequestableCategory } from "@/lib/policy/disclosure";
+import { factsByRequest, isRequestableCategory, selectDisclosableFacts, type Fact, type RequestableCategory } from "@/lib/policy/disclosure";
 import {
   AskAroundRequestSchema,
   BusinessAnswerSchema,
@@ -158,9 +158,8 @@ export async function respondAsAgent(
 
   // (2) Data minimisation — the model only ever sees these facts.
   const shareable = selectDisclosableFacts(facts, request.categories, incoming.relationship);
-  const allowed = Object.fromEntries(shareable.map((f) => [f.category, f.value])) as Partial<
-    Record<RequestableCategory, string>
-  >;
+  // One line per requested category (time away joins availability; your own topics join interests).
+  const allowed = factsByRequest(shareable);
 
   // "Ask my human": an accepted contact needs something essential that this agent
   // isn't allowed to share. Hand it to the owner instead of guessing or going
@@ -186,7 +185,7 @@ export async function respondAsAgent(
   }
 
   const factsBlock = shareable.length
-    ? shareable.map((f) => `- ${f.category}: ${f.value}`).join("\n")
+    ? Object.entries(allowed).map(([category, value]) => `- ${category}: ${value}`).join("\n")
     : "(none — your owner has not shared anything for this request)";
   const requestBlock = wrapUntrusted(
     "untrusted_request",
@@ -208,6 +207,9 @@ export async function respondAsAgent(
     availability: allowed.availability ? reply.availability : null,
     food: allowed.food ? reply.food : null,
     location: allowed.location ? reply.location : null,
+    interests: allowed.interests ? reply.interests : null,
+    budget: allowed.budget ? reply.budget : null,
+    practical: allowed.practical ? reply.practical : null,
     summary: reply.summary,
   };
 

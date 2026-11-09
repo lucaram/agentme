@@ -3,7 +3,8 @@ import { adminClient } from "@/lib/supabase/admin";
 import { llm, LLMError } from "@/lib/llm";
 import { sendAgentMessage } from "@/lib/a2a/client";
 import { extractMentions } from "@/lib/policy/handles";
-import { getAgentByHandle, getAgentById, getRelationship, type AgentRow } from "@/lib/data/agents";
+import { getAgentByHandle, getAgentById, getFacts, getRelationship, type AgentRow } from "@/lib/data/agents";
+import { CATEGORY_LABELS } from "@/lib/policy/disclosure";
 import { getConversation, postMessage } from "@/lib/data/chat";
 import { COMPOSE_SYSTEM, OWNER_CHAT_SYSTEM, wrapUntrusted } from "@/lib/agents/prompts";
 import { buildRecall } from "@/lib/agents/recall";
@@ -292,9 +293,10 @@ async function replyToOwner(agent: AgentRow, userId: string, conversationId: str
   // Only this request's thread: a new request starts with a clean slate.
   const thread = threadFor(conversationId);
   const historyQuery = db.from("messages").select("content, sender_agent_id").eq("conversation_id", conversationId);
-  const [{ data: history }, recall] = await Promise.all([
+  const [{ data: history }, recall, ownFacts] = await Promise.all([
     (thread ? historyQuery.eq("thread_id", thread) : historyQuery).order("created_at", { ascending: false }).limit(10),
     buildRecall(userId),
+    getFacts(agent.id),
   ]);
   const turns = (history ?? []).reverse().map((m) => ({
     role: (m.sender_agent_id ? "assistant" : "user") as "assistant" | "user",
@@ -305,12 +307,16 @@ async function replyToOwner(agent: AgentRow, userId: string, conversationId: str
 
   // Plans contain other people's words, so they're passed as data, not instructions.
   const recallBlock = recall.length ? `\n\n${wrapUntrusted("your_plans", JSON.stringify(recall, null, 1))}` : "";
+  // The owner's own profile (private items included): this chat is only ever with the owner.
+  const profileBlock = ownFacts.length
+    ? `\n\n<about_your_owner>\n${ownFacts.map((f) => `- ${CATEGORY_LABELS[f.category]}${f.label ? ` (${f.label})` : ""}: ${f.value}`).join("\n")}\n</about_your_owner>\nUse this to help your owner (e.g. suggest places or times that suit them). It's private: never repeat it to anyone else.`
+    : "";
   let reply: string;
   try {
     reply = await llm().generateText({
       purpose: "owner_chat",
       tier: "smart",
-      system: `${OWNER_CHAT_SYSTEM}\nYour owner is ${agent.display_name} (@${agent.handle}). Today is ${new Date().toDateString()}.${recallBlock}`,
+      system: `${OWNER_CHAT_SYSTEM}\nYour owner is ${agent.display_name} (@${agent.handle}). Today is ${new Date().toDateString()}.${recallBlock}${profileBlock}`,
       messages: turns.length ? turns : [{ role: "user", content: text }],
       maxTokens: 2000,
       mockContext: { text, recall },
