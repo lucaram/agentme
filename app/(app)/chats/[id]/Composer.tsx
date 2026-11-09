@@ -94,7 +94,7 @@ export function Composer({
       {error && <p className="mb-1 text-xs text-danger" role="alert">{error}</p>}
       {/* One rounded box with the send button inside, like ChatGPT / Claude / Gemini. */}
       <form
-        className="flex items-end gap-2 rounded-3xl border border-border bg-surface py-1.5 pl-4 pr-1.5 shadow-sm transition-colors focus-within:border-accent"
+        className="flex items-end gap-2 rounded-3xl border border-border bg-surface py-2 pl-4 pr-2 shadow-sm transition-colors focus-within:border-accent"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
@@ -104,7 +104,7 @@ export function Composer({
           ref={ref}
           aria-label="Message"
           rows={1}
-          className="thin-scrollbar block min-h-9 flex-1 resize-none overflow-hidden bg-transparent py-1.5 text-sm leading-6 outline-none placeholder:text-muted"
+          className="thin-scrollbar block min-h-10 flex-1 resize-none overflow-hidden bg-transparent py-2 text-[15px] leading-6 outline-none placeholder:text-muted"
           placeholder={placeholder}
           onInput={fit}
           onKeyDown={(e) => {
@@ -117,7 +117,7 @@ export function Composer({
         <button
           aria-label="Send"
           title="Send (Enter) · New line: Shift+Enter"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-lg font-semibold text-white transition hover:opacity-90 disabled:opacity-50 dark:text-black"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-lg font-semibold text-white transition hover:opacity-90 disabled:opacity-50 dark:text-black"
           disabled={pending}
         >
           {pending ? "…" : "↑"}
