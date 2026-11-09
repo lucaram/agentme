@@ -50,9 +50,22 @@ export default async function AboutYouPage() {
         </p>
       </div>
 
-      <details className="card" data-testid="profile-preview">
-        <summary className="font-semibold">👁️ Preview what friends&apos; agents can see</summary>
-        <div className="mt-2 space-y-2 text-sm">
+      {/* Not a topic: a read-only view of what's shared, in the agents' colours. */}
+      <details className="group rounded-2xl border border-agent-border bg-agent transition-shadow open:shadow-2xl" data-testid="profile-preview">
+        <summary className="flex items-center gap-3 px-4 py-3">
+          <span className="text-xl" aria-hidden>👁️</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">Preview what friends&apos; agents can see</span>
+            <span className="block text-xs text-muted">
+              Exactly what a contact&apos;s agent could get when their plan asks ·{" "}
+              {REQUESTABLE_CATEGORIES.filter((c) => preview[c]).length
+                ? `${REQUESTABLE_CATEGORIES.filter((c) => preview[c]).length} ${REQUESTABLE_CATEGORIES.filter((c) => preview[c]).length === 1 ? "topic" : "topics"} shared`
+                : "nothing shared yet"}
+            </span>
+          </span>
+          <span className="text-muted transition group-open:rotate-90" aria-hidden>›</span>
+        </summary>
+        <div className="space-y-2 border-t border-agent-border px-4 py-3 text-sm">
           <p className="hint">
             For example, if Marco plans a dinner with you, his agent asks for when you&apos;re free and food &amp; drink, and gets only what you shared below
             in those topics.
