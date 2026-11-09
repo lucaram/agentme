@@ -3,16 +3,15 @@
 import { useActionState, useState, useTransition } from "react";
 import { updateGroupInfoAction, updateGroupSettingsAction } from "../../social-actions";
 import { AvatarPicker } from "@/components/social/Controls";
+import { NameField } from "@/components/NameField";
+import { MAX_GROUP_NAME } from "@/lib/social/limits";
 
 export function GroupInfoForm({ groupId, title, description, avatar, avatars }: { groupId: string; title: string; description: string; avatar: string | null; avatars: string[] }) {
   const [state, action, pending] = useActionState(updateGroupInfoAction.bind(null, groupId), undefined);
   return (
     <form action={action} className="space-y-3">
       <AvatarPicker options={avatars} initial={avatar} />
-      <div>
-        <label className="label" htmlFor="title">Name</label>
-        <input className="input" id="title" name="title" defaultValue={title} maxLength={80} required />
-      </div>
+      <NameField id="title" name="title" label="Name" max={MAX_GROUP_NAME} defaultValue={title} />
       <div>
         <label className="label" htmlFor="description">Description</label>
         <textarea className="input" id="description" name="description" defaultValue={description} rows={2} maxLength={500} />
