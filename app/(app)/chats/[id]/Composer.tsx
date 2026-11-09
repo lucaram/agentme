@@ -12,6 +12,7 @@ export function Composer({
   placeholder,
   thinkingLabel,
   examples,
+  examplesHint,
   collapseExamples = false,
 }: {
   conversationId: string;
@@ -19,8 +20,10 @@ export function Composer({
   threadId?: string;
   placeholder: string;
   thinkingLabel?: string;
-  /** Template chips: clicking one fills the box so the owner can adjust it before sending. */
-  examples?: { label: string; text: string }[];
+  /** 💡 Ideas: clicking one fills the box (to adjust before sending), or opens a page (href). */
+  examples?: { label: string; text?: string; href?: string }[];
+  /** A line shown with the ideas (e.g. "Only you see @agent and its answer."). */
+  examplesHint?: string;
   /** Regular users: the chips stay behind a small "💡 Ideas" button. */
   collapseExamples?: boolean;
 }) {
@@ -77,7 +80,8 @@ export function Composer({
               type="button"
               className="shrink-0 rounded-full border border-border bg-surface px-3 py-1 text-xs hover:bg-accent-soft"
               onClick={() => {
-                if (!ref.current) return;
+                if (ex.href) return router.push(ex.href);
+                if (!ref.current || !ex.text) return;
                 ref.current.value = ex.text;
                 fit();
                 ref.current.focus();
@@ -88,6 +92,7 @@ export function Composer({
           ))}
         </div>
       )}
+      {examples && showExamples && examplesHint && <p className="-mt-1 mb-2 text-[11px] text-muted">{examplesHint}</p>}
       {pending && (thinkingLabel || summoned) && (
         <p className="mb-1 text-xs text-muted" aria-live="polite">{thinkingLabel ?? "Your agent is thinking… (only you will see the answer)"}</p>
       )}

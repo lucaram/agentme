@@ -16,7 +16,7 @@ const GROUPS: { key: ThreadGroup; title: string }[] = [
  * by what they need, newest activity first, each with its own badge. Typing
  * below starts a new request.
  */
-export async function MyAgentHome({ conversationId, examples, now }: { conversationId: string; examples: { label: string; text: string }[]; now: number }) {
+export async function MyAgentHome({ conversationId, examples, now }: { conversationId: string; examples: { label: string; text?: string; href?: string }[]; now: number }) {
   const supabase = await createClient();
   const [{ data }, { count: requestsMade }] = await Promise.all([
     supabase.rpc("my_agent_threads"),

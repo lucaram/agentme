@@ -17,6 +17,7 @@ import { InviteLink } from "./InviteLink";
 import { MessageActions } from "./MessageActions";
 import { OpenRequests } from "@/components/requests/OpenRequests";
 import { MyAgentHome } from "./MyAgentHome";
+import { businessIdeas, chatIdeas, personalIdeas, type Idea } from "@/lib/agents/ideas";
 import { ThreadTitle } from "./ThreadTitle";
 import type { Database } from "@/lib/database.types";
 import { AgentName } from "@/components/AgentName";
@@ -110,25 +111,33 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
           .maybeSingle()
       : { data: null };
 
-  // Template chips for My Agent, filled with the owner's own contacts.
-  let examples: { label: string; text: string }[] | undefined;
+  // 💡 Ideas for My Agent: what the agent can do, filled with real names (see lib/agents/ideas.ts).
+  let examples: Idea[] | undefined;
   if (conv.kind === "my_agent") {
-    const { data: contacts } = await supabase.from("contacts").select("requester_agent, addressee_agent").eq("status", "accepted");
-    const friends = (contacts ?? [])
-      .map((c) => byId.get(c.requester_agent === agent.id ? c.addressee_agent : c.requester_agent))
-      .filter((a) => a && a.type === "personal")
-      .map((a) => `@${a!.handle}`);
-    const [a, b] = [friends[0] ?? "@friend", friends[1] ?? friends[0] ?? "@friend"];
-    const both = a === b ? a : `${a} and ${b}`;
-    examples = [
-      { label: "🍝 Dinner", text: `Arrange dinner with ${both} on Saturday evening` },
-      { label: "⚽ Five-a-side", text: `Organise five-a-side on Thursday at 7pm with ${both}, need 3, someone bring a ball and bibs` },
-      { label: "📊 Poll", text: `Ask ${both} to vote: Italian, Thai or Indian` },
-      { label: "🧺 Who brings what", text: `Ask ${both} who brings what for Saturday: drinks, dessert and bread` },
-      { label: "🚗 Carpool", text: `Ask ${both} who drives which day: Monday, Tuesday, Wednesday` },
-      { label: "💬 Question", text: `Ask ${a} if they can help me move on Sunday` },
-      { label: "📣 Announcement", text: `Tell ${both}: the trip is tomorrow, bring lunch` },
-    ];
+    if (agent.type === "business") {
+      examples = businessIdeas();
+    } else {
+      const [{ data: contacts }, { data: agentChats }, { data: myTasks }, { count: introductions }] = await Promise.all([
+        supabase.from("contacts").select("requester_agent, addressee_agent").eq("status", "accepted"),
+        supabase.from("conversations").select("target_agent").eq("kind", "agent_chat"),
+        supabase.from("tasks").select("parsed").order("created_at", { ascending: false }).limit(100),
+        supabase.from("introductions").select("*", { count: "exact", head: true }).eq("introducer_agent", agent.id),
+      ]);
+      const known = [
+        ...(contacts ?? []).map((c) => byId.get(c.requester_agent === agent.id ? c.addressee_agent : c.requester_agent)),
+        ...(agentChats ?? []).map((c) => (c.target_agent ? byId.get(c.target_agent) : undefined)),
+      ].filter((a) => a !== undefined);
+      const used = new Set<string>((myTasks ?? []).flatMap((t) => {
+        const p = (t.parsed ?? {}) as { kind?: string; venue?: unknown };
+        return [p.kind ?? "", p.venue ? "venue" : ""];
+      }));
+      if (introductions) used.add("introduce");
+      examples = personalIdeas({
+        friends: known.filter((a) => a.type === "personal").map((a) => a.handle),
+        business: known.find((a) => a.type === "business")?.handle ?? null,
+        used,
+      });
+    }
     // The list of requests (or an unknown thread): My Agent's home.
     if (!threadParam || (threadParam !== "new" && !thread)) return <MyAgentHome conversationId={id} examples={examples} now={Date.parse(new Date().toISOString())} />;
   }
@@ -352,7 +361,17 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                   : "Message — or @agent to ask your agent (only you see it)"
         }
         thinkingLabel={conv.kind === "dm" || conv.kind === "group" || conv.kind === "channel" ? undefined : "Agent is thinking…"}
-        examples={thread ? undefined : examples}
+        examples={
+          isMyAgent
+            ? thread
+              ? undefined
+              : examples
+            : conv.kind === "group" || conv.kind === "channel"
+              ? chatIdeas({ kind: conv.kind, business: mentionable[0] ?? null, moderator: canModerate })
+              : undefined
+        }
+        collapseExamples={!isMyAgent}
+        examplesHint={isMyAgent ? undefined : "Only you see @agent and its answer."}
       />
       )}
     </div>

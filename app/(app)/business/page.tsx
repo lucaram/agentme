@@ -79,7 +79,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
           {words(about).toLocaleString("en-GB")} words about your business · {sources.filter((s) => s.status === "ok").length} of {sources.length} links read (
           {readWords.toLocaleString("en-GB")} words) · {faqs.length} questions &amp; answers
         </p>
-        <div className="mt-4 rounded-xl border border-dashed border-border p-3">
+        <div id="test-your-agent" className="mt-4 scroll-mt-40 rounded-xl border border-dashed border-border p-3">
           <h3 className="text-sm font-semibold">🧪 Test your agent</h3>
           <p className="mb-2 text-xs text-muted">See how your agent would answer a customer, before anyone asks. It&apos;s only a preview: nothing is sent to anyone.</p>
           <TryIt />
@@ -99,7 +99,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
         </span>
       </section>
 
-      <section className="card space-y-3" aria-label="Book or order">
+      <section id="book-or-order" className="card scroll-mt-40 space-y-3" aria-label="Book or order">
         <div>
           <h2 className="font-semibold">How customers book or order</h2>
           <p className="hint">
@@ -115,7 +115,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
         <BusinessInfoForm about={about} customers={info.customers ?? ""} />
       </section>
 
-      <section className="card space-y-3" aria-label="Links your agent reads">
+      <section id="links" className="card scroll-mt-40 space-y-3" aria-label="Links your agent reads">
         <h2 className="font-semibold">Links your agent reads</h2>
         <SourcesManager sources={sources} />
       </section>
