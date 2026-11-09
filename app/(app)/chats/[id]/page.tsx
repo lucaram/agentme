@@ -20,6 +20,7 @@ import { MyAgentHome } from "./MyAgentHome";
 import { FactSuggestion } from "./FactSuggestion";
 import { HiddenAppeal } from "./HiddenAppeal";
 import { touchSeen } from "@/lib/social/digest";
+import { dmState } from "@/lib/people/dm";
 import { businessIdeas, chatIdeas, personalIdeas, type Idea } from "@/lib/agents/ideas";
 import { ThreadTitle } from "./ThreadTitle";
 import type { Database } from "@/lib/database.types";
@@ -154,8 +155,9 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
     if (!threadParam || (threadParam !== "new" && !thread)) return <MyAgentHome conversationId={id} examples={examples} now={Date.parse(new Date().toISOString())} />;
   }
   const others = conv.conversation_members.filter((m) => m.user_id !== user.id).map((m) => byOwner.get(m.user_id));
-  // The other person left this direct message: keep it readable, but closed.
-  const dmClosed = conv.kind === "dm" && others.length === 0;
+  // A direct message stays readable but closed when the other person left, or you're no longer contacts (removed or blocked).
+  const dm = conv.kind === "dm" ? await dmState(id, user.id, agent.id) : null;
+  const dmClosed = dm !== null && dm.state !== "open";
   const shared = conv.kind === "group" || conv.kind === "channel";
   const community = conv.kind === "channel" && conv.community_id ? (await supabase.from("communities").select("id, name, avatar").eq("id", conv.community_id).maybeSingle()).data : null;
   // Being here counts as being around (moderators who are never around get help: lib/social/digest.ts).
@@ -187,9 +189,11 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
             ? others.length > 6
               ? `${others.length + 1} members`
               : `Members: ${["you", ...others.map((o) => (o ? `@${o.handle}` : "someone"))].join(", ")}`
-            : dmClosed
+            : dm?.state === "left"
               ? "They left this chat"
-              : "Direct message";
+              : dm?.state === "removed"
+                ? "Not contacts any more"
+                : "Direct message";
 
   return (
     <div className="flex flex-1 flex-col">
@@ -365,8 +369,19 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
       )}
       {dmClosed ? (
         <p className="mt-4 rounded-2xl border border-border bg-surface px-4 py-3 text-center text-sm text-muted" data-testid="dm-closed">
-          You can&apos;t send messages here any more. To talk again, open them from{" "}
-          <Link href="/contacts" className="text-accent underline">Contacts</Link> and start a new chat.
+          {dm?.state === "removed" ? (
+            <>
+              You&apos;re no longer contacts.{" "}
+              {dm.otherHandle && <Link href={`/u/${dm.otherHandle}`} className="text-accent underline">Send a contact request</Link>} to message again.
+            </>
+          ) : dm?.state === "blocked" ? (
+            "You can't message this person."
+          ) : (
+            <>
+              You can&apos;t send messages here any more. To talk again, open them from{" "}
+              <Link href="/contacts" className="text-accent underline">Contacts</Link> and start a new chat.
+            </>
+          )}
         </p>
       ) : (
       <Composer
