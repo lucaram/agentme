@@ -9,7 +9,10 @@ import { getAgentForUser } from "@/lib/data/agents";
 import { getOrCreateMyAgentConversation, postMessage } from "@/lib/data/chat";
 import { validateHandle } from "@/lib/policy/handles";
 import { asJson } from "@/lib/data/json";
-import { AVATARS } from "@/lib/avatars";
+import { avatarsFor } from "@/lib/avatars";
+import { normaliseSite } from "@/lib/business/site";
+import { allowLocal } from "@/lib/business/fetch";
+import { attachWebsite } from "@/lib/business/site-setup";
 import { safeNext } from "@/lib/next-path";
 import { registerAccountEmail } from "@/lib/people/matching";
 
@@ -29,7 +32,7 @@ const Base = z.object({
   type: z.enum(["personal", "business"]),
   display_name: z.string().trim().min(MIN_NAME, "Enter a name (at least 2 characters).").max(MAX_BUSINESS_NAME),
   handle: z.string(),
-  avatar: z.string().refine((a) => AVATARS.includes(a), "Pick an avatar."),
+  avatar: z.string(),
 });
 
 const shareFlag = (v: FormDataEntryValue | null) => (v === "on" ? "contacts" : "private") as "contacts" | "private";
@@ -71,12 +74,19 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   if (parsed.data.display_name.length > maxNameFor(parsed.data.type)) return { error: `Keep the name to ${maxNameFor(parsed.data.type)} characters.` };
+  if (!avatarsFor(parsed.data.type).includes(parsed.data.avatar)) return { error: "Pick an avatar." };
   const handle = validateHandle(parsed.data.handle);
   if (!handle.ok) return { error: handle.reason };
 
   const isBusiness = parsed.data.type === "business";
   const detailsError = checkDetails(form, isBusiness);
   if (detailsError) return { error: detailsError };
+  // "Have a website?": checked before anything is created; read once the agent exists.
+  const website = isBusiness ? optional(form.get("website")) : null;
+  if (website) {
+    const site = normaliseSite(website, { allowLocal: allowLocal() });
+    if (!site.ok) return { error: `Website: ${site.error}` };
+  }
   const faqs = isBusiness
     ? [1, 2, 3]
         .map((i) => ({ q: optional(form.get(`faq_q_${i}`)), a: optional(form.get(`faq_a_${i}`)) }))
@@ -131,6 +141,8 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
       ? `Hi! I'm @${handle.handle}, your business agent. I answer visitors' questions using only the information you gave me, and I never take bookings or payments.`
       : `Hi ${parsed.data.display_name}! I'm @${handle.handle}, your agent. Connect with friends, then ask me something like "Arrange dinner with @marco on Saturday evening".`,
   });
+  // A website: read it all now, then review what the agent learned (step by step) before going live.
+  if (website && (await attachWebsite(agent.id, website, user)).ok) redirect("/business/setup");
   // Came from an invite or personal link: go back there to finish joining/connecting.
   redirect(next || `/chats/${conv.id}`);
 }

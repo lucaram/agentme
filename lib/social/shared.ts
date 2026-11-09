@@ -156,10 +156,10 @@ export function stillMuted(until: string | null | undefined): boolean {
   return Boolean(until && new Date(until).getTime() > Date.now());
 }
 
-/** An update shown in the Groups/Communities tab (and counted in its badge until seen). */
+/** An update shown in the Groups/Communities/My Business tab (and counted in its badge until seen). */
 export async function notify(
   userIds: string[],
-  area: "groups" | "communities",
+  area: "groups" | "communities" | "business",
   text: string,
   link: string | null = null,
   /** kind: groups repeats; needsAction: pinned at the top (with "Review") until handled. */

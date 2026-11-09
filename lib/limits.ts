@@ -32,6 +32,10 @@ export const LIMITS = {
   businessMentionsPerUser: { windowSeconds: 3600, max: 20 },
   /** Businesses a person can add ("Add a business"). */
   businessesPerPerson: { windowSeconds: 86400, max: 10 },
+  /** "Fill in from my website" at sign-up (one homepage fetch each). */
+  sitePreviewsPerUser: { windowSeconds: 3600, max: 30 },
+  /** Reading a whole website (first read or "Re-read now"): up to 30 pages and one AI summary each. */
+  siteReadsPerAgent: { windowSeconds: 3600, max: 6 },
   /** "Ask around" requests (each reaches up to 25 contacts). */
   askAroundPerUser: { windowSeconds: 86400, max: 10 },
   /** Introductions an agent may make. */

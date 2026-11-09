@@ -11,6 +11,16 @@ import { adminClient } from "@/lib/supabase/admin";
 import { ActionButton } from "@/components/ActionButton";
 import { answerPartnerInviteAction, leavePlacementAction } from "../social-actions";
 import { linkKey, linksIn } from "@/lib/business/extract";
+import { WebsiteCard } from "./WebsiteCard";
+import { GapsSection } from "./Gaps";
+import { verifiesByEmail } from "@/lib/business/site";
+import { learnedCount, learnedOf } from "@/lib/business/learn";
+import { gapTitle } from "@/lib/business/gaps";
+import { openBusinessQuestions } from "@/lib/business/website";
+import { realPerson } from "@/lib/identities";
+import { daysAgo } from "@/lib/social/shared";
+import { dayBucket } from "@/lib/social/notices";
+import { clearSiteChangesAction } from "./website-actions";
 
 type Info = { about?: string; customers?: string; description?: string; hours?: string; faqs?: { q: string; a: string }[] };
 const words = (s: string | null | undefined) => (s ?? "").split(/\s+/).filter(Boolean).length;
@@ -19,16 +29,40 @@ const words = (s: string | null | undefined) => (s ?? "").split(/\s+/).filter(Bo
 export default async function MyBusinessPage({ searchParams }: PageProps<"/business">) {
   const { user, agent } = await requireAgent();
   if (agent.type !== "business") return <AddBusinessIntro guest={agent.guest} />;
-  const { welcome } = await searchParams;
+  const { welcome, live } = await searchParams;
   const supabase = await createClient();
   const info = (agent.business_info ?? {}) as Info;
   const about = info.about ?? [info.description, info.hours && `Opening hours: ${info.hours}`].filter(Boolean).join("\n");
   // RLS: the owner's own links and what was read.
-  const { data: rows } = await supabase.from("business_sources").select("*").order("created_at");
+  const { data: allRows } = await supabase.from("business_sources").select("*").order("created_at");
+  // Website pages are summarised in "Your website"; the list below is the links you added yourself.
+  const rows = (allRows ?? []).filter((s) => s.origin === "link");
+  const sitePages = (allRows ?? []).filter((s) => s.origin === "site" && s.status === "ok").length;
+  // Your website (RLS: your own row), the person's email for automatic ✓ Verified, updates, and open questions.
+  const [{ data: site }, person, { data: changes }, gaps] = await Promise.all([
+    supabase.from("business_sites").select("*").maybeSingle(),
+    realPerson(user, agent),
+    supabase
+      .from("notices")
+      .select("id, text, created_at")
+      .eq("area", "business")
+      .eq("kind", "site_change")
+      .is("dismissed_at", null)
+      .gte("created_at", daysAgo(30))
+      .order("created_at", { ascending: false })
+      .limit(10),
+    openBusinessQuestions(agent.id),
+    // Opening My Business: its updates are seen (the tab badge goes).
+    supabase.rpc("mark_notices_seen", { p_area: "business" }),
+  ]);
+  const personEmail =
+    person && person !== user.id ? (await adminClient().auth.admin.getUserById(person)).data.user : null;
+  const email = person === user.id ? { address: user.email ?? null, confirmed: Boolean(user.emailConfirmed) } : { address: personEmail?.email ?? null, confirmed: Boolean(personEmail?.email_confirmed_at) };
+  const learnedItems = site?.live_at ? learnedCount(learnedOf(site.learned), site.hidden) : 0;
   // Links also written in the text boxes: shown as one item seen from two places, not a duplicate.
   const inAbout = new Set(linksIn(about).map(linkKey));
   const inCustomers = new Set(linksIn(info.customers ?? "").map(linkKey));
-  const sources = (rows ?? []).map((s) => ({
+  const sources = rows.map((s) => ({
     fromText: inAbout.has(linkKey(s.url)) ? "About your business" : inCustomers.has(linkKey(s.url)) ? "For customers only" : null,
     id: s.id,
     url: s.url,
@@ -73,18 +107,67 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
         </p>
       </div>
 
+      {live && (
+        <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status" data-testid="site-live">
+          🚀 You&apos;re live. Customers&apos; agents now get answers from your website, with the page each answer came from. Your agent re-reads it every day
+          and tells you here when something changes.
+        </p>
+      )}
+
       <section className="card" aria-label="What my agent knows" data-testid="agent-knows">
         <h2 className="font-semibold">What your agent knows</h2>
         <p className="mt-1 text-sm text-muted">
+          {site?.live_at ? `${sitePages} website ${sitePages === 1 ? "page" : "pages"} · ${learnedItems} things learned · ` : ""}
           {words(about).toLocaleString("en-GB")} words about your business · {sources.filter((s) => s.status === "ok").length} of {sources.length} links read (
           {readWords.toLocaleString("en-GB")} words) · {faqs.length} questions &amp; answers
         </p>
+        <div id="website" className="mt-4 scroll-mt-40">
+          <WebsiteCard
+            site={
+              site
+                ? {
+                    domain: site.domain,
+                    url: site.url,
+                    status: site.status,
+                    pagesRead: site.pages_read,
+                    lastReadAt: site.last_read_at,
+                    live: Boolean(site.live_at),
+                    warning: site.warning,
+                    error: site.error,
+                    verifyToken: site.verify_token,
+                  }
+                : null
+            }
+            verified={Boolean(site && agent.verified_domain === site.domain)}
+            canVerifyByEmail={Boolean(site && email.confirmed && verifiesByEmail(email.address, site.domain))}
+          />
+        </div>
         <div id="test-your-agent" className="mt-4 scroll-mt-40 rounded-xl border border-dashed border-border p-3">
           <h3 className="text-sm font-semibold">🧪 Test your agent</h3>
           <p className="mb-2 text-xs text-muted">See how your agent would answer a customer, before anyone asks. It&apos;s only a preview: nothing is sent to anyone.</p>
           <TryIt />
         </div>
       </section>
+
+      <GapsSection gaps={gaps.map((g) => ({ key: g.key, title: gapTitle(g), questions: g.items.map((i) => i.question), ids: g.items.map((i) => i.id) }))} />
+
+      {(changes ?? []).length > 0 && (
+        <section className="card space-y-2" aria-label="Changes on your website" data-testid="site-changes">
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="font-semibold">Changes on your website</h2>
+            <ActionButton action={clearSiteChangesAction} label="Clear" />
+          </div>
+          <p className="hint">Your agent noticed these when it re-read your website, and already answers with the new information.</p>
+          <ul className="divide-y divide-border">
+            {(changes ?? []).map((c) => (
+              <li key={c.id} className="py-2 text-sm" data-testid="site-change">
+                {c.text}
+                <span className="block text-xs text-muted">{dayBucket(c.created_at)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="card flex flex-wrap items-center gap-3" aria-label="Your QR code">
         <span className="text-3xl" aria-hidden>📷</span>

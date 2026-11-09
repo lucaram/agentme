@@ -131,14 +131,14 @@ isOneToOne: false
                   ]
                 },"agents": {
                   Row: {
-                    "appearance": NonNullable<Json>,"avatar": string,"bio": string | null,"business_info": NonNullable<Json>,"contact_policy": Database["public"]['Enums']["contact_policy"],"contact_sources": NonNullable<Json>,"contacts_synced_at": string | null,"created_at": string,"discoverable": boolean,"display_name": string,"group_add_policy": string,"guest": boolean,"handle": string,"id": string,"owner_id": string,"recommendations_ok": boolean,"type": Database["public"]['Enums']["agent_type"]
+                    "appearance": NonNullable<Json>,"avatar": string,"bio": string | null,"business_info": NonNullable<Json>,"contact_policy": Database["public"]['Enums']["contact_policy"],"contact_sources": NonNullable<Json>,"contacts_synced_at": string | null,"created_at": string,"discoverable": boolean,"display_name": string,"group_add_policy": string,"guest": boolean,"handle": string,"id": string,"owner_id": string,"recommendations_ok": boolean,"type": Database["public"]['Enums']["agent_type"],"verified_domain": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "appearance"?: NonNullable<Json>,"avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name": string,"group_add_policy"?: string,"guest"?: boolean,"handle": string,"id"?: string,"owner_id": string,"recommendations_ok"?: boolean,"type"?: Database["public"]['Enums']["agent_type"]
+                    "appearance"?: NonNullable<Json>,"avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name": string,"group_add_policy"?: string,"guest"?: boolean,"handle": string,"id"?: string,"owner_id": string,"recommendations_ok"?: boolean,"type"?: Database["public"]['Enums']["agent_type"],"verified_domain"?: string | null
                   }
                   Update: {
-                    "appearance"?: NonNullable<Json>,"avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name"?: string,"group_add_policy"?: string,"guest"?: boolean,"handle"?: string,"id"?: string,"owner_id"?: string,"recommendations_ok"?: boolean,"type"?: Database["public"]['Enums']["agent_type"]
+                    "appearance"?: NonNullable<Json>,"avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name"?: string,"group_add_policy"?: string,"guest"?: boolean,"handle"?: string,"id"?: string,"owner_id"?: string,"recommendations_ok"?: boolean,"type"?: Database["public"]['Enums']["agent_type"],"verified_domain"?: string | null
                   }
                   Relationships: [
                     
@@ -195,16 +195,36 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"business_sources": {
+                },"business_sites": {
                   Row: {
-                    "agent_id": string,"content": string | null,"created_at": string,"error": string | null,"id": string,"kind": string | null,"last_read_at": string | null,"status": string,"url": string,"visibility": string
+                    "agent_id": string,"created_at": string,"domain": string,"error": string | null,"hidden": (string)[],"last_read_at": string | null,"learned": NonNullable<Json>,"live_at": string | null,"pages_found": number,"pages_read": number,"progress": NonNullable<Json>,"reading_started_at": string | null,"status": string,"url": string,"verify_token": string,"warning": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "agent_id": string,"content"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"kind"?: string | null,"last_read_at"?: string | null,"status"?: string,"url": string,"visibility"?: string
+                    "agent_id": string,"created_at"?: string,"domain": string,"error"?: string | null,"hidden"?: (string)[],"last_read_at"?: string | null,"learned"?: NonNullable<Json>,"live_at"?: string | null,"pages_found"?: number,"pages_read"?: number,"progress"?: NonNullable<Json>,"reading_started_at"?: string | null,"status"?: string,"url": string,"verify_token"?: string,"warning"?: string | null
                   }
                   Update: {
-                    "agent_id"?: string,"content"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"kind"?: string | null,"last_read_at"?: string | null,"status"?: string,"url"?: string,"visibility"?: string
+                    "agent_id"?: string,"created_at"?: string,"domain"?: string,"error"?: string | null,"hidden"?: (string)[],"last_read_at"?: string | null,"learned"?: NonNullable<Json>,"live_at"?: string | null,"pages_found"?: number,"pages_read"?: number,"progress"?: NonNullable<Json>,"reading_started_at"?: string | null,"status"?: string,"url"?: string,"verify_token"?: string,"warning"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "business_sites_agent_id_fkey"
+      columns: ["agent_id"]
+isOneToOne: true
+      referencedRelation: "agents"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"business_sources": {
+                  Row: {
+                    "agent_id": string,"content": string | null,"content_hash": string | null,"created_at": string,"error": string | null,"id": string,"kind": string | null,"last_read_at": string | null,"origin": string,"status": string,"title": string | null,"url": string,"visibility": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "agent_id": string,"content"?: string | null,"content_hash"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"kind"?: string | null,"last_read_at"?: string | null,"origin"?: string,"status"?: string,"title"?: string | null,"url": string,"visibility"?: string
+                  }
+                  Update: {
+                    "agent_id"?: string,"content"?: string | null,"content_hash"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"kind"?: string | null,"last_read_at"?: string | null,"origin"?: string,"status"?: string,"title"?: string | null,"url"?: string,"visibility"?: string
                   }
                   Relationships: [
                     {

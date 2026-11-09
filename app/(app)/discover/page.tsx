@@ -1,4 +1,5 @@
 import { requireAgent } from "@/lib/auth";
+import { VerifiedBadge } from "@/components/business/VerifiedBadge";
 import { createClient } from "@/lib/supabase/server";
 import { ActionButton } from "@/components/ActionButton";
 import { openAgentChat, requestContact } from "../actions";
@@ -28,13 +29,13 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/discove
   const query = (typeof q === "string" ? q : "").trim().replace(/^@/, "").replace(/[^\p{L}\p{N}_ .'-]/gu, "").slice(0, 40);
   const supabase = await createClient();
 
-  let results: { id: string; handle: string; display_name: string; avatar: string; type: string; bio: string | null }[] = [];
+  let results: { id: string; handle: string; display_name: string; avatar: string; type: string; bio: string | null; verified_domain: string | null }[] = [];
   if (query) {
     // Escape LIKE wildcards in user input.
     const pattern = `%${query.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
     const { data } = await supabase
       .from("agents")
-      .select("id, handle, display_name, avatar, type, bio")
+      .select("id, handle, display_name, avatar, type, bio, verified_domain")
       .or(`handle.ilike.${pattern},display_name.ilike.${pattern}`)
       .neq("id", agent.id)
       .eq("guest", false)
@@ -104,6 +105,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/discove
                   <span className="min-w-0 flex-1">
                     <AgentName agent={a} className="block font-medium" pageHint>{a.display_name}</AgentName>
                     <span className="block text-xs text-muted">@{a.handle}{a.type === "business" ? ` · Business${a.bio ? ` · ${a.bio}` : ""}` : ""}</span>
+                    {a.type === "business" && <VerifiedBadge domain={a.verified_domain} className="mt-1" />}
                   </span>
                   <span className="flex gap-2">
                     {a.type === "business" && <ActionButton action={openAgentChat.bind(null, a.id)} label="Ask agent" />}

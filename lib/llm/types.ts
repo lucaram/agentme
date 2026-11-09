@@ -14,6 +14,8 @@ export type LLMPurpose =
   | "business_faq" // answer a question from business-provided info only
   | "ask_around_summary" // summarise friends' recommendations for the owner
   | "business_ingest" // read a business's PDF or photo (e.g. a menu) into text
+  | "business_learn" // learn a business's whole website: basics, facts, questions & answers
+  | "business_changes" // say what changed on a business's website since the last read
   | "moderation"; // check a community message against the community's rules
 
 export type LLMTier = "smart" | "fast";

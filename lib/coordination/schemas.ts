@@ -42,6 +42,7 @@ export type QuestionRequest = z.infer<typeof QuestionRequestSchema>;
 export const BusinessAnswerSchema = z.object({
   answer: z.string().max(1500).describe("The answer to the visitor, 1-3 sentences."),
   needs_team: z.boolean().describe("true when the information isn't in the business info or website content."),
+  source_url: z.string().default("").describe("The page address the answer came from (website content only), or empty."),
 });
 
 /** "Ask around": a contact asks for a recommendation (answered from a saved tip, or by the person). */

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { VerifiedBadge } from "@/components/business/VerifiedBadge";
 import { notFound } from "next/navigation";
 import { getUser } from "@/lib/auth";
 import { getAgentByHandle, getAgentForUser, getContactRow } from "@/lib/data/agents";
@@ -35,6 +36,7 @@ export default async function PersonalLinkPage({ params, searchParams }: PagePro
         <div>
           <h1 className="text-2xl font-semibold">{other.display_name}</h1>
           <p className="text-sm text-muted">@{other.handle} · Business</p>
+          <VerifiedBadge domain={other.verified_domain} className="mt-1" />
           {bio && <p className="mt-2 text-sm">{bio}</p>}
         </div>
         {/* The business's own ways to book or order: open to anyone, no account needed. */}
