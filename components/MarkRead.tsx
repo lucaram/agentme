@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { markReadAction } from "@/app/(app)/actions";
+import { markReadAction, markThreadReadAction } from "@/app/(app)/actions";
 import { READ_EVENT } from "./ChatsBadge";
 import { scheduleRefresh } from "@/lib/refresh";
 
@@ -11,13 +11,13 @@ import { scheduleRefresh } from "@/lib/refresh";
  * a new message arrives while it is open; then refreshes so the unread badges
  * update (the Chats tab total also reloads itself on READ_EVENT).
  */
-export function MarkRead({ conversationId, latestMessageId }: { conversationId: string; latestMessageId: string | null }) {
+export function MarkRead({ conversationId, latestMessageId, threadId }: { conversationId: string; latestMessageId: string | null; threadId?: string }) {
   const router = useRouter();
   useEffect(() => {
-    markReadAction(conversationId).then(() => {
+    Promise.all([markReadAction(conversationId), threadId ? markThreadReadAction(threadId) : null]).then(() => {
       window.dispatchEvent(new Event(READ_EVENT)); // the Chats tab total reloads itself
       scheduleRefresh(() => router.refresh()); // shared with live updates: one render, not several
     });
-  }, [conversationId, latestMessageId, router]);
+  }, [conversationId, latestMessageId, threadId, router]);
   return null;
 }

@@ -1,15 +1,19 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { sendMessage } from "../../actions";
 
 export function Composer({
   conversationId,
+  threadId,
   placeholder,
   thinkingLabel,
   examples,
 }: {
   conversationId: string;
+  /** My Agent: the request thread this box belongs to ("new" starts one, then opens it). */
+  threadId?: string;
   placeholder: string;
   thinkingLabel?: string;
   /** Template chips: clicking one fills the box so the owner can adjust it before sending. */
@@ -19,6 +23,7 @@ export function Composer({
   const [error, setError] = useState<string | null>(null);
   const [summoned, setSummoned] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const router = useRouter();
 
   function submit() {
     const text = ref.current?.value.trim();
@@ -27,7 +32,9 @@ export function Composer({
     setError(null);
     setSummoned(/^\s*@agent\b/i.test(text));
     startTransition(async () => {
-      const result = await sendMessage(conversationId, text);
+      const result = await sendMessage(conversationId, text, threadId);
+      // A new request got its own thread: open it.
+      if (result?.threadId && result.threadId !== threadId) router.push(`/chats/${conversationId}?t=${result.threadId}`);
       if (result?.error) {
         setError(result.error);
         // Give the text back so nothing is lost.

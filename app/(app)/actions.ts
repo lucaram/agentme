@@ -34,13 +34,19 @@ import { tellOwner } from "@/lib/requests/notify";
 import { canPost, type ConvRow } from "@/lib/social/shared";
 import { handOverIfOwnerLeft } from "@/lib/social/groups";
 import { answerMentions } from "@/lib/social/businesses";
+import { renameThread, resolveThread } from "@/lib/agents/threads";
+import { withThread } from "@/lib/agents/thread-context";
 import { businessesOnlyOwnedBy, forgetPerson, realPerson, signInAs } from "@/lib/identities";
 
 const Id = z.uuid();
 
 // ------------------------------------------------------------- messages
 
-export async function sendMessage(conversationId: string, text: string): Promise<{ error?: string }> {
+/**
+ * Sends a message. In My Agent, `threadId` is the request thread it was typed
+ * in (none or "new" starts a new one); the thread used is returned.
+ */
+export async function sendMessage(conversationId: string, text: string, threadId?: string | null): Promise<{ error?: string; threadId?: string }> {
   const { user, agent } = await requireAgent();
   const content = text.trim().slice(0, 4000);
   if (!content || !Id.safeParse(conversationId).success) return {};
@@ -67,9 +73,12 @@ export async function sendMessage(conversationId: string, text: string): Promise
     }
   }
 
+  // My Agent: one thread per request; everything the agent says while handling this stays in it.
+  const thread = conv.kind === "my_agent" ? await resolveThread({ userId: user.id, conversationId, threadId, text: content }) : null;
+
   await withUsageContext({ userId: user.id, agentId: agent.id }, async () => {
-    if (conv.kind === "my_agent") {
-      await handleOwnerMessage({ userId: user.id, agent, conversationId, text: content });
+    if (conv.kind === "my_agent" && thread) {
+      await withThread({ conversationId, threadId: thread }, () => handleOwnerMessage({ userId: user.id, agent, conversationId, text: content }));
     } else if (conv.kind === "agent_chat") {
       await askAgent({ userId: user.id, agent, conversationId, text: content });
     } else if (summoned) {
@@ -83,7 +92,24 @@ export async function sendMessage(conversationId: string, text: string): Promise
     }
   });
   revalidatePath(`/chats/${conversationId}`);
-  return {};
+  return thread ? { threadId: thread } : {};
+}
+
+/** Rename a My Agent thread. */
+export async function renameThreadAction(threadId: string, title: string): Promise<{ error?: string }> {
+  const { user } = await requireAgent();
+  if (!Id.safeParse(threadId).success) return { error: "Not found." };
+  const result = await renameThread(user.id, threadId, String(title ?? ""));
+  revalidatePath("/chats", "layout");
+  return result.ok ? {} : { error: result.error };
+}
+
+/** Viewing a thread: its updates are read (keeps its badge in step while it's open). */
+export async function markThreadReadAction(threadId: string) {
+  await requireAgent();
+  if (!Id.safeParse(threadId).success) return;
+  const supabase = await createClient();
+  await supabase.rpc("mark_thread_read", { p_thread: threadId });
 }
 
 /**

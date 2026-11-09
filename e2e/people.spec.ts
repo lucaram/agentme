@@ -230,6 +230,7 @@ test("the header search finds businesses too: tap one to open its page", async (
   await expect(eve.page).toHaveURL(/\/u\/trattoria$/);
   await expect(eve.page.getByRole("heading", { name: "Trattoria Sole" })).toBeVisible();
   // People who aren't your contacts never show up here.
+  await eve.page.goto("/chats");
   await search.fill("marc");
   await expect(eve.page.getByRole("option", { name: /Marco/ })).toHaveCount(0);
   await eve.close();

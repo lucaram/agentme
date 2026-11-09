@@ -1,4 +1,5 @@
 import "server-only";
+import { threadFor } from "@/lib/agents/thread-context";
 import { adminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/database.types";
 import { asJson } from "./json";
@@ -84,6 +85,8 @@ type NewMessage = {
   metadata?: Record<string, unknown>;
   /** Only this user can see the message (e.g. their @agent command and its reply). */
   visibleTo?: string;
+  /** My Agent thread (otherwise the thread the owner is typing in; the database files the rest). */
+  threadId?: string;
 } & (
   | { from: "human"; userId: string }
   | { from: "agent"; agentId: string }
@@ -102,6 +105,7 @@ export async function postMessage(msg: NewMessage): Promise<MessageRow> {
       // Trust rule: every agent-authored message is flagged as AI-generated.
       is_ai_generated: msg.from === "agent",
       visible_to: msg.visibleTo ?? null,
+      thread_id: msg.threadId ?? threadFor(msg.conversationId),
     })
     .select("*")
     .single();
