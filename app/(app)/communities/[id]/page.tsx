@@ -159,14 +159,21 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
 
       <section className="card space-y-2" aria-label="Chats">
         <h2 className="font-semibold">Chats</h2>
-        <ul className="divide-y divide-border">
+        {/* Each chat is a row you tap (highlighted on hover, like Settings); Mute stays separate. */}
+        <ul className="space-y-2">
           {ordered.map((c) => (
-            <li key={c.id} className="flex flex-wrap items-center gap-3 py-2">
-              <Link href={`/chats/${c.id}`} className="min-w-0 flex-1 hover:underline">
-                <span className="block font-medium">{c.channel === "announcements" ? "📣 Announcements" : "💬 General"}</span>
-                <span className="block text-xs text-muted">{c.channel === "announcements" ? "Moderators post, everyone reads" : "Everyone can talk"}</span>
+            <li key={c.id} className="flex items-center gap-2 rounded-xl border border-border bg-background transition hover:border-accent/60 hover:bg-accent-soft">
+              <Link href={`/chats/${c.id}`} className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3" data-testid={`channel-${c.channel}`}>
+                <span className="text-xl" aria-hidden>{c.channel === "announcements" ? "📣" : "💬"}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">{c.channel === "announcements" ? "Announcements" : "General"}</span>
+                  <span className="block text-xs text-muted">{c.channel === "announcements" ? "Moderators post, everyone reads" : "Everyone can talk"}</span>
+                </span>
+                <span className="text-accent" aria-hidden>›</span>
               </Link>
-              <ActionButton action={setMutedAction.bind(null, c.id, !mutedChannels.has(c.id))} label={mutedChannels.has(c.id) ? "🔔 Unmute" : "🔕 Mute"} />
+              <span className="pr-3">
+                <ActionButton action={setMutedAction.bind(null, c.id, !mutedChannels.has(c.id))} label={mutedChannels.has(c.id) ? "🔔 Unmute" : "🔕 Mute"} />
+              </span>
             </li>
           ))}
         </ul>
