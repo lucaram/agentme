@@ -34,6 +34,7 @@ import { canPost, type ConvRow } from "@/lib/social/shared";
 import { handOverIfOwnerLeft } from "@/lib/social/groups";
 import { answerMentions } from "@/lib/social/businesses";
 import { guardCommunityPost } from "@/lib/social/guard-server";
+import { autopilot } from "@/lib/social/moderation-server";
 import { renameThread, resolveThread } from "@/lib/agents/threads";
 import { withThread } from "@/lib/agents/thread-context";
 import { answerSuggestion, offerProfileSave } from "@/lib/profile/offer";
@@ -47,7 +48,13 @@ const Id = z.uuid();
  * Sends a message. In My Agent, `threadId` is the request thread it was typed
  * in (none or "new" starts a new one); the thread used is returned.
  */
-export async function sendMessage(conversationId: string, text: string, threadId?: string | null): Promise<{ error?: string; threadId?: string }> {
+export async function sendMessage(
+  conversationId: string,
+  text: string,
+  threadId?: string | null,
+  /** Community: the author chose "Post anyway" after a nudge. */
+  options: { confirmed?: boolean } = {},
+): Promise<{ error?: string; threadId?: string; nudge?: { rule: string; message: string } }> {
   const { user, agent } = await requireAgent();
   const content = text.trim().slice(0, 4000);
   if (!content || !Id.safeParse(conversationId).success) return {};
@@ -77,9 +84,13 @@ export async function sendMessage(conversationId: string, text: string, threadId
   // Communities: free spam checks before posting (slow mode, links, mentions, repeats), by trust level.
   let flags: string[] = [];
   if (conv.kind === "channel" && conv.community_id && !summoned) {
-    const guard = await guardCommunityPost(conv.community_id, user.id, content);
+    const guard = await guardCommunityPost(conv.community_id, user.id, content, { resend: Boolean(options.confirmed) });
     if (!guard.ok) return { error: guard.error };
-    flags = guard.flags;
+    // Autopilot: an AI check against the community's rules; code decides (refuse, nudge, or post).
+    const auto = await autopilot({ communityId: conv.community_id, conversationId, userId: user.id, text: content, level: guard.level, confirmed: Boolean(options.confirmed) });
+    if (auto.action === "refuse") return { error: auto.message };
+    if (auto.action === "nudge") return { nudge: { rule: auto.rule, message: auto.message } };
+    flags = [...new Set([...guard.flags, ...auto.flags])];
   }
 
   // My Agent: one thread per request; everything the agent says while handling this stays in it.

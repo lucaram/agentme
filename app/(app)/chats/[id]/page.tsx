@@ -26,6 +26,15 @@ import { adminClient } from "@/lib/supabase/admin";
 import { waysOf } from "@/lib/business/booking";
 import { canPost, communityMembership, groupRole, isGroupAdmin, isModerator, type ConvRow } from "@/lib/social/shared";
 
+/** Labels moderators see on flagged community messages (posted anyway, or likely selling). */
+const FLAG_LABEL: Record<string, string> = {
+  selling: "🏷️ possible selling",
+  spam: "🏷️ possibly spam (posted anyway)",
+  disrespectful: "⚠️ posted after a respect nudge",
+  abusive: "⚠️ posted after a respect nudge",
+  off_topic: "↪️ possibly off-topic",
+};
+
 export default async function ChatPage({ params, searchParams }: PageProps<"/chats/[id]">) {
   const { id } = await params;
   const { t } = await searchParams;
@@ -263,9 +272,12 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                   `${senderUser?.avatar ?? ""} ${senderUser?.display_name ?? "Someone"}`
                 )}
                 {/* Flagged by the community spam guard: shown to moderators only. */}
-                {canModerate && meta.flags?.includes("selling") && (
-                  <span className="rounded bg-danger/10 px-1 text-[10px] text-danger" data-testid="flag-selling" title="Looks like selling or promotion">🏷️ possible selling</span>
-                )}
+                {canModerate &&
+                  (meta.flags ?? []).filter((f) => FLAG_LABEL[f]).map((f) => (
+                    <span key={f} className="rounded bg-danger/10 px-1 text-[10px] text-danger" data-testid={`flag-${f}`} title="Flagged by the community's automatic checks">
+                      {FLAG_LABEL[f]}
+                    </span>
+                  ))}
                 {isPrivate && (
                   <span className="text-[10px]" data-testid="private-label" title="Only you can see this message">
                     · 🔒 only visible to you

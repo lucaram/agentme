@@ -44,7 +44,7 @@ describe.skipIf(!dbUp)("community spam guard (live)", () => {
     expect(await guard.communityTrust(communityId, people.owner.userId)).toBe("moderator");
     expect(await guard.communityTrust(communityId, people.member.userId)).toBe("new");
     expect(await guard.guardCommunityPost(communityId, people.member.userId, "Highlights: https://clip.example/goal")).toMatchObject({ ok: false, error: expect.stringContaining("New members") });
-    expect(await guard.guardCommunityPost(communityId, people.owner.userId, "Rules: https://club.example/rules https://club.example/faq")).toEqual({ ok: true, flags: [] });
+    expect(await guard.guardCommunityPost(communityId, people.owner.userId, "Rules: https://club.example/rules https://club.example/faq")).toMatchObject({ ok: true, flags: [] });
   });
 
   it("after a day and a few messages: a member, links allowed; repeats blocked", async () => {
@@ -56,9 +56,9 @@ describe.skipIf(!dbUp)("community spam guard (live)", () => {
       if (error) throw error;
     }
     expect(await guard.communityTrust(communityId, people.member.userId)).toBe("member");
-    expect(await guard.guardCommunityPost(communityId, people.member.userId, "Highlights: https://clip.example/goal")).toEqual({ ok: true, flags: [] });
+    expect(await guard.guardCommunityPost(communityId, people.member.userId, "Highlights: https://clip.example/goal")).toMatchObject({ ok: true, flags: [] });
     expect(await guard.guardCommunityPost(communityId, people.member.userId, "see you saturday!")).toMatchObject({ ok: false, error: expect.stringContaining("just posted") });
-    expect(await guard.guardCommunityPost(communityId, people.member.userId, "Two tickets for sale, £30")).toEqual({ ok: true, flags: ["selling"] });
+    expect(await guard.guardCommunityPost(communityId, people.member.userId, "Two tickets for sale, £30")).toMatchObject({ ok: true, flags: ["selling"] });
   });
 
   it("a removed message puts a member back on the new-member rules", async () => {

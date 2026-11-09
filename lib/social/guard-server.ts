@@ -30,11 +30,33 @@ export async function communityTrust(communityId: string, userId: string): Promi
  * Before posting in a community chat: slow mode by trust level, then the
  * checks (links, mentions, repeats). Returns flags to keep on the message.
  */
-export async function guardCommunityPost(communityId: string, userId: string, text: string): Promise<GuardResult> {
+export async function guardCommunityPost(
+  communityId: string,
+  userId: string,
+  text: string,
+  /** "Post anyway" after a nudge re-sends the same message: slow mode already counted it. */
+  opts: { resend?: boolean } = {},
+): Promise<GuardResult & { level: TrustLevel }> {
   const level = await communityTrust(communityId, userId);
-  if (level !== "moderator") {
+  // A re-send only skips slow mode if this exact message really was nudged moments ago (the flag comes from the browser).
+  const resend =
+    opts.resend &&
+    Boolean(
+      (
+        await adminClient()
+          .from("moderation_events")
+          .select("id")
+          .eq("community_id", communityId)
+          .eq("user_id", userId)
+          .eq("action", "nudged")
+          .eq("excerpt", text.slice(0, 500))
+          .gt("created_at", new Date(Date.now() - 10 * 60_000).toISOString())
+          .limit(1)
+      ).data?.length,
+    );
+  if (level !== "moderator" && !resend) {
     const limit = await hit(SLOW_MODE_LIMIT[level], `${communityId}:${userId}`);
-    if (!limit.allowed) return { ok: false, error: `Slow mode: please wait ${describeRetry(limit.retryAfterSeconds)} before posting again.` };
+    if (!limit.allowed) return { ok: false, error: `Slow mode: please wait ${describeRetry(limit.retryAfterSeconds)} before posting again.`, level };
   }
   const db = adminClient();
   const { data: channels } = await db.from("conversations").select("id").eq("community_id", communityId);
@@ -46,5 +68,5 @@ export async function guardCommunityPost(communityId: string, userId: string, te
     .eq("sender_user_id", userId)
     .gt("created_at", tenMinutesAgo)
     .limit(20);
-  return checkCommunityMessage(text, level, (recent ?? []).map((m) => m.content));
+  return { ...checkCommunityMessage(text, level, (recent ?? []).map((m) => m.content)), level };
 }

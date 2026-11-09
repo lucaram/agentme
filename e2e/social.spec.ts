@@ -103,6 +103,12 @@ test("communities: create, join by accepting the rules, Announcements vs General
   await eve.page.getByRole("link", { name: /General/ }).click();
   await send(eve.page, "Hello fans!");
   await expect(eve.page.getByText("Hello fans!")).toBeVisible();
+  // Autopilot: something rude gets a private nudge first; Eve decides to post anyway.
+  await send(eve.page, "Ref was an idiot today");
+  const nudge = eve.page.getByTestId("post-nudge");
+  await expect(nudge).toContainText("Be respectful");
+  await nudge.getByRole("button", { name: "Post anyway" }).click();
+  await expect(eve.page.getByRole("listitem").filter({ hasText: "Ref was an idiot today" })).toBeVisible();
   // Spam protection: a brand-new member can't post links yet (told why).
   await send(eve.page, "Free tickets here https://spam.example/win");
   await expect(eve.page.getByRole("alert").filter({ hasText: "New members can't post links yet" })).toBeVisible();
@@ -115,6 +121,8 @@ test("communities: create, join by accepting the rules, Announcements vs General
   // The owner removes a message for everyone.
   await luca.page.goto(communityUrl);
   await luca.page.getByRole("link", { name: /General/ }).click();
+  // Moderators see why a message was nudged.
+  await expect(luca.page.getByRole("listitem").filter({ hasText: "Ref was an idiot today" }).getByTestId("flag-disrespectful")).toBeVisible();
   const message = luca.page.getByRole("listitem").filter({ hasText: "Hello fans!" });
   await message.getByLabel("Message options").click();
   await message.getByRole("button", { name: /Remove for everyone/ }).click();

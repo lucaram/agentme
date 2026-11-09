@@ -599,6 +599,38 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"moderation_events": {
+                  Row: {
+                    "action": string,"community_id": string,"confidence": number | null,"conversation_id": string | null,"created_at": string,"excerpt": string | null,"id": string,"message_id": string | null,"reason": string | null,"user_id": string | null,"verdict": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"community_id": string,"confidence"?: number | null,"conversation_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"message_id"?: string | null,"reason"?: string | null,"user_id"?: string | null,"verdict": string
+                  }
+                  Update: {
+                    "action"?: string,"community_id"?: string,"confidence"?: number | null,"conversation_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"message_id"?: string | null,"reason"?: string | null,"user_id"?: string | null,"verdict"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "moderation_events_community_id_fkey"
+      columns: ["community_id"]
+isOneToOne: false
+      referencedRelation: "communities"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "moderation_events_conversation_id_fkey"
+      columns: ["conversation_id"]
+isOneToOne: false
+      referencedRelation: "conversations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "moderation_events_message_id_fkey"
+      columns: ["message_id"]
+isOneToOne: false
+      referencedRelation: "messages"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"notices": {
                   Row: {
                     "area": string,"created_at": string,"id": string,"link": string | null,"seen_at": string | null,"text": string,"user_id": string

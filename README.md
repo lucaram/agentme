@@ -298,6 +298,17 @@ My Agent opens on a list of your requests, one line each, like a list of recent 
     - **Also refused:** more than 5 @mentions, and the same message again within 10 minutes. The sender is told why.
     - **Possible selling or promotion** (prices, "for sale", "DM me", crypto…) is **posted, but flagged** (`metadata.flags`). Moderators see a 🏷️ label, ready for the AI check in step 2.
     - Each community page says spam protection is on.
+  - **Autopilot** (`lib/social/moderation*.ts`): moderation that works even if moderators do nothing.
+    - **The check:** after the free checks, a small, fast model checks the message against the community's own name, description and rules. The message is treated as untrusted data, never as instructions.
+    - **Who gets checked:** new members and members. Trusted members and moderators skip it, to save cost.
+    - **What happens is decided by code, not by the model:**
+      - near-certain spam (90% sure or more) or clear abuse (85% or more) is **not posted**, and the author is told why;
+      - possibly disrespectful, selling or off-topic (60% or more) gets a **private nudge**, *"This might break 'Be respectful'. Edit, or post anyway?"*. The author decides. If they post anyway, the message is posted, and moderators see a label explaining the nudge;
+      - everything else is posted.
+    - **If the check is unavailable,** messages are posted.
+    - **Members' reports with AI agreement:** when 3 different members report a community message *and* the check agrees (70% sure or more), it's hidden automatically. One person can't silence anyone.
+    - **Log:** every automatic action is recorded in `moderation_events`, which only that community's moderators can read. Step 3 adds a daily digest and appeals.
+    - **Tests** use a predictable mock model, never the real one.
 - **Enforced in code:** posting rules (`canPost`) and every permission check (`lib/social/*`). The browser only reads through RLS. Membership, requests, reports and links are server-written, and reports are visible only to the admins or moderators who handle them.
 
 ## Reliability, limits and cost
