@@ -7,13 +7,14 @@ import { parseAgentCommand } from "@/lib/agents/commands";
 describe("💡 Ideas", () => {
   it("fills personal ideas with real names, and a business you know", () => {
     const ideas = personalIdeas({ friends: ["marco", "paul"], business: "trattoria", used: new Set() });
-    expect(ideas.map((i) => i.label)).toEqual(["🍝 Dinner", "🍕 Food", "🔎 Ask around", "🤝 Introduce", "📊 Polls", "🧺 Who brings what", "🧠 Remember"]);
-    expect(ideas.find((i) => i.label === "🍕 Food")?.text).toBe("Organise pizza at @trattoria on Friday at 8pm with @marco");
+    expect(ideas.map((i) => i.label)).toEqual(["🍝 Dinner", "⚽ Five-a-side", "🔎 Ask around", "🤝 Introduce", "📊 Polls", "🧺 Who brings what", "🧠 Remember"]);
+    expect(ideas.find((i) => i.label === "🍝 Dinner")?.text).toBe("Arrange dinner at @trattoria with @marco and @paul on Saturday evening");
+    expect(personalIdeas({ friends: ["marco"], business: null, used: new Set() })[0].text).toBe("Arrange dinner with @marco on Saturday evening");
   });
 
   it("leaves out what can't work, and moves ideas already tried to the end", () => {
     const one = personalIdeas({ friends: ["marco"], business: null, used: new Set(["poll", "ask_around"]) });
-    expect(one.map((i) => i.label)).toEqual(["🍝 Dinner", "🧺 Who brings what", "🧠 Remember", "🔎 Ask around", "📊 Polls"]);
+    expect(one.map((i) => i.label)).toEqual(["🍝 Dinner", "⚽ Five-a-side", "🧺 Who brings what", "🧠 Remember", "🔎 Ask around", "📊 Polls"]);
   });
 
   it("each idea is understood the way it's meant", () => {

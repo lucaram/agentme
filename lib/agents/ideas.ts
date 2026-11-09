@@ -15,8 +15,13 @@ export function personalIdeas(opts: { friends: string[]; business: string | null
   const b = second ? `@${second}` : null;
   const both = b ? `${a} and ${b}` : a;
   const ideas: Idea[] = [
-    { label: "🍝 Dinner", text: `Arrange dinner with ${both} on Saturday evening`, used: opts.used.has("coordinate") || opts.used.has("composed") },
-    ...(opts.business ? [{ label: "🍕 Food", text: `Organise pizza at @${opts.business} on Friday at 8pm with ${a}`, used: opts.used.has("venue") }] : []),
+    // At a business you know: the plan shows its booking buttons.
+    {
+      label: "🍝 Dinner",
+      text: opts.business ? `Arrange dinner at @${opts.business} with ${both} on Saturday evening` : `Arrange dinner with ${both} on Saturday evening`,
+      used: opts.used.has("coordinate") || opts.used.has("composed") || opts.used.has("venue"),
+    },
+    { label: "⚽ Five-a-side", text: `Organise five-a-side on Thursday at 7pm with ${both}, need 3, someone bring a ball and bibs`, used: opts.used.has("rsvp") },
     { label: "🔎 Ask around", text: "Does anyone know a good plumber near me?", used: opts.used.has("ask_around") },
     ...(b ? [{ label: "🤝 Introduce", text: `Introduce ${a} to ${b}, you both love climbing`, used: opts.used.has("introduce") }] : []),
     { label: "📊 Polls", text: `Ask ${both} to vote: cinema on Friday or Saturday`, used: opts.used.has("poll") },
