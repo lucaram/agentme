@@ -66,3 +66,16 @@ describe("“Save to your profile?” suggestions", () => {
     expect(suggestFact(text, today)).toBeNull();
   });
 });
+
+describe("changing your avatar", () => {
+  it("people pick from the personal set, businesses from the business set", async () => {
+    const { AVATARS, BUSINESS_AVATARS, avatarsFor } = await import("@/lib/avatars");
+    expect(avatarsFor("personal", "🦊")).toEqual(AVATARS);
+    expect(avatarsFor("business", "🏪")).toEqual(BUSINESS_AVATARS);
+  });
+
+  it("keeps the current avatar as a choice when it isn't in the set", async () => {
+    const { BUSINESS_AVATARS, avatarsFor } = await import("@/lib/avatars");
+    expect(avatarsFor("business", "🦊")).toEqual(["🦊", ...BUSINESS_AVATARS]);
+  });
+});

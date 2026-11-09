@@ -34,6 +34,7 @@ import { canPost, type ConvRow } from "@/lib/social/shared";
 import { handOverIfOwnerLeft } from "@/lib/social/groups";
 import { answerMentions } from "@/lib/social/businesses";
 import { MIN_NAME, maxNameFor } from "@/lib/social/limits";
+import { avatarsFor } from "@/lib/avatars";
 import { DM_CLOSED, dmState } from "@/lib/people/dm";
 import { guardCommunityPost } from "@/lib/social/guard-server";
 import { autopilot } from "@/lib/social/moderation-server";
@@ -408,6 +409,8 @@ export async function saveSettings(form: FormData) {
   const groupPolicy = z.enum(["contacts", "nobody"]).safeParse(form.get("group_add_policy"));
   const typedName = String(form.get("display_name") ?? "").trim().slice(0, maxNameFor(agent.type));
   const displayName = typedName.length >= MIN_NAME ? typedName : "";
+  const pickedAvatar = String(form.get("avatar") ?? "");
+  const avatar = avatarsFor(agent.type, agent.avatar).includes(pickedAvatar) ? pickedAvatar : null;
   await db
     .from("agents")
     .update({
@@ -416,6 +419,7 @@ export async function saveSettings(form: FormData) {
       // A checkbox sends nothing when unticked: only trust its absence when the form section was there.
       ...(form.get("recommendations_form") ? { recommendations_ok: form.get("recommendations_ok") === "on" } : {}),
       ...(displayName ? { display_name: displayName } : {}),
+      ...(avatar ? { avatar } : {}),
     })
     .eq("id", agent.id);
 
@@ -424,7 +428,8 @@ export async function saveSettings(form: FormData) {
   // Back to the settings page the form was on.
   const returnTo = String(form.get("return_to") ?? "");
   const page = ["/settings/profile", "/settings/privacy"].includes(returnTo) ? returnTo : "/settings";
-  revalidatePath("/settings", "layout");
+  // The name and avatar show all over the app (header, chats, contacts).
+  revalidatePath("/", "layout");
   redirect(`${page}?saved=1`);
 }
 
