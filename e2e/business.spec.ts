@@ -13,6 +13,12 @@ async function as(browser: Browser, handle: string) {
   return { page, close: () => context.close() };
 }
 
+/** My Business sections open one at a time: open the one a step needs (if it isn't already). */
+async function openSection(page: Page, testId: string) {
+  const fold = page.getByTestId(testId);
+  if ((await fold.getAttribute("open")) === null) await fold.locator("summary").first().click();
+}
+
 async function send(page: Page, text: string) {
   await page.getByLabel("Message", { exact: true }).fill(text);
   await page.getByRole("button", { name: "Send" }).click();
@@ -23,27 +29,32 @@ test("my business: the agent reads the menu link, answers from it, and asks the 
   const shop = await as(browser, "trattoria");
   await shop.page.getByRole("navigation").first().getByRole("link", { name: "My Business" }).click();
   // A web address written in the text is added to the links the agent reads.
+  await openSection(shop.page, "fold-own-words");
   await shop.page
     .getByRole("textbox", { name: /About your business/ })
     .fill(`Family-run Italian restaurant in Camden. Open Tue–Sun 12–15 and 18–23.
 Our menu: ${baseURL}/demo/trattoria-menu.html`);
   await shop.page.getByRole("button", { name: "Save your words" }).click();
   await expect(shop.page.getByRole("status").filter({ hasText: "I also added 1 link from your text" })).toBeVisible();
+  await openSection(shop.page, "fold-links");
   await expect(shop.page.getByTestId("source-status").first()).toContainText("✓ Read", { timeout: 20_000 });
   // Shown as the same link seen from two places, not a duplicate.
   await expect(shop.page.getByTestId("source-from-text")).toContainText("📝 from your link in About your business");
 
   // Try it: answered from the menu it read.
+  await openSection(shop.page, "fold-knows");
   await shop.page.getByLabel("Test question").fill("Do you have panna cotta?");
   await shop.page.getByRole("button", { name: "See the answer" }).click();
   await expect(shop.page.getByTestId("try-answer")).toContainText("Panna cotta");
 
   // Questions & answers can be added by hand; the agent uses them straight away.
+  await openSection(shop.page, "fold-faqs");
   await shop.page.getByRole("button", { name: "＋ Add a question" }).click();
   await shop.page.getByLabel("Question", { exact: true }).fill("Is there a kids menu?");
   await shop.page.getByLabel("Answer", { exact: true }).fill("Yes: small pasta and pizzas for £6.");
   await shop.page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(shop.page.getByTestId("faq-list")).toContainText("Is there a kids menu?");
+  await openSection(shop.page, "fold-knows");
   await shop.page.getByLabel("Test question").fill("Do you have a kids menu?");
   await shop.page.getByRole("button", { name: "See the answer" }).click();
   await expect(shop.page.getByTestId("try-answer")).toContainText("small pasta and pizzas");
@@ -63,6 +74,7 @@ Our menu: ${baseURL}/demo/trattoria-menu.html`);
   await item.getByRole("button", { name: "Send answer" }).click();
   await expect(luca.page.getByText("The team at Trattoria Sole: Yes, a public car park two minutes away")).toBeVisible({ timeout: 15_000 });
   await shop.page.goto("/business");
+  await openSection(shop.page, "fold-faqs");
   await expect(shop.page.getByRole("region", { name: "Questions and answers" })).toContainText("Is there parking nearby?");
   await shop.close();
   await luca.close();
@@ -119,6 +131,7 @@ test("add a business from a personal account and switch between the two", async 
   await expect(page.getByTestId("business-welcome")).toContainText(`live at @gina_bakery_${id}`);
   await expect(switcher).toContainText("Business");
   await expect(page.getByRole("navigation").first().getByRole("link", { name: "My Business" })).toBeVisible();
+  await openSection(page, "fold-own-words");
   await expect(page.getByRole("textbox", { name: /About your business/ })).toHaveValue(/Sourdough and pastries/);
 
   // A visitor asks something the business didn't say: it waits for the business, not for Gina's personal account.
@@ -152,6 +165,7 @@ test("how to book: the business adds its own ways; its page, its agent and frien
   // The business says how customers book (AGENTME never books itself).
   const shop = await as(browser, "trattoria");
   await shop.page.goto("/business");
+  await openSection(shop.page, "fold-book");
   const ways = shop.page.getByRole("form", { name: "How customers book or order" });
   await ways.getByLabel("Way 1: what is it").selectOption("book");
   await ways.getByLabel("Way 1: link or number").fill("trattoria-sole.example/book");

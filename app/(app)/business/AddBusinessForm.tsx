@@ -6,6 +6,7 @@ import { addBusinessAction } from "../identity-actions";
 import { MAX_BUSINESS_NAME, MIN_NAME } from "@/lib/social/limits";
 import { BUSINESS_AVATARS } from "@/lib/avatars";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
+import { WebsiteField, type WebsiteFill } from "@/components/business/WebsiteField";
 
 const AVATARS = BUSINESS_AVATARS;
 const suggest = (name: string) =>
@@ -24,7 +25,18 @@ export function AddBusinessForm() {
   const [edited, setEdited] = useState(false);
   const [avatar, setAvatar] = useState(AVATARS[0]);
   const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
+  const [about, setAbout] = useState("");
   const shown = edited ? handle : suggest(name);
+  // Filled in from the website (everything stays editable).
+  const fillFrom = (fill: WebsiteFill) => {
+    if (fill.name) setName(fill.name.slice(0, MAX_BUSINESS_NAME));
+    if (fill.handle) {
+      setEdited(true);
+      setHandle(fill.handle);
+    }
+    if (AVATARS.includes(fill.avatar)) setAvatar(fill.avatar);
+    if (fill.description) setAbout(fill.description);
+  };
 
   useEffect(() => {
     if (shown.length < 3) return;
@@ -42,6 +54,7 @@ export function AddBusinessForm() {
   return (
     <form action={action} className="space-y-5" aria-label="Add a business">
       <input type="hidden" name="avatar" value={avatar} />
+      <WebsiteField onFilled={fillFrom} />
       <div>
         <div className="flex items-baseline justify-between gap-2">
           <label className="label" htmlFor="biz-name">Business name <span className="font-normal text-muted">· required</span></label>
@@ -110,9 +123,11 @@ export function AddBusinessForm() {
           minRows={3}
           maxRows={10}
           maxLength={8000}
+          value={about}
+          onChange={(e) => setAbout(e.target.value)}
           placeholder={"Family-run Italian restaurant in Camden.\nOpen Tue–Sun 12–15 and 18–23."}
         />
-        <p className="hint mt-1">You can add your website, menu and more in My Business afterwards.</p>
+        <p className="hint mt-1">You can add your menu, links and more in My Business afterwards.</p>
       </div>
       {state?.error && <p className="text-sm text-danger" role="alert">{state.error}</p>}
       <button className="btn-primary w-full" disabled={pending}>{pending ? "Creating…" : "Create business"}</button>

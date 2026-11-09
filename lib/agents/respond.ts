@@ -12,6 +12,7 @@ import {
 import { BUSINESS_FAQ_SYSTEM, COORDINATION_REPLY_SYSTEM, wrapUntrusted } from "./prompts";
 import { matchTips } from "@/lib/people/askAround";
 import { businessKnowledge, type KnowledgeSource } from "@/lib/business/knowledge";
+import { citation } from "@/lib/business/learn";
 import { waysOf, withWays } from "@/lib/business/booking";
 
 export type Tip = { topic: string; tip: string };
@@ -240,8 +241,8 @@ export async function draftBusinessAnswer(
   audience: "public" | "customers",
 ) {
   const trimmed = question.trim().slice(0, 1000);
-  const { info, websites } = businessKnowledge(recipient, sources, audience);
-  const reply = await llm().generateObject({
+  const { info, websites } = businessKnowledge(recipient, sources, audience, trimmed);
+  const raw = await llm().generateObject({
     purpose: "business_faq",
     tier: "fast",
     system: BUSINESS_FAQ_SYSTEM,
@@ -252,8 +253,11 @@ export async function draftBusinessAnswer(
     maxTokens: 600,
     mockContext: { question: trimmed, businessInfo: recipient.business_info, knowledge: `${info}\n${websites}` },
   });
+  // Where it came from and when it was read: added by code, only for a page the agent was actually given.
+  const page = raw.needs_team ? undefined : sources.find((s) => s.url === raw.source_url.trim() && s.origin !== "learned");
+  const reply = { answer: page ? `${raw.answer.trim()}\n\n${citation(page.url, page.last_read_at)}` : raw.answer, needs_team: raw.needs_team };
   // Booking or ordering: the business's own ways are always in the answer (code, not the model).
-  return withWays(trimmed, reply, waysOf(recipient.business_info));
+  return { ...withWays(trimmed, reply, waysOf(recipient.business_info)), source: page?.url ?? null };
 }
 
 async function answerBusinessQuestion(recipient: RecipientAgent, question: string, incoming: IncomingA2A, business: BusinessContext): Promise<AgentResponse> {

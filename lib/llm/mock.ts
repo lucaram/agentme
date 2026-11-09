@@ -8,6 +8,7 @@ import { recordUsage } from "@/lib/usage/meter";
 import { mockModeration } from "@/lib/social/moderation";
 import { describeRecall, type RecallPlan } from "@/lib/agents/recall-format";
 import { heuristicCompose } from "@/lib/plans/compose";
+import { mockChanges, mockLearn, type PageText } from "@/lib/business/learn";
 import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest } from "./types";
 
 type Faq = { q: string; a: string };
@@ -56,7 +57,10 @@ export class MockProvider implements LLMProvider {
         // Deterministic stand-in for reading a PDF or photo.
         text = `(Read from ${String(ctx.kind ?? "file")}) ${String(ctx.hint ?? "Menu items and prices")}`;
         break;
-            case "ask_around_summary": {
+      case "business_changes":
+        text = mockChanges((ctx.added ?? []) as string[], (ctx.removed ?? []) as string[]);
+        break;
+      case "ask_around_summary": {
         // Deterministic: one labelled line per tip.
         const tips = (ctx.tips ?? []) as { handle: string; answer: string }[];
         text = tips.map((t) => `- **@${t.handle}:** ${t.answer}`).join("\n");
@@ -93,10 +97,14 @@ export class MockProvider implements LLMProvider {
         break;
       case "business_faq": {
         // Deterministic: FAQs, then a line of the business's info/website mentioning the question's words.
-        const answer = answerFaq(String(ctx.question ?? ""), (ctx.businessInfo ?? {}) as BusinessInfo, String(ctx.knowledge ?? ""));
-        value = { answer, needs_team: answer.startsWith("I don't have") };
+        const knowledge = String(ctx.knowledge ?? "");
+        const answer = answerFaq(String(ctx.question ?? ""), (ctx.businessInfo ?? {}) as BusinessInfo, knowledge);
+        value = { answer, needs_team: answer.startsWith("I don't have"), source_url: mockSourceOf(answer, knowledge) };
         break;
       }
+      case "business_learn":
+        value = mockLearn((ctx.pages ?? []) as PageText[]);
+        break;
       case "proposal":
         value = heuristicPlan(
           String(ctx.organiser),
@@ -128,6 +136,24 @@ async function meterMock(req: LLMRequest, output: string) {
   });
 }
 
+/**
+ * The website page an answer line came from: a page block ("From <url> (read …):")
+ * containing it. Not the owner's own words, and not the reviewed summary (which
+ * repeats the same sentences but isn't a page).
+ */
+export function mockSourceOf(answer: string, knowledge: string): string {
+  const start = knowledge.indexOf("<website_content>");
+  if (!answer || start < 0) return "";
+  let page = "";
+  for (const raw of knowledge.slice(start).split("\n")) {
+    const line = raw.trim();
+    const header = line.match(/^From (\S+) \((read [^)]*|summary[^)]*)\):$/);
+    if (header) page = header[2].startsWith("read") ? header[1] : "";
+    else if (page && line.includes(answer)) return page;
+  }
+  return "";
+}
+
 const STOPWORDS = new Set(["the", "you", "your", "can", "are", "have", "has", "for", "and", "any", "there", "what", "with", "does", "how", "our"]);
 const keywords = (s: string) => (s.toLowerCase().match(/[a-z]{3,}/g) ?? []).filter((w) => !STOPWORDS.has(w));
 
@@ -144,9 +170,20 @@ function answerFaq(question: string, info: BusinessInfo, knowledge = ""): string
     if (score > bestScore) [best, bestScore] = [faq, score];
   }
   if (best) return best.a;
-  // A line from the business's own info or website that mentions what was asked.
-  const lines = knowledge.split("\n").map((l) => l.trim()).filter((l) => l && !/^(Business:|From |<\/?\w)/.test(l));
-  const hit = lines.find((l) => keywords(l).some((w) => words.has(w) || words.has(`${w}s`) || words.has(w.replace(/s$/, ""))));
+  // A line that mentions what was asked: the owner's own words first, then the website's pages, then its reviewed summary.
+  const blocks: Record<"own" | "page" | "summary", string[]> = { own: [], page: [], summary: [] };
+  let block: keyof typeof blocks = "own";
+  for (const raw of knowledge.split("\n")) {
+    const line = raw.trim();
+    if (/^From \S+ \(read [^)]*\):$/.test(line)) block = "page";
+    else if (/^From \S+ \(summary/.test(line)) block = "summary";
+    // Headers, tags and questions aren't answers.
+    if (!line || /^(Business:|From |Q: |<\/?\w)/.test(line) || line.endsWith("?")) continue;
+    // "A: …" and "… (site/page)" are how the summary is written; the answer is the text itself.
+    blocks[block].push(block === "summary" ? line.replace(/^A: /, "").replace(/ \([^()]*\)$/, "") : line);
+  }
+  const mentions = (l: string) => keywords(l).some((w) => words.has(w) || words.has(`${w}s`) || words.has(w.replace(/s$/, "")));
+  const hit = [...blocks.own, ...blocks.page, ...blocks.summary].find(mentions);
   if (hit) return hit;
   if (/\b(open|hours|close|closing)\b/i.test(question) && info.hours) return `Our opening hours: ${info.hours}`;
   return "I don't have that information. Please contact the business directly.";

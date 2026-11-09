@@ -6,6 +6,7 @@ import { BUSINESS_INGEST_SYSTEM } from "@/lib/agents/prompts";
 import type { KnowledgeSource } from "./knowledge";
 import { htmlToText } from "./extract";
 import { safeFetch } from "./fetch";
+import { learnedOf, learnedText } from "./learn";
 
 const MAX_CONTENT = 30_000;
 const MAX_IMAGE_BYTES = 3.5 * 1024 * 1024; // keeps the encoded image under the model's limit
@@ -13,7 +14,7 @@ const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 export const REFRESH_HOURS = 24;
 
 /** PDFs and photos (e.g. a menu) are read by the AI into plain text. */
-async function readWithAi(body: Buffer, mediaType: string, kind: "pdf" | "image") {
+export async function readWithAi(body: Buffer, mediaType: string, kind: "pdf" | "image") {
   return llm().generateText({
     purpose: "business_ingest",
     tier: "fast",
@@ -62,14 +63,33 @@ export async function readSource(sourceId: string) {
   }
 }
 
-/** Keeps knowledge fresh: re-reads a few links not read in the last day (called by the sweeper). */
+/** Keeps knowledge fresh: re-reads a few links not read in the last day (called by the sweeper). Website pages are re-read with their site. */
 export async function refreshDueSources(limit = 3) {
   const cutoff = new Date(Date.now() - REFRESH_HOURS * 3600_000).toISOString();
-  const { data } = await adminClient().from("business_sources").select("id").in("status", ["ok", "error"]).lt("last_read_at", cutoff).order("last_read_at").limit(limit);
+  const { data } = await adminClient()
+    .from("business_sources")
+    .select("id")
+    .eq("origin", "link")
+    .in("status", ["ok", "error"])
+    .lt("last_read_at", cutoff)
+    .order("last_read_at")
+    .limit(limit);
   for (const s of data ?? []) await readSource(s.id);
 }
 
-export async function businessSources(agentId: string): Promise<KnowledgeSource[]> {
-  const { data } = await adminClient().from("business_sources").select("url, visibility, content, last_read_at").eq("agent_id", agentId).eq("status", "ok");
-  return data ?? [];
+/**
+ * What a business agent answers from: its links, and its website once the
+ * owner pressed Go live (the summary they reviewed first, then the pages).
+ * `preview`: the owner trying it out before going live sees it all.
+ */
+export async function businessSources(agentId: string, opts: { preview?: boolean } = {}): Promise<KnowledgeSource[]> {
+  const db = adminClient();
+  const [{ data: rows }, { data: site }] = await Promise.all([
+    db.from("business_sources").select("url, visibility, content, last_read_at, origin, title").eq("agent_id", agentId).eq("status", "ok"),
+    db.from("business_sites").select("url, live_at, learned, hidden, last_read_at").eq("agent_id", agentId).maybeSingle(),
+  ]);
+  const siteOn = Boolean(site && (site.live_at || opts.preview));
+  const sources: KnowledgeSource[] = (rows ?? []).filter((s) => s.origin !== "site" || siteOn);
+  const summary = site && siteOn ? learnedText(learnedOf(site.learned), site.hidden) : "";
+  return summary ? [{ url: site!.url, visibility: "public", content: summary, last_read_at: site!.last_read_at, origin: "learned", title: null }, ...sources] : sources;
 }

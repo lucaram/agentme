@@ -64,7 +64,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
           .order("created_at")
           .limit(200)
       : Promise.resolve({ data: [] as Database["public"]["Tables"]["messages"]["Row"][] }),
-    supabase.from("agents").select("id, owner_id, handle, display_name, avatar, type"),
+    supabase.from("agents").select("id, owner_id, handle, display_name, avatar, type, verified_domain"),
   ]);
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));
   const byOwner = new Map((agents ?? []).map((a) => [a.owner_id, a]));
@@ -180,7 +180,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
         ? "Notes from your agent and things others asked you."
         : "Ask your agent to organise something with your contacts. It always asks before contacting anyone."
       : conv.kind === "agent_chat"
-        ? "You're talking to an AI agent over A2A. It answers only from information its owner published."
+        ? `You're talking to an AI agent over A2A. It answers only from information its owner published.${target?.verified_domain ? ` ✓ Verified owner of ${target.verified_domain}.` : ""}`
         : conv.kind === "channel"
           ? conv.channel === "announcements"
             ? "Announcements from the community's moderators"

@@ -38,7 +38,7 @@ export function businessIdeas(): Idea[] {
     { label: "📅 Add how to book", href: "/business#book-or-order" },
     { label: "📷 Print your QR poster", href: "/print/qr" },
     { label: "🏟️ Start a community for your customers", href: "/communities" },
-    { label: "🔗 Add your menu or website", href: "/business#links" },
+    { label: "🔗 Add your menu or website", href: "/business#website" },
   ];
 }
 

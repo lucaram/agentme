@@ -21,6 +21,12 @@ async function send(page: Page, text: string) {
   await page.getByRole("button", { name: "Send" }).click();
 }
 
+/** My Business sections open one at a time: open the one a step needs (if it isn't already). */
+async function openSection(page: Page, testId: string) {
+  const fold = page.getByTestId(testId);
+  if ((await fold.getAttribute("open")) === null) await fold.locator("summary").first().click();
+}
+
 const suffix = () => Date.now().toString().slice(-6);
 
 test("groups: create from the Groups tab, only admins send, make someone admin", async ({ browser }) => {
@@ -168,6 +174,7 @@ test("businesses in groups: an admin adds one, it answers only when mentioned, a
   // The business sees where it was added (not the group's messages).
   const shop = await as(browser, "trattoria");
   await shop.page.goto("/business");
+  await openSection(shop.page, "fold-places");
   await expect(shop.page.getByTestId("placement").filter({ hasText: name })).toBeVisible();
   await shop.page.goto(chatUrl);
   await expect(shop.page.getByText("Shall we try that Italian place?")).toHaveCount(0);

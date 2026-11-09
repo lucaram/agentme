@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { AVATARS } from "@/lib/avatars";
+import { avatarsFor } from "@/lib/avatars";
+import { WebsiteField, type WebsiteFill } from "@/components/business/WebsiteField";
 import { checkHandle, createAgent } from "./actions";
 import { NameField } from "@/components/NameField";
 import { LimitedField } from "@/components/LimitedField";
@@ -14,7 +15,19 @@ export function OnboardingForm({ suggestedHandle, next }: { suggestedHandle: str
   const [type, setType] = useState<"personal" | "business">("personal");
   const [handle, setHandle] = useState(suggestedHandle);
   const [status, setStatus] = useState<HandleStatus>(null);
-  const [avatar, setAvatar] = useState(AVATARS[0]);
+  const [picked, setAvatar] = useState("");
+  // Businesses choose from the business pictures; the first one until you pick.
+  const avatars = avatarsFor(type);
+  const avatar = avatars.includes(picked) ? picked : avatars[0];
+  // Filled in from the website: the name field restarts with it (key), the rest is state.
+  const [filled, setFilled] = useState<{ key: number; name: string }>({ key: 0, name: "" });
+  const [description, setDescription] = useState("");
+  const fillFrom = (fill: WebsiteFill) => {
+    if (fill.name) setFilled((f) => ({ key: f.key + 1, name: fill.name }));
+    if (fill.handle) setHandle(fill.handle);
+    setAvatar(fill.avatar);
+    if (fill.description) setDescription(fill.description.slice(0, SIGNUP_LIMITS.description));
+  };
 
   useEffect(() => {
     if (!handle) return;
@@ -51,7 +64,17 @@ export function OnboardingForm({ suggestedHandle, next }: { suggestedHandle: str
         ))}
       </div>
 
-      <NameField id="display_name" name="display_name" label={type === "business" ? "Business name" : "Your name"} max={maxNameFor(type)} min={MIN_NAME} />
+      {type === "business" && <WebsiteField onFilled={fillFrom} />}
+
+      <NameField
+        key={filled.key}
+        id="display_name"
+        name="display_name"
+        label={type === "business" ? "Business name" : "Your name"}
+        max={maxNameFor(type)}
+        min={MIN_NAME}
+        defaultValue={filled.name}
+      />
 
       <div>
         <label className="label" htmlFor="handle">Agent address</label>
@@ -76,7 +99,7 @@ export function OnboardingForm({ suggestedHandle, next }: { suggestedHandle: str
       <div>
         <span className="label">Avatar</span>
         <div className="flex flex-wrap gap-2">
-          {AVATARS.map((a) => (
+          {avatars.map((a) => (
             <button
               key={a}
               type="button"
@@ -102,7 +125,7 @@ export function OnboardingForm({ suggestedHandle, next }: { suggestedHandle: str
         <fieldset className="space-y-3">
           <legend className="label">What should your agent know? (optional)</legend>
           <div>
-            <LimitedField name="description" multiline rows={2} maxRows={6} max={SIGNUP_LIMITS.description} aria-label="What your business does" placeholder="What your business does" />
+            <LimitedField name="description" multiline rows={2} maxRows={6} max={SIGNUP_LIMITS.description} value={description} onChange={setDescription} aria-label="What your business does" placeholder="What your business does" />
             <p className="hint mt-1">A short start. You can add much more later in Business → About your business.</p>
           </div>
           <LimitedField name="hours" max={SIGNUP_LIMITS.hours} aria-label="Opening hours" placeholder="Opening hours, e.g. Tue–Sun 12:00–23:00" />
