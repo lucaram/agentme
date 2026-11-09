@@ -1,167 +1,100 @@
 import Link from "next/link";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { deleteAccount, saveSettings } from "../actions";
-import { PhoneVerify } from "./PhoneVerify";
-import { SaveAccount } from "./SaveAccount";
-import { DiscoverableToggle } from "./DiscoverableToggle";
-import { SavedTips } from "./SavedTips";
-import { maskEmail } from "@/lib/people/normalise";
-import { businessesOnlyOwnedBy, isManagedLogin, realPerson } from "@/lib/identities";
+import { isManagedLogin } from "@/lib/identities";
 
-export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
+const CONTACT_POLICY: Record<string, string> = { contacts_only: "Only contacts", anyone: "Anyone", nobody: "Nobody" };
+
+/** Settings: a short menu; each row shows a summary and opens its own page. */
+export default async function SettingsPage() {
   const { user, agent } = await requireAgent();
-  const { saved, error } = await searchParams;
   const supabase = await createClient();
-  const [{ data: facts }, { data: identifiers }] = await Promise.all([
-    supabase.from("agent_facts").select("category, value, disclosure"),
-    supabase.from("agent_identifiers").select("kind, hint"),
+  const [{ data: facts }, { count: tips }] = await Promise.all([
+    supabase.from("agent_facts").select("disclosure"),
+    supabase.from("agent_tips").select("*", { count: "exact", head: true }),
   ]);
-  const { data: tips } = await supabase.from("agent_tips").select("id, topic, tip").order("created_at", { ascending: false });
-  const hint = (kind: string) => identifiers?.find((i) => i.kind === kind)?.hint ?? null;
-  // A business added from a personal account has an internal login: nothing to find it by.
+  const personal = agent.type === "personal";
   const managedBusiness = isManagedLogin(user.email);
-  const person = await realPerson(user, agent);
-  const ownedBusinesses = agent.type === "personal" && person ? await businessesOnlyOwnedBy(person) : [];
+  const shared = (facts ?? []).filter((f) => f.disclosure === "contacts").length;
+
+  const rows: { href: string; icon: string; title: string; summary: string; testId?: string; highlight?: boolean }[] = [
+    {
+      href: "/settings/profile",
+      icon: "👤",
+      title: "Profile & account",
+      summary: agent.guest
+        ? "You're a guest: save your account to keep it"
+        : `${agent.display_name} · @${agent.handle}${!managedBusiness && user.email ? ` · ✉️ ${user.emailConfirmed ? "verified" : "not verified"}` : ""}`,
+      testId: "profile-link",
+      highlight: agent.guest,
+    },
+    personal
+      ? {
+          href: "/settings/about",
+          icon: "🧠",
+          title: "What your agent knows about you",
+          summary: facts?.length
+            ? `${facts.length} ${facts.length === 1 ? "topic" : "topics"} · ${shared} shared with contacts' agents when asked`
+            : "When you're free, food & drink, hobbies, where you are, and more",
+          testId: "about-you-link",
+        }
+      : {
+          href: "/business",
+          icon: "🏪",
+          title: "Business information",
+          summary: "What your agent knows is managed in My Business",
+        },
+    {
+      href: "/settings/privacy",
+      icon: "🔐",
+      title: "Privacy",
+      summary: [
+        CONTACT_POLICY[agent.contact_policy] ?? agent.contact_policy,
+        agent.group_add_policy === "nobody" ? "Group invites only" : "Contacts can add you to groups",
+        ...(personal && !agent.guest && !managedBusiness ? [agent.discoverable ? "Findable" : "Not findable"] : []),
+      ].join(" · "),
+      testId: "privacy-link",
+    },
+    ...(personal
+      ? [
+          {
+            href: "/settings/tips",
+            icon: "💡",
+            title: "Saved tips",
+            summary: tips ? `${tips} ${tips === 1 ? "tip" : "tips"} your agent can share when friends ask around` : "Tips your agent can share when friends ask around",
+            testId: "tips-link",
+          },
+        ]
+      : []),
+    {
+      href: "/history",
+      icon: "📜",
+      title: "Activity",
+      summary: "Everything your agent did: plans, what it asked and what it shared",
+      testId: "activity-link",
+    },
+  ];
 
   return (
-    <div className="space-y-8">
-      {saved === "account" && <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status">Your account is saved. You can now log in with your email anywhere.</p>}
-      {agent.guest && (
-        <section id="account" className="card space-y-3 border-accent">
-          <h2 className="font-semibold">Save your account</h2>
-          <p className="hint">You joined as a guest, so this account only lives in this browser. Add an email and password to keep your plans, chats and contacts.</p>
-          <SaveAccount />
-        </section>
-      )}
-      {!agent.guest && !managedBusiness && (
-        <section id="find-me" className="card space-y-3">
-          <div>
-            <h2 className="font-semibold">How friends can find you</h2>
-            <p className="hint">People who have your email or number in their contacts can find you on AGENTME. Your details are never shown to them.</p>
-          </div>
-          <DiscoverableToggle initial={agent.discoverable} />
-          <p className="text-sm">✉️ {user.email && user.emailConfirmed ? `${maskEmail(user.email)} ✓` : "Your email isn't verified yet."}</p>
-          <PhoneVerify current={hint("phone")} />
-        </section>
-      )}
-      <form action={saveSettings} className="space-y-6">
-        {saved && saved !== "account" && <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status">Saved.</p>}
-        <section className="card space-y-3">
-          <h2 className="font-semibold">Profile</h2>
-          <div>
-            <label className="label" htmlFor="display_name">Name</label>
-            <input className="input" id="display_name" name="display_name" defaultValue={agent.display_name} maxLength={60} />
-          </div>
-          <p className="hint">Your address @{agent.handle} is permanent.</p>
-        </section>
-
-        <section className="card space-y-3">
-          <h2 className="font-semibold">Who can contact your agent</h2>
-          {(
-            [
-              ["contacts_only", "Only my contacts", "Recommended for personal agents."],
-              ["anyone", "Anyone", "Strangers' agents can ask questions. Private data is still never shared with non-contacts."],
-              ["nobody", "Nobody", "Your agent ignores all incoming requests."],
-            ] as const
-          ).map(([value, title, hint]) => (
-            <label key={value} className="flex items-start gap-2 text-sm">
-              <input type="radio" name="contact_policy" value={value} defaultChecked={agent.contact_policy === value} className="mt-1" />
-              <span>
-                {title}
-                <span className="block hint">{hint}</span>
-              </span>
-            </label>
-          ))}
-        </section>
-
-        <section className="card space-y-3">
-          <h2 className="font-semibold">Recommendations</h2>
-          <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" name="recommendations_ok" defaultChecked={agent.recommendations_ok} className="mt-1" />
-            <span>
-              Friends can ask me for recommendations
-              <span className="block hint">When a contact asks around (“does anyone know a good plumber?”), you&apos;re asked too. You can always say “I don&apos;t know”; they&apos;re never told.</span>
+    <div className="space-y-4">
+      <h1 className="text-lg font-semibold">Settings</h1>
+      <nav aria-label="Settings" className="space-y-2">
+        {rows.map((r) => (
+          <Link
+            key={r.href}
+            href={r.href}
+            className={`card flex items-center gap-3 hover:bg-accent-soft ${r.highlight ? "border-accent" : ""}`}
+            data-testid={r.testId}
+          >
+            <span className="text-xl" aria-hidden>{r.icon}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold">{r.title}</span>
+              <span className="block truncate text-xs text-muted">{r.summary}</span>
             </span>
-          </label>
-          <input type="hidden" name="recommendations_form" value="1" />
-        </section>
-
-        <section className="card space-y-3">
-          <h2 className="font-semibold">Who can add you to groups</h2>
-          {(
-            [
-              ["contacts", "My contacts", "Contacts can add you to a group directly."],
-              ["nobody", "Nobody: send me an invite", "Your agent asks you in My Agent and you decide whether to join."],
-            ] as const
-          ).map(([value, title, hint]) => (
-            <label key={value} className="flex items-start gap-2 text-sm">
-              <input type="radio" name="group_add_policy" value={value} defaultChecked={agent.group_add_policy === value} className="mt-1" />
-              <span>
-                {title}
-                <span className="block hint">{hint}</span>
-              </span>
-            </label>
-          ))}
-        </section>
-
-        {agent.type === "personal" ? (
-          <Link href="/settings/about" className="card flex items-center justify-between hover:bg-accent-soft" data-testid="about-you-link">
-            <span>
-              <span className="block font-semibold">🧠 What your agent knows about you</span>
-              <span className="block text-xs text-muted">
-                {(facts ?? []).length
-                  ? `${(facts ?? []).length} ${(facts ?? []).length === 1 ? "topic" : "topics"} · ${(facts ?? []).filter((f) => f.disclosure === "contacts").length} shared with contacts' agents when asked`
-                  : "When you're free, food & drink, hobbies, where you are, budget, practical needs, and your own topics."}
-              </span>
-            </span>
-            <span className="text-accent">›</span>
+            <span className="text-accent" aria-hidden>›</span>
           </Link>
-        ) : (
-          <Link href="/business" className="card flex items-center justify-between hover:bg-accent-soft">
-            <span>
-              <span className="block font-semibold">Business information</span>
-              <span className="block text-xs text-muted">What your agent knows (your words, your website and menu) is managed in My Business.</span>
-            </span>
-            <span className="text-accent">›</span>
-          </Link>
-        )}
-        <button className="btn-primary">Save</button>
-      </form>
-
-      {agent.type === "personal" && (
-        <section className="card space-y-3" aria-label="Saved tips">
-          <div>
-            <h2 className="font-semibold">Saved tips</h2>
-            <p className="hint">Your agent shares these by itself when a friend asks around about that topic (only with your contacts). Everything else, you answer yourself.</p>
-          </div>
-          <SavedTips tips={tips ?? []} />
-        </section>
-      )}
-
-      <Link href="/history" className="card flex items-center justify-between hover:bg-accent-soft" data-testid="activity-link">
-        <span>
-          <span className="block font-semibold">Activity</span>
-          <span className="block text-xs text-muted">Everything your agent did: plans, what it asked and what it shared.</span>
-        </span>
-        <span className="text-accent">›</span>
-      </Link>
-
-      <section className="card space-y-3 border-danger">
-        <h2 className="font-semibold text-danger">Delete account</h2>
-        <p className="text-sm text-muted">
-          Permanently deletes your agent, preferences, contacts, private chats, tasks and audit history. Messages you sent in shared
-          chats stay for other members, without your name.
-          {ownedBusinesses.length > 0 &&
-            ` The ${ownedBusinesses.length === 1 ? "business" : `${ownedBusinesses.length} businesses`} you added (and only you manage) ${ownedBusinesses.length === 1 ? "is" : "are"} deleted too.`}
-          {managedBusiness && " This deletes only the business; your personal account stays and you're switched back to it."}
-        </p>
-        <form action={deleteAccount} className="flex flex-wrap gap-2">
-          <input className="input max-w-xs" name="confirm" placeholder={`Type ${agent.handle} to confirm`} aria-label="Confirm handle" />
-          <button className="btn-danger">Delete everything</button>
-        </form>
-        {error === "confirm" && <p className="text-sm text-danger">Type your handle exactly to confirm.</p>}
-      </section>
+        ))}
+      </nav>
     </div>
   );
 }

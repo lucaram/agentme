@@ -58,7 +58,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       {agent.guest && (
         <p className="mx-4 mt-3 rounded-xl bg-accent-soft px-3 py-2 text-sm" data-testid="guest-banner">
           You&apos;re here as a guest.{" "}
-          <Link href="/settings#account" className="font-medium text-accent underline">Save your account</Link> to keep it on other devices.
+          <Link href="/settings/profile#account" className="font-medium text-accent underline">Save your account</Link> to keep it on other devices.
         </p>
       )}
       <div className="flex flex-1 flex-col px-4 py-4">{children}</div>

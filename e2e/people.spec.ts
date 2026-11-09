@@ -189,7 +189,7 @@ test("the header search follows the tab: contacts on Contacts, your groups on Gr
 test("ask around: a saved tip answers by itself, a friend answers personally, then a summary", async ({ browser }) => {
   // Paul saves a tip: his agent may share it by itself when someone asks about plumbers.
   const paul = await as(browser, "paul");
-  await paul.page.goto("/settings");
+  await paul.page.goto("/settings/tips");
   await paul.page.getByLabel("Tip topic").fill("plumber");
   await paul.page.getByLabel("Tip", { exact: true }).fill("Joe's Plumbing, 020 7946 0000");
   await paul.page.getByRole("button", { name: "Add tip" }).click();
