@@ -27,6 +27,7 @@ import {
 import { EditCommunityForm } from "../CommunityForm";
 import { JoinCommunity } from "./JoinCommunity";
 import { BusinessHandleForm } from "@/components/social/BusinessHandleForm";
+import { Fold } from "@/components/Fold";
 import { digestCounts, suggestModerators, touchSeen } from "@/lib/social/digest";
 
 const AUTOPILOT_ACTION: Record<string, string> = {
@@ -185,15 +186,23 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
       </section>
 
       {isMod && (
-        <>
-          <section className="card space-y-4" aria-label="Autopilot" data-testid="autopilot">
-            <div>
-              <h2 className="font-semibold">🤖 Autopilot</h2>
+        <div className="space-y-3">
+          <Fold
+            name="community-sections"
+            icon="🤖"
+            title="Autopilot"
+            testId="autopilot"
+            open={appealsWaiting.length > 0}
+            summary={[
+              `${autopilotWeek.refused} kept out this week`,
+              appealsWaiting.length ? `${appealsWaiting.length} ${appealsWaiting.length === 1 ? "appeal waits" : "appeals wait"} for you` : "nothing waiting",
+            ].join(" · ")}
+          >
+            <div className="space-y-4 px-5 py-5 sm:px-6" aria-label="Autopilot">
               <p className="hint">
                 Your community&apos;s agent keeps spam out, hides messages several members report when it agrees, and nudges members before they post
                 something rude. It works even if nobody moderates; you get one summary a day. Undo anything in one tap.
               </p>
-            </div>
             <p className="text-sm" data-testid="autopilot-week">
               Last 7 days: {autopilotWeek.refused} kept out · {autopilotWeek.hidden} hidden after reports · {autopilotWeek.nudged} nudged
             </p>
@@ -252,10 +261,21 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
                 </ul>
               </div>
             )}
-          </section>
+            </div>
+          </Fold>
 
-          <section className="card space-y-4" aria-label="Moderation">
-            <h2 className="font-semibold">Moderation</h2>
+          <Fold
+            name="community-sections"
+            icon="🛡️"
+            title="Moderation"
+            testId="fold-moderation"
+            open={Boolean(requests?.length || reports?.length)}
+            summary={[
+              requests?.length ? `${requests.length} asking to join` : "Invite link",
+              reports?.length ? `${reports.length} reported` : "nothing reported",
+            ].join(" · ")}
+          >
+            <div className="space-y-4 px-5 py-5 sm:px-6" aria-label="Moderation">
             <JoinLinkBox create={communityLinkAction.bind(null, id)} revoke={revokeCommunityLinkAction.bind(null, id)} what={community.name} />
 
             {requests && requests.length > 0 && (
@@ -294,13 +314,18 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
                 <p className="text-sm text-muted">Nothing reported. 🎉</p>
               )}
             </div>
-          </section>
-
-          <section className="card space-y-3" aria-label="Official partners">
-            <div>
-              <h2 className="font-semibold">Official partners</h2>
-              <p className="hint">Invite a local business your members use. Once it accepts, members can mention it in the chats and it answers from its public information.</p>
             </div>
+          </Fold>
+
+          <Fold
+            name="community-sections"
+            icon="🤝"
+            title="Official partners"
+            testId="fold-partners"
+            summary={partners.length ? `${partners.filter((p) => p.status === "active").length} active · ${partners.filter((p) => p.status === "invited").length} invited` : "Invite a local business your members use"}
+          >
+            <div className="space-y-4 px-5 py-5 sm:px-6" aria-label="Official partners">
+              <p className="hint">Invite a local business your members use. Once it accepts, members can mention it in the chats and it answers from its public information.</p>
             {partners.length > 0 && (
               <ul className="divide-y divide-border">
                 {partners.map((p) => (
@@ -321,10 +346,17 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
               button="Invite"
               done="invitation sent. It appears as a partner once they accept."
             />
-          </section>
+            </div>
+          </Fold>
 
-          <section className="card space-y-2" aria-label="Members">
-            <h2 className="font-semibold">Members</h2>
+          <Fold
+            name="community-sections"
+            icon="👥"
+            title="Members"
+            testId="fold-members"
+            summary={[`${members} ${members === 1 ? "member" : "members"}`, ...(bans?.length ? [`${bans.length} banned`] : [])].join(" · ")}
+          >
+            <div className="space-y-4 px-5 py-5 sm:px-6" aria-label="Members">
             <ul className="divide-y divide-border">
               {(people ?? []).map((p) => {
                 const isMe = p.user_id === user.id;
@@ -368,11 +400,11 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
                 </ul>
               </details>
             )}
-          </section>
+            </div>
+          </Fold>
 
-          <details className="card">
-            <summary className="cursor-pointer font-semibold">Edit community</summary>
-            <div className="mt-3">
+          <Fold name="community-sections" icon="✏️" title="Edit community" testId="fold-edit" summary="Name, description, rules, picture and who can join">
+            <div className="px-5 py-5 sm:px-6">
               <EditCommunityForm
                 id={id}
                 isOwner={isOwner}
@@ -380,8 +412,8 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
                 values={{ name: community.name, description: community.description ?? "", rules: community.rules ?? "", avatar: community.avatar, visibility: community.visibility as "public" | "private" }}
               />
             </div>
-          </details>
-        </>
+          </Fold>
+        </div>
       )}
 
       <section className="card flex flex-wrap gap-2" aria-label="Leave">
