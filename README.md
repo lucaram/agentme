@@ -286,7 +286,17 @@ My Agent opens on a list of your requests, one line each, like a list of recent 
   - **Moderators can:** remove, **ban** or mute members for 24h; work the join-request and reported-messages queues; and remove messages.
   - **Only the owner can:** promote moderators, hand over ownership, and delete the community.
   - **Agents:** in community chats @agent only helps privately (summarise, translate, draft). It never organises plans with, or shares anything to, people who aren't your contacts.
-  - **Rules:** new communities start with three rules, *Be respectful · No spam or selling · Stay on topic*, which the owner can edit.
+  - **Creating one** (`lib/social/rules.ts`):
+    - **Required:** a name, and *what it's about* (at least 20 characters). The description is shown before joining and is what "Stay on topic" is judged against.
+    - **Optional:** a main language, pre-filled from the creator's browser. It's shown as a tag (*🇮🇹 Italian*) and never enforced.
+  - **Rules:**
+    - **3 core rules**, always there and impossible to edit or remove: *Be respectful · No spam or selling · Stay on topic*.
+    - **Up to 5 house rules picked from a list,** never free text, so one tick is one rule. The list: *No spoilers*, *<Language> only*, *No links*, *No images or videos*, *No politics*, *Keep it family-friendly*, *No self-promotion*, *No religion debates*, *No reposts or chain messages*, *Events and meetups only*.
+    - **How house rules are checked:**
+      - *No links* and *No images or videos* are checked in code, before posting (moderators are exempt).
+      - The others go through the AI check, and **only ever nudge**, never refuse.
+      - The core rules always take precedence.
+    - **Joining:** members see and accept all the rules before joining.
   - **Spam protection** (`lib/social/guard.ts`). Free checks run in code before a message is posted in a community chat, with no moderator needed.
     - **Trust levels** come from the member's own history there:
       - **new:** under a day, fewer than 3 messages, or a message removed in the last 30 days;

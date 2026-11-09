@@ -124,7 +124,7 @@ describe.skipIf(!dbUp)("businesses in groups and communities (live)", () => {
 
   it("businesses can't join groups or communities as members", async () => {
     const { communities } = await lib();
-    const made = await communities.createCommunity(me(people.admin), { name: `Neighbours ${run}`, description: "", rules: "", avatar: "🏟️", visibility: "public" });
+    const made = await communities.createCommunity(me(people.admin), { name: `Neighbours ${run}`, description: "A test community about football and match days", avatar: "🏟️", visibility: "public" });
     expect(made.ok).toBe(true);
     communityIds.push((made as { id: string }).id);
     expect(await communities.joinCommunity(communityIds[0], me(people.shop), { acceptRules: true })).toMatchObject({ ok: false, error: expect.stringContaining("official partner") });

@@ -68,5 +68,6 @@ export async function guardCommunityPost(
     .eq("sender_user_id", userId)
     .gt("created_at", tenMinutesAgo)
     .limit(20);
-  return { ...checkCommunityMessage(text, level, (recent ?? []).map((m) => m.content)), level };
+  const { data: community } = await db.from("communities").select("house_rules").eq("id", communityId).maybeSingle();
+  return { ...checkCommunityMessage(text, level, (recent ?? []).map((m) => m.content), community?.house_rules ?? []), level };
 }

@@ -4,9 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { COMMUNITY_AVATARS } from "@/lib/social/shared";
 import { CreateCommunityForm } from "./CommunityForm";
 import { Fold } from "@/components/Fold";
+import { languageOf } from "@/lib/social/rules";
 import { Notices } from "@/components/social/Notices";
 
-type Row = { id: string; name: string; description: string | null; avatar: string; visibility: string };
+type Row = { id: string; name: string; description: string | null; avatar: string; visibility: string; language: string | null };
 
 function List({ rows, counts, roles, toReview }: { rows: Row[]; counts: Map<string, number>; roles?: Map<string, string>; toReview?: Map<string, number> }) {
   return (
@@ -19,6 +20,7 @@ function List({ rows, counts, roles, toReview }: { rows: Row[]; counts: Map<stri
               <span className="block truncate font-medium">{c.name}</span>
               <span className="block truncate text-xs text-muted">
                 {counts.get(c.id) ?? 0} {(counts.get(c.id) ?? 0) === 1 ? "member" : "members"} · {c.visibility === "private" ? "🔒 Private" : "Public"}
+                {languageOf(c.language) && ` · ${languageOf(c.language)!.flag} ${languageOf(c.language)!.name}`}
                 {roles?.get(c.id) && roles.get(c.id) !== "member" && ` · ${roles.get(c.id) === "owner" ? "Owner" : "Moderator"}`}
                 {c.description && ` · ${c.description}`}
               </span>
@@ -53,9 +55,9 @@ export default async function CommunitiesPage() {
   }
 
   const [{ data: mine }, { data: publicOnes }] = await Promise.all([
-    mineIds.length ? supabase.from("communities").select("id, name, description, avatar, visibility").in("id", mineIds).order("name") : Promise.resolve({ data: [] as Row[] }),
+    mineIds.length ? supabase.from("communities").select("id, name, description, avatar, visibility, language").in("id", mineIds).order("name") : Promise.resolve({ data: [] as Row[] }),
     // Search lives in the header bar; here, the biggest public communities.
-    supabase.from("communities").select("id, name, description, avatar, visibility").eq("visibility", "public").order("created_at", { ascending: false }).limit(50),
+    supabase.from("communities").select("id, name, description, avatar, visibility, language").eq("visibility", "public").order("created_at", { ascending: false }).limit(50),
   ]);
   const discover = (publicOnes ?? []).filter((c) => !roles.has(c.id));
   const allIds = [...(mine ?? []), ...discover].map((c) => c.id);

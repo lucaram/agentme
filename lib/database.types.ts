@@ -217,14 +217,14 @@ isOneToOne: false
                   ]
                 },"communities": {
                   Row: {
-                    "avatar": string,"created_at": string,"description": string | null,"digest_sent_at": string | null,"id": string,"mods_nudged_at": string | null,"name": string,"owner_id": string | null,"rules": string | null,"visibility": string
+                    "avatar": string,"created_at": string,"description": string | null,"digest_sent_at": string | null,"house_rules": (string)[],"id": string,"language": string | null,"mods_nudged_at": string | null,"name": string,"owner_id": string | null,"rules": string | null,"visibility": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "avatar"?: string,"created_at"?: string,"description"?: string | null,"digest_sent_at"?: string | null,"id"?: string,"mods_nudged_at"?: string | null,"name": string,"owner_id"?: string | null,"rules"?: string | null,"visibility"?: string
+                    "avatar"?: string,"created_at"?: string,"description"?: string | null,"digest_sent_at"?: string | null,"house_rules"?: (string)[],"id"?: string,"language"?: string | null,"mods_nudged_at"?: string | null,"name": string,"owner_id"?: string | null,"rules"?: string | null,"visibility"?: string
                   }
                   Update: {
-                    "avatar"?: string,"created_at"?: string,"description"?: string | null,"digest_sent_at"?: string | null,"id"?: string,"mods_nudged_at"?: string | null,"name"?: string,"owner_id"?: string | null,"rules"?: string | null,"visibility"?: string
+                    "avatar"?: string,"created_at"?: string,"description"?: string | null,"digest_sent_at"?: string | null,"house_rules"?: (string)[],"id"?: string,"language"?: string | null,"mods_nudged_at"?: string | null,"name"?: string,"owner_id"?: string | null,"rules"?: string | null,"visibility"?: string
                   }
                   Relationships: [
                     

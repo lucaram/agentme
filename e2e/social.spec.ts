@@ -82,11 +82,12 @@ test("communities: create, join by accepting the rules, Announcements vs General
   const form = luca.page.getByRole("form", { name: "New community" });
   await form.getByLabel("Name").fill(name);
   await form.getByLabel("What is it about?").fill("Match days, transfers and banter");
-  // The three universal rules come filled in; the owner can change them.
-  await expect(form.getByLabel(/Rules/)).toHaveValue("Be respectful.\nNo spam or selling.\nStay on topic.");
-  await form.getByLabel(/Rules/).fill("Be kind. No spam.");
+  // The three core rules are always there; house rules are picked from a list.
+  await expect(form.getByRole("list", { name: "Core rules" })).toContainText("Be respectful");
+  await form.getByRole("checkbox", { name: /No spoilers/ }).check();
   await form.getByRole("button", { name: "Create community" }).click();
   await expect(luca.page).toHaveURL(/\/communities\/[0-9a-f-]+$/);
+  await expect(luca.page.getByTestId("community-rules")).toContainText("No spoilers");
   const communityUrl = luca.page.url();
 
   // Eve finds it in Discover communities and joins after accepting the rules.
@@ -188,6 +189,7 @@ test("community autopilot: a message kept out can be appealed; a moderator accep
   await luca.page.getByRole("button", { name: "＋ New community" }).click();
   const form = luca.page.getByRole("form", { name: "New community" });
   await form.getByLabel("Name").fill(name);
+  await form.getByLabel("What is it about?").fill("Match days and banter for autopilot tests");
   await form.getByRole("button", { name: "Create community" }).click();
   await expect(luca.page).toHaveURL(/\/communities\/[0-9a-f-]+$/);
   const communityUrl = luca.page.url();

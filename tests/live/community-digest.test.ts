@@ -45,7 +45,7 @@ describe.skipIf(!dbUp)("community appeals, digest and quiet moderators (live)", 
       people[key] = { userId: created.user.id, agent: agent! };
     }
     const { communities } = await lib();
-    const made = await communities.createCommunity(me("owner"), { name: `Digest ${run}`, description: "Football", rules: "Be respectful.", avatar: "🏟️", visibility: "public" });
+    const made = await communities.createCommunity(me("owner"), { name: `Digest ${run}`, description: "A test community about football and match days", avatar: "🏟️", visibility: "public" });
     communityId = (made as { id: string }).id;
     for (const k of ["author", "regular", "other"] as const) await communities.joinCommunity(communityId, me(k), { acceptRules: true });
     general = (await db.from("conversations").select("id").eq("community_id", communityId).eq("channel", "general").single()).data!.id;

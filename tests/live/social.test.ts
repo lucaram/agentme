@@ -109,7 +109,7 @@ describe.skipIf(!dbUp)("groups and communities (live)", () => {
   it("communities: rules, Announcements vs General, mutes, private requests, bans", async () => {
     const { communities, shared } = await lib();
     const { a, b, c, d } = people;
-    const made = await communities.createCommunity(a.me, { name: `Test FC ${run}`, description: "Fans", rules: "Be kind.", avatar: "⚽", visibility: "public" });
+    const made = await communities.createCommunity(a.me, { name: `Test FC ${run}`, description: "A test community about football and match days", avatar: "⚽", visibility: "public" });
     expect(made.ok).toBe(true);
     const id = (made as { id: string }).id;
     communityIds.push(id);
@@ -153,7 +153,7 @@ describe.skipIf(!dbUp)("groups and communities (live)", () => {
     expect((await communities.leaveCommunity(id, a.me)).ok).toBe(false);
 
     // Private: request, then a moderator approves; an invite link skips the queue.
-    await communities.updateCommunity(id, a.me, { name: `Test FC ${run}`, description: "Fans", rules: "Be kind.", avatar: "⚽", visibility: "private" });
+    await communities.updateCommunity(id, a.me, { name: `Test FC ${run}`, description: "A test community about football and match days", avatar: "⚽", visibility: "private" });
     expect(await communities.joinCommunity(id, d.me, { acceptRules: true })).toEqual({ ok: true, status: "requested" });
     const { data: req } = await admin().from("join_requests").select("id").eq("community_id", id).eq("user_id", d.userId).single();
     expect(await communities.decideCommunityRequest(req!.id, c.me, true)).toEqual({ ok: true });
@@ -221,7 +221,7 @@ describe.skipIf(!dbUp)("groups and communities (live)", () => {
   it("the browser sees private communities and moderation data only when allowed", async () => {
     const { communities } = await lib();
     const { a, b, d } = people;
-    const made = await communities.createCommunity(a.me, { name: `Secret ${run}`, description: "", rules: "", avatar: "🗳️", visibility: "private" });
+    const made = await communities.createCommunity(a.me, { name: `Secret ${run}`, description: "A test community about football and match days", avatar: "🗳️", visibility: "private" });
     const id = (made as { id: string }).id;
     communityIds.push(id);
     const asUser = async (p: P) => {

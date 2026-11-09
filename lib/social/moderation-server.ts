@@ -4,6 +4,7 @@ import { llm } from "@/lib/llm";
 import { MODERATION_SYSTEM, wrapUntrusted } from "@/lib/agents/prompts";
 import { agreesWithReports, decide, ModerationSchema, THRESHOLDS, type Decision, type Moderation } from "./moderation";
 import type { TrustLevel } from "./guard";
+import { houseRuleLabel } from "./rules";
 
 type Event = {
   communityId: string;
@@ -34,7 +35,7 @@ async function logEvent(e: Event): Promise<string | null> {
 
 /** The AI check of one message against the community's own description and rules. Fails open (posts) if the check is unavailable. */
 export async function checkAgainstRules(communityId: string, text: string): Promise<Moderation | null> {
-  const { data: community } = await adminClient().from("communities").select("name, description, rules").eq("id", communityId).maybeSingle();
+  const { data: community } = await adminClient().from("communities").select("name, description, rules, house_rules, language").eq("id", communityId).maybeSingle();
   if (!community) return null;
   try {
     return await llm().generateObject({
@@ -49,7 +50,7 @@ export async function checkAgainstRules(communityId: string, text: string): Prom
       ],
       schema: ModerationSchema,
       maxTokens: 300,
-      mockContext: { text },
+      mockContext: { text, houseRules: (community.house_rules ?? []).map((id) => houseRuleLabel(id, community.language)) },
     });
   } catch (error) {
     console.error("moderation check unavailable", error instanceof Error ? error.message : error);

@@ -89,7 +89,7 @@ export class MockProvider implements LLMProvider {
         );
         break;
       case "moderation":
-        value = mockModeration(String(ctx.text ?? ""));
+        value = mockModeration(String(ctx.text ?? ""), (ctx.houseRules ?? []) as string[]);
         break;
       case "business_faq": {
         // Deterministic: FAQs, then a line of the business's info/website mentioning the question's words.

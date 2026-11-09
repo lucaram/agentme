@@ -9,24 +9,25 @@
  */
 import { z } from "zod";
 
-export const VERDICTS = ["ok", "disrespectful", "abusive", "spam", "selling", "off_topic"] as const;
+export const VERDICTS = ["ok", "disrespectful", "abusive", "spam", "selling", "off_topic", "house_rule"] as const;
 export type Verdict = (typeof VERDICTS)[number];
 
 export const ModerationSchema = z.object({
   verdict: z
     .enum(VERDICTS)
     .describe(
-      "ok = fine (banter, disagreement and strong opinions are fine); disrespectful = rude or dismissive toward someone; abusive = insults, harassment, slurs or threats aimed at someone; spam = scams, link spam, repeated promotion, get-rich-quick; selling = selling or promoting something; off_topic = clearly unrelated to what the community is about.",
+      "ok = fine (banter, disagreement and strong opinions are fine); disrespectful = rude or dismissive toward someone; abusive = insults, harassment, slurs or threats aimed at someone; spam = scams, link spam, repeated promotion, get-rich-quick; selling = selling or promoting something; off_topic = clearly unrelated to what the community is about; house_rule = breaks one of the community's house rules (the rules after the first three).",
     ),
   confidence: z.number().min(0).max(1).describe("How sure you are, 0 to 1. Only use 0.9+ when it is unmistakable."),
   reason: z.string().max(200).describe("One short, kind sentence addressed to the author explaining the concern. Empty when ok."),
+  rule: z.string().max(80).default("").describe("house_rule only: the house rule's exact wording, e.g. \"No spoilers\". Otherwise empty."),
 });
 export type Moderation = z.infer<typeof ModerationSchema>;
 
 /** How sure the check must be before code acts. */
 export const THRESHOLDS = { refuseSpam: 0.9, refuseAbuse: 0.85, nudge: 0.6, reportsAgree: 0.7, reportsNeeded: 3 } as const;
 
-const RULE: Record<Exclude<Verdict, "ok">, string> = {
+const RULE: Record<Exclude<Verdict, "ok" | "house_rule">, string> = {
   disrespectful: "Be respectful",
   abusive: "Be respectful",
   spam: "No spam or selling",
@@ -41,6 +42,11 @@ export type Decision =
 
 export function decide(m: Moderation): Decision {
   if (m.verdict === "ok") return { action: "post" };
+  // House rules are picked by the owner: they only ever nudge, never refuse.
+  if (m.verdict === "house_rule") {
+    const rule = m.rule.trim() || "the community's house rules";
+    return m.confidence >= THRESHOLDS.nudge ? { action: "nudge", rule, message: `This might break “${rule}”.${m.reason.trim() ? ` ${m.reason.trim()}` : ""}` } : { action: "post" };
+  }
   const rule = RULE[m.verdict];
   const why = m.reason.trim() ? ` ${m.reason.trim()}` : "";
   if (m.verdict === "spam" && m.confidence >= THRESHOLDS.refuseSpam) {
@@ -63,12 +69,14 @@ export const agreesWithReports = (m: Moderation) => m.verdict !== "ok" && m.conf
 const ABUSIVE = /\b(hate you|f\*?u?ck you|piece of shit|kill yourself)\b/i;
 const RUDE = /\b(idiot|stupid|moron|loser|shut up|clown)\b/i;
 const SPAM = /\b(free money|click here|guaranteed returns?|win an? (?:iphone|prize)|limited offer|double your money)\b/i;
+const SPOILER = /\bspoiler|\bwho won\b.*\btonight|\bfinal score\b/i;
 const SELL = /[£$€]\s?\d|\bfor sale\b|\bselling\b|\bbuy now\b|\bdm me\b|\bpromo code\b/i;
 
-export function mockModeration(text: string): Moderation {
-  if (ABUSIVE.test(text)) return { verdict: "abusive", confidence: 0.95, reason: "Please don't attack other members." };
-  if (SPAM.test(text)) return { verdict: "spam", confidence: 0.95, reason: "It reads like a scam or advert." };
-  if (RUDE.test(text)) return { verdict: "disrespectful", confidence: 0.8, reason: "It could come across as rude." };
-  if (SELL.test(text)) return { verdict: "selling", confidence: 0.75, reason: "Selling isn't allowed here." };
-  return { verdict: "ok", confidence: 0.9, reason: "" };
+export function mockModeration(text: string, houseRules: string[] = []): Moderation {
+  if (ABUSIVE.test(text)) return { verdict: "abusive", confidence: 0.95, reason: "Please don't attack other members.", rule: "" };
+  if (SPAM.test(text)) return { verdict: "spam", confidence: 0.95, reason: "It reads like a scam or advert.", rule: "" };
+  if (RUDE.test(text)) return { verdict: "disrespectful", confidence: 0.8, reason: "It could come across as rude.", rule: "" };
+  if (SELL.test(text)) return { verdict: "selling", confidence: 0.75, reason: "Selling isn't allowed here.", rule: "" };
+  if (houseRules.includes("No spoilers") && SPOILER.test(text)) return { verdict: "house_rule", confidence: 0.8, reason: "It may spoil the result for others.", rule: "No spoilers" };
+  return { verdict: "ok", confidence: 0.9, reason: "", rule: "" };
 }
