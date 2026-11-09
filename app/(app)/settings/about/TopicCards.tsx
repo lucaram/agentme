@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { addChip, MAX_CUSTOM_TOPICS, type Topic } from "@/lib/profile/topics";
 import { saveAwayAction, saveTopicAction } from "./actions";
 
+/** A topic card; the open one stands out (accent border, raised, shadow), and only one is open at a time (same name). */
+const CARD = "group rounded-2xl border border-border bg-surface transition-shadow open:border-accent/60 open:bg-raised open:shadow-2xl open:ring-1 open:ring-black/10";
+
 function ShareChoice({ share, onChange, name }: { share: boolean; onChange: (share: boolean) => void; name: string }) {
   return (
     <fieldset className="space-y-1">
@@ -60,7 +63,7 @@ export function TopicCard({
   const shown = initialValue ? (topic.alwaysPrivate || !initialShare ? "🔒" : "👥") : null;
 
   return (
-    <details className="group rounded-2xl border border-border bg-surface" data-testid={label ? "topic-custom" : `topic-${topic.key}`}>
+    <details name="topics" className={CARD} data-testid={label ? "topic-custom" : `topic-${topic.key}`}>
       <summary className="flex items-center gap-3 px-4 py-3">
         <span className="text-xl" aria-hidden>{topic.icon}</span>
         <span className="min-w-0 flex-1">
@@ -120,7 +123,7 @@ export function AwayCard({ current, currentShare, minDate }: { current: { until:
   const { message, pending, run } = useSaver();
   const summary = current?.text.split(":")[0] ?? null;
   return (
-    <details className="group rounded-2xl border border-border bg-surface" data-testid="topic-away">
+    <details name="topics" className={CARD} data-testid="topic-away">
       <summary className="flex items-center gap-3 px-4 py-3">
         <span className="text-xl" aria-hidden>✈️</span>
         <span className="min-w-0 flex-1">
@@ -188,7 +191,7 @@ export function CustomTopics({ topics }: { topics: { label: string; value: strin
         />
       ))}
       {topics.length < MAX_CUSTOM_TOPICS && (
-        <details className="rounded-2xl border border-dashed border-border bg-surface" data-testid="add-own-topic">
+        <details name="topics" className={`${CARD} border-dashed`} data-testid="add-own-topic">
           <summary className="px-4 py-3 text-sm font-medium text-accent">＋ Your own topic</summary>
           <div className="space-y-2 border-t border-border px-4 py-3">
             <input className="input" aria-label="Topic name" placeholder="Name, e.g. Music I like" maxLength={40} value={label} onChange={(e) => setLabel(e.target.value)} />
