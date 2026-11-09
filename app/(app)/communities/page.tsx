@@ -3,16 +3,17 @@ import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { COMMUNITY_AVATARS } from "@/lib/social/shared";
 import { CreateCommunityForm } from "./CommunityForm";
+import { Fold } from "@/components/Fold";
 import { Notices } from "@/components/social/Notices";
 
 type Row = { id: string; name: string; description: string | null; avatar: string; visibility: string };
 
 function List({ rows, counts, roles, toReview }: { rows: Row[]; counts: Map<string, number>; roles?: Map<string, string>; toReview?: Map<string, number> }) {
   return (
-    <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
+    <ul className="divide-y divide-border">
       {rows.map((c) => (
         <li key={c.id}>
-          <Link href={`/communities/${c.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-accent-soft" data-testid="community-row">
+          <Link href={`/communities/${c.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-accent-soft sm:px-6" data-testid="community-row">
             <span className="text-2xl">{c.avatar}</span>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium">{c.name}</span>
@@ -77,16 +78,46 @@ export default async function CommunitiesPage() {
       )}
       <CreateCommunityForm avatars={COMMUNITY_AVATARS} />
 
-      <section aria-label="Your communities">
-        <h2 className="mb-2 text-sm font-semibold text-muted">Your communities</h2>
-        {mine?.length ? <List rows={mine} counts={counts} roles={roles} toReview={toReview} /> : <p className="card text-sm text-muted">You haven&apos;t joined any communities yet.</p>}
-      </section>
+      {/* Tap-to-open sections, one at a time: yours first, then popular ones to discover. */}
+      <div className="space-y-3">
+        <Fold
+          name="community-lists"
+          icon="🏟️"
+          title="Your communities"
+          testId="fold-your-communities"
+          open={Boolean(mine?.length)}
+          summary={
+            mine?.length
+              ? [
+                  `${mine.length} ${mine.length === 1 ? "community" : "communities"}`,
+                  ...([...(roles?.values() ?? [])].filter((r) => r === "owner").length ? [`you own ${[...(roles?.values() ?? [])].filter((r) => r === "owner").length}`] : []),
+                  ...([...(toReview?.values() ?? [])].reduce((n, v) => n + v, 0) ? [`${[...(toReview?.values() ?? [])].reduce((n, v) => n + v, 0)} to review`] : []),
+                ].join(" · ")
+              : "You haven't joined any communities yet"
+          }
+        >
+          <div aria-label="Your communities">
+            {mine?.length ? (
+              <List rows={mine} counts={counts} roles={roles} toReview={toReview} />
+            ) : (
+              <p className="px-5 py-4 text-sm text-muted sm:px-6">You haven&apos;t joined any communities yet. Find one below, or start your own.</p>
+            )}
+          </div>
+        </Fold>
 
-      <section aria-label="Discover communities" className="space-y-2">
-        <h2 className="text-sm font-semibold text-muted">Popular public communities</h2>
-        <p className="hint">Looking for something specific? Use the search bar at the top.</p>
-        {discover.length ? <List rows={discover.slice(0, 20)} counts={counts} /> : <p className="text-sm text-muted">No other public communities yet.</p>}
-      </section>
+        <Fold
+          name="community-lists"
+          icon="🔥"
+          title="Popular public communities"
+          testId="fold-popular-communities"
+          open={!mine?.length}
+          summary={discover.length ? `${Math.min(discover.length, 20)} to discover · for something specific, use the search bar` : "No other public communities yet"}
+        >
+          <div aria-label="Discover communities">
+            {discover.length ? <List rows={discover.slice(0, 20)} counts={counts} /> : <p className="px-5 py-4 text-sm text-muted sm:px-6">No other public communities yet.</p>}
+          </div>
+        </Fold>
+      </div>
     </div>
   );
 }
