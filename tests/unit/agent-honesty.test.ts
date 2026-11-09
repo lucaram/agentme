@@ -60,3 +60,21 @@ describe("“share this with @marco” refers to the conversation", () => {
     expect(heuristicCompose("Ask @marco and @paul to vote: pizza or sushi", [], recent).steps.map((s) => s.type)).toEqual(["poll"]);
   });
 });
+
+describe("where a shared message goes (shown on the approval card)", () => {
+  const draft = { kind: "plan" as const, title: "Shared message", steps: [{ ...heuristicCompose("Tell @marco: hi", []).steps[0], message: "See you at 8" }] };
+
+  it("one person: your direct chat with them", async () => {
+    const { validateDraft } = await import("@/lib/plans/compose");
+    const plan = validateDraft(draft, { organiser: "luca", participants: ["marco"] });
+    expect(plan.ok && plan.preview[0]).toBe("Send to @marco in your direct chat, as your own message: “See you at 8”");
+  });
+
+  it("several people: a group; started inside a chat: that chat", async () => {
+    const { validateDraft } = await import("@/lib/plans/compose");
+    const many = validateDraft(draft, { organiser: "luca", participants: ["marco", "paul"] });
+    expect(many.ok && many.preview[0]).toBe("Send your exact words as your own message: “See you at 8”");
+    const inChat = validateDraft(draft, { organiser: "luca", participants: ["marco"], inChat: true });
+    expect(inChat.ok && inChat.preview[0]).toBe("Send your exact words as your own message in this chat: “See you at 8”");
+  });
+});

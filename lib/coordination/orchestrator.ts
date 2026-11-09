@@ -198,7 +198,7 @@ To organise it with friends, mention them too, e.g. "Dinner at @${venue.handle} 
     return say(`A plan can include up to ${MAX_PLAN_PEOPLE} people, including you. Please mention fewer people.`);
   }
 
-  const plan = validateDraft(draft, { organiser: agent.handle, participants: valid });
+  const plan = validateDraft(draft, { organiser: agent.handle, participants: valid, inChat: Boolean(opts.groupConversationId) });
   if (!plan.ok) return say(`I couldn't set that up: ${plan.error}`);
   if (venue) plan.parsed.venue = { agent_id: venue.agent_id, handle: venue.handle, name: venue.name };
 

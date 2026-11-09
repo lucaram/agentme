@@ -131,7 +131,8 @@ const clean = (list: string[], max: number, len: number) =>
  * Turns a draft (from the model or the organiser's edits) into engine steps.
  * Everything that must always hold is enforced here, in code.
  */
-export function validateDraft(draft: PlanDraft, ctx: { organiser: string; participants: string[] }): Validation {
+/** inChat: started with "@agent" inside a chat, so it runs in that chat. */
+export function validateDraft(draft: PlanDraft, ctx: { organiser: string; participants: string[]; inChat?: boolean }): Validation {
   const people = ctx.participants.length + 1;
   if (people > MAX_PLAN_PEOPLE) return { ok: false, error: `A plan can include up to ${MAX_PLAN_PEOPLE} people, including you.` };
   if (!draft.steps.length) return { ok: false, error: "The plan has no steps. Say what you'd like to organise." };
@@ -225,7 +226,14 @@ export function validateDraft(draft: PlanDraft, ctx: { organiser: string; partic
         if (!message) return { ok: false, error: "What should the announcement say?" };
         Object.assign(parsed, { message });
         steps.push({ type: "announce", config: { message, participants: ctx.participants } });
-        preview.push(`Send your exact words as your own message: “${message}”`);
+        // One person: your direct chat with them; several: a new group (or the chat it was started in).
+        preview.push(
+          ctx.inChat
+            ? `Send your exact words as your own message in this chat: “${message}”`
+            : ctx.participants.length === 1
+              ? `Send to @${ctx.participants[0]} in your direct chat, as your own message: “${message}”`
+              : `Send your exact words as your own message: “${message}”`,
+        );
         break;
       }
     }

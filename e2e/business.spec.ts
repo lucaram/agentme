@@ -219,12 +219,17 @@ test("my agent asks a business for me: with @ straight away, named without @ onl
   // Sharing that answer with a contact: an approval card with the exact text; nothing is sent before Approve.
   await send(luca.page, "please share this with @marco");
   const task = luca.page.getByRole("region", { name: "Agent task" }).last();
+  await expect(task).toContainText("Send to @marco in your direct chat");
   await expect(task).toContainText("about half the menu is vegetarian");
   await expect(task.getByTestId("task-status")).toHaveText("Waiting for your approval");
   await task.getByRole("button", { name: "Approve" }).click();
+  // One person: it arrives in their direct chat with Luca (not a new group), as Luca's own message.
   const marco = await as(browser, "marco");
-  await marco.page.getByRole("link", { name: /📣 Yes, about half the menu/ }).first().click();
-  await expect(marco.page.getByRole("listitem").filter({ hasText: "about half the menu is vegetarian" })).toContainText("Luca");
+  await marco.page.getByRole("link", { name: /about half the menu is vegetarian/ }).first().click();
+  await expect(marco.page.getByRole("heading", { name: /Luca/ })).toBeVisible();
+  const shared = marco.page.getByRole("listitem").filter({ hasText: "about half the menu is vegetarian" });
+  await expect(shared).toBeVisible();
+  await expect(shared.getByTitle("Written by an AI agent")).toHaveCount(0);
   await marco.close();
 
   // Named without the @, in a question: my agent offers first, and asks only when I tap.
