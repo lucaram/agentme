@@ -529,7 +529,7 @@ test("what your agent knows: topics with quick picks, your own topic, a preview,
   await hobbies.locator("summary").click();
   await hobbies.getByRole("button", { name: "＋ Climbing" }).click();
   await hobbies.getByRole("button", { name: "＋ Cinema" }).click();
-  await expect(hobbies.getByLabel("Hobbies & interests")).toHaveValue("Climbing, Cinema");
+  await expect(hobbies.getByRole("textbox", { name: "Hobbies & interests", exact: true })).toHaveValue("Climbing, Cinema");
   await expect(hobbies.getByRole("radio", { name: /My contacts' agents/ })).toBeChecked();
   await hobbies.getByRole("button", { name: "Save" }).click();
   await expect(hobbies.getByRole("status")).toContainText("Saved");
