@@ -24,6 +24,7 @@ async function send(page: Page, text: string) {
 test("scanning a live QR code connects instantly and opens the chat", async ({ browser }) => {
   const luca = await as(browser, "luca");
   await luca.page.goto("/contacts");
+  await luca.page.getByTestId("fold-add-people").locator("summary").first().click();
   await expect(luca.page.getByTestId("personal-link")).toHaveText(/\/u\/luca$/);
   await luca.page.getByText("📷 Show my QR code").click();
   const qr = luca.page.getByTestId("qr-code");
@@ -189,7 +190,7 @@ test("the header search follows the tab: contacts on Contacts, your groups on Gr
 test("ask around: a saved tip answers by itself, a friend answers personally, then a summary", async ({ browser }) => {
   // Paul saves a tip: his agent may share it by itself when someone asks about plumbers.
   const paul = await as(browser, "paul");
-  await paul.page.goto("/settings");
+  await paul.page.goto("/settings/tips");
   await paul.page.getByLabel("Tip topic").fill("plumber");
   await paul.page.getByLabel("Tip", { exact: true }).fill("Joe's Plumbing, 020 7946 0000");
   await paul.page.getByRole("button", { name: "Add tip" }).click();

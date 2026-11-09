@@ -163,7 +163,7 @@ export async function saveGuestAccountAction(_prev: Out | undefined, form: FormD
   if (pwError) return { error: "Check your email to confirm it, then come back to set your password." };
   await adminClient().from("agents").update({ guest: false }).eq("id", agent.id).eq("owner_id", user.id);
   revalidatePath("/", "layout");
-  redirect("/settings?saved=account");
+  redirect("/settings/profile?saved=account");
 }
 
 // ------------------------------------------------------------- saved tips (ask around)
