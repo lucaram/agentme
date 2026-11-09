@@ -76,7 +76,9 @@ export default async function ContactsPage() {
           title="Contacts"
           testId="fold-contacts"
           summary={[
-            `${accepted.length} ${accepted.length === 1 ? "contact" : "contacts"}`,
+            // The same words as the groups below: "2 people · 1 business".
+            ...(accepted.length === 0 ? ["No contacts yet"] : []),
+            ...(accepted.length - businessCount ? [`${accepted.length - businessCount} ${accepted.length - businessCount === 1 ? "person" : "people"}`] : []),
             ...(businessCount ? [`${businessCount} ${businessCount === 1 ? "business" : "businesses"}`] : []),
             ...(outgoing.length ? [`${outgoing.length} sent ${outgoing.length === 1 ? "request" : "requests"}`] : []),
             ...(blocked.length ? [`${blocked.length} blocked`] : []),
