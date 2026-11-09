@@ -112,34 +112,61 @@ export function TopicCard({
   );
 }
 
-/** "Away until …": part of when you're free, forgotten by itself after that day. */
-export function AwayEditor({ current, currentShare, minDate }: { current: { until: string; text: string } | null; currentShare: boolean; minDate: string }) {
+/** ✈️ Away for a while: its own row, like every topic (part of "when you're free", forgotten after that day). */
+export function AwayCard({ current, currentShare, minDate }: { current: { until: string; text: string } | null; currentShare: boolean; minDate: string }) {
   const [until, setUntil] = useState(current?.until ?? "");
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(current?.text.match(/\(([^)]*)\)/)?.[1] ?? "");
   const [share, setShare] = useState(current ? currentShare : true);
   const { message, pending, run } = useSaver();
+  const summary = current?.text.split(":")[0] ?? null;
   return (
-    <div className="space-y-2 rounded-xl border border-dashed border-border p-3" data-testid="away-editor">
-      <p className="text-sm font-medium">✈️ Away for a while?</p>
-      {current && <p className="text-xs text-muted">Now: {current.text}</p>}
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="text-sm" htmlFor="away-until">Away until</label>
-        <input id="away-until" type="date" className="input w-auto" min={minDate} value={until} onChange={(e) => setUntil(e.target.value)} />
-        <input className="input min-w-0 flex-1" aria-label="Away note" placeholder="optional, e.g. holiday" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} />
-      </div>
-      <ShareChoice share={share} onChange={setShare} name="share-away" />
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className="btn-ghost" disabled={pending || !until} onClick={() => run(() => saveAwayAction({ until, note, share }), "Saved. It's forgotten by itself after that day.")}>
-          Save time away
-        </button>
-        {current && (
-          <button type="button" className="btn-ghost" disabled={pending} onClick={() => run(() => saveAwayAction({ until: "", note: "", share: false }), "Removed.")}>
-            I&apos;m back
+    <details className="group rounded-2xl border border-border bg-surface" data-testid="topic-away">
+      <summary className="flex items-center gap-3 px-4 py-3">
+        <span className="text-xl" aria-hidden>✈️</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">Away for a while</span>
+          <span className={`block truncate text-xs ${summary ? "text-muted" : "text-accent"}`}>{summary || "＋ Add"}</span>
+        </span>
+        {summary && <span title={currentShare ? "Shared with contacts' agents when asked" : "Only your agent"}>{currentShare ? "👥" : "🔒"}</span>}
+        <span className="text-muted transition group-open:rotate-90" aria-hidden>›</span>
+      </summary>
+      <div className="space-y-3 border-t border-border px-4 py-3">
+        <p className="hint">Holidays, trips, busy weeks: plans before that day won&apos;t include you. It&apos;s forgotten by itself after that day.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-sm" htmlFor="away-until">Away until</label>
+          <input id="away-until" type="date" className="input w-auto" min={minDate} value={until} onChange={(e) => setUntil(e.target.value)} />
+          <input className="input min-w-0 flex-1" aria-label="Away note" placeholder="optional, e.g. holiday" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+        <ShareChoice share={share} onChange={setShare} name="share-away" />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={pending}
+            onClick={() => (until ? run(() => saveAwayAction({ until, note, share })) : undefined)}
+            title={until ? undefined : "Pick a date first"}
+          >
+            Save
           </button>
-        )}
-        {message && <span className={`text-xs ${message.ok ? "text-accent" : "text-danger"}`} role={message.ok ? "status" : "alert"}>{message.text}</span>}
+          {current && (
+            <button
+              type="button"
+              className="btn-ghost"
+              disabled={pending}
+              onClick={() => {
+                setUntil("");
+                setNote("");
+                run(() => saveAwayAction({ until: "", note: "", share: false }), "Removed.");
+              }}
+            >
+              Remove
+            </button>
+          )}
+          {!until && !message && <span className="text-xs text-muted">Pick a date first.</span>}
+          {message && <span className={`text-xs ${message.ok ? "text-accent" : "text-danger"}`} role={message.ok ? "status" : "alert"}>{message.text}</span>}
+        </div>
       </div>
-    </div>
+    </details>
   );
 }
 
