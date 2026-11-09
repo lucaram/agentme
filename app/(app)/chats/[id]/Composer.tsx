@@ -10,6 +10,7 @@ export function Composer({
   placeholder,
   thinkingLabel,
   examples,
+  collapseExamples = false,
 }: {
   conversationId: string;
   /** My Agent: the request thread this box belongs to ("new" starts one, then opens it). */
@@ -18,12 +19,15 @@ export function Composer({
   thinkingLabel?: string;
   /** Template chips: clicking one fills the box so the owner can adjust it before sending. */
   examples?: { label: string; text: string }[];
+  /** Regular users: the chips stay behind a small "💡 Ideas" button. */
+  collapseExamples?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [summoned, setSummoned] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const router = useRouter();
+  const [showExamples, setShowExamples] = useState(!collapseExamples);
 
   function submit() {
     const text = ref.current?.value.trim();
@@ -45,7 +49,12 @@ export function Composer({
 
   return (
     <div className="sticky bottom-0 mt-4 bg-background pb-3 pt-2">
-      {examples && (
+      {examples && !showExamples && (
+        <button type="button" className="mb-2 text-xs font-medium text-accent hover:underline" onClick={() => setShowExamples(true)}>
+          💡 Ideas
+        </button>
+      )}
+      {examples && showExamples && (
         <div className="no-scrollbar mb-2 flex gap-1.5 overflow-x-auto" aria-label="Templates">
           {examples.map((ex) => (
             <button
