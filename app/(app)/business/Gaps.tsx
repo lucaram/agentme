@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
+import { Fold } from "@/components/Fold";
 import { answerGapAction, dismissGapAction } from "./website-actions";
 
 export type GapView = { key: string; title: string; questions: string[]; ids: string[] };
@@ -12,17 +13,25 @@ export type GapView = { key: string; title: string; questions: string[]; ids: st
  * gets it, and the agent knows it from now on. Always rendered (empty when
  * there's nothing), so a "✓ Sent" stays on screen after the page refreshes.
  */
-export function GapsSection({ gaps }: { gaps: GapView[] }) {
+export function GapsSection({ gaps, name }: { gaps: GapView[]; name: string }) {
   const [done, setDone] = useState<{ key: string; text: string }[]>([]);
   const open = gaps.filter((g) => !done.some((d) => d.key === g.key));
   if (!open.length && !done.length) return null;
+  const people = open.reduce((n, g) => n + g.ids.length, 0);
   return (
-    <section id="gaps" className="card scroll-mt-40 space-y-3 border-accent" aria-label="Questions your website doesn't answer" data-testid="gaps">
-      <div>
-        <h2 className="font-semibold">Questions your website doesn&apos;t answer</h2>
+    <Fold
+      name={name}
+      id="gaps"
+      icon="❓"
+      title="Questions your website doesn't answer"
+      testId="gaps"
+      open
+      badge={{ count: people, tone: "new" }}
+      summary={open.length ? `${open[0].title}${open.length > 1 ? ` · and ${open.length - 1} more` : ""}` : "All answered"}
+    >
+      <section className="space-y-3 px-5 py-5 sm:px-6" aria-label="Questions your website doesn't answer">
         <p className="hint">Customers asked these and your agent didn&apos;t know. Answer once: everyone who asked gets it, and your agent answers it by itself from now on.</p>
-      </div>
-      <ul className="space-y-3">
+        <ul className="space-y-3">
         {done.map((d) => (
           <li key={d.key} className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status" data-testid="gap-done">
             {d.text}
@@ -31,8 +40,9 @@ export function GapsSection({ gaps }: { gaps: GapView[] }) {
         {open.map((g) => (
           <Gap key={g.key} gap={g} onDone={(text) => setDone((list) => [...list, { key: g.key, text }])} />
         ))}
-      </ul>
-    </section>
+        </ul>
+      </section>
+    </Fold>
   );
 }
 

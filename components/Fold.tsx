@@ -8,6 +8,7 @@ export function Fold({
   summary,
   name,
   open = false,
+  id,
   testId,
   badge,
   children,
@@ -17,6 +18,8 @@ export function Fold({
   summary: string;
   name?: string;
   open?: boolean;
+  /** For links to it (#id): see OpenFromHash. */
+  id?: string;
   testId?: string;
   /** A counter next to the arrow: green for new things, grey for a total. */
   badge?: { count: number; tone: "new" | "total" };
@@ -24,9 +27,10 @@ export function Fold({
 }) {
   return (
     <details
+      id={id}
       name={name}
       open={open || undefined}
-      className="group rounded-2xl border border-border bg-surface transition-shadow open:border-accent/60 open:bg-raised open:shadow-2xl open:ring-1 open:ring-black/10"
+      className="group scroll-mt-40 rounded-2xl border border-border bg-surface transition-shadow open:border-accent/60 open:bg-raised open:shadow-2xl open:ring-1 open:ring-black/10"
       data-testid={testId}
     >
       <summary className="flex items-center gap-3 px-5 py-4 sm:px-6">

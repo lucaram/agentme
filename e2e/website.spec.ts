@@ -1,8 +1,14 @@
-import { expect, test, type Browser } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 
 // "Paste your website": a business signs up with its website, reviews what its agent
 // learned, tries it as a customer and goes live; then answers a question its website
 // doesn't cover, once. The demo website is served by the app (public/demo/site).
+
+/** My Business sections open one at a time: open the one a step needs (if it isn't already). */
+async function openSection(page: Page, testId: string) {
+  const fold = page.getByTestId(testId);
+  if ((await fold.getAttribute("open")) === null) await fold.locator("summary").first().click();
+}
 
 async function as(browser: Browser, handle: string) {
   const context = await browser.newContext();
@@ -80,6 +86,7 @@ test("paste your website: sign-up fills itself in, the agent learns the site, th
   await gap.getByRole("textbox").fill("Yes: free parking on Shore Street after 6pm.");
   await gap.getByRole("button", { name: "Send and remember" }).click();
   await expect(page.getByTestId("gap-done")).toContainText("Sent to the customer who asked");
+  await openSection(page, "fold-faqs");
   await expect(page.getByTestId("faq-list")).toContainText("Is there parking nearby?");
   await luca.page.reload();
   await expect(luca.page.getByText("The team at Caffè Aurora: Yes: free parking on Shore Street after 6pm.")).toBeVisible();
