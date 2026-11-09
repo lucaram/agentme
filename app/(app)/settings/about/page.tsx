@@ -4,7 +4,8 @@ import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { factsByRequest, REQUESTABLE_CATEGORIES, type Fact, type FactCategory, type RequestableCategory } from "@/lib/policy/disclosure";
 import { TOPICS } from "@/lib/profile/topics";
-import { AwayEditor, CustomTopics, TopicCard } from "./TopicCards";
+import { Fragment } from "react";
+import { AwayCard, CustomTopics, TopicCard } from "./TopicCards";
 
 type Row = { category: string; value: string; disclosure: string; label: string; expires_at: string | null };
 
@@ -75,15 +76,17 @@ export default async function AboutYouPage() {
 
       <section className="space-y-2" aria-label="Topics">
         {TOPICS.map((topic) => (
-          <TopicCard key={topic.key} topic={topic} initialValue={get(topic.key)?.value ?? ""} initialShare={get(topic.key)?.disclosure === "contacts"}>
+          <Fragment key={topic.key}>
+            <TopicCard topic={topic} initialValue={get(topic.key)?.value ?? ""} initialShare={get(topic.key)?.disclosure === "contacts"} />
+            {/* Time away gets its own row, right under when you're free. */}
             {topic.key === "availability" && (
-              <AwayEditor
+              <AwayCard
                 current={away ? { until: away.expires_at!.slice(0, 10), text: away.value } : null}
                 currentShare={away?.disclosure === "contacts"}
                 minDate={now.slice(0, 10)}
               />
             )}
-          </TopicCard>
+          </Fragment>
         ))}
       </section>
 
