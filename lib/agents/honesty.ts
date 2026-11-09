@@ -23,12 +23,32 @@ export function claimsAction(reply: string): boolean {
   return CLAIMS.some((re) => re.test(reply));
 }
 
+const FORWARD_HOW = "To pass on a message (mine, a business's or anyone's), forward it yourself: ↪ Forward on the message. It's labelled as forwarded, so people know where it came from.";
+const tellHow = (to: string) => `To say something in your own words, write “Tell ${to}: your message”: I'll show you exactly what will go out, and it's sent only when you tap Approve.`;
+const handleIn = (...texts: string[]) => texts.map((t) => t.match(/@([a-z0-9_]+)/i)?.[1]).find(Boolean);
+
 /** What the agent says instead: the truth, and how to actually send it (with your approval). */
 export function honestReply(reply: string, ownerText: string): string {
-  const handle = (ownerText.match(/@([a-z0-9_]+)/i) ?? reply.match(/@([a-z0-9_]+)/i))?.[1];
-  const to = handle ? `@${handle}` : "@name";
+  const handle = handleIn(ownerText, reply);
   return [
     "I haven't sent anything: from this chat I can't send, share or book things myself. Only a plan you approve does that.",
-    `To send it, write “Share this with ${to}” (or “Tell ${to}: your message”). I'll show you exactly what will go out, and it's sent only when you tap Approve.`,
+    FORWARD_HOW,
+    tellHow(handle ? `@${handle}` : "@name"),
   ].join("\n\n");
+}
+
+/**
+ * "Share this with @marco", "forward that to @paul", "send him the answer above": passing on
+ * something someone else (or an AI) wrote. Your agent never does that: you forward it yourself.
+ * A colon means the owner wrote the message ("Tell @marco: …"), which is fine.
+ */
+const PASS_ON = /^\s*(?:please\s+)?(?:share|forward|send|pass|give|condividi|inoltra|manda|invia|gira)\b[^:]*\b(?:this|that|it|above|answer|info|information|questo|questa|quello|quella|la risposta|l'informazione)\b/i;
+
+export function asksToPassOn(text: string): boolean {
+  return PASS_ON.test(text) && /@[a-z0-9_]/i.test(text);
+}
+
+export function passOnReply(ownerText: string): string {
+  const handle = handleIn(ownerText);
+  return [`I don't pass things on myself: agents talk to agents, and people talk to people.`, FORWARD_HOW, tellHow(handle ? `@${handle}` : "@name")].join("\n\n");
 }

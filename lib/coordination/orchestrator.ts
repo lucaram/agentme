@@ -11,7 +11,7 @@ import { buildRecall } from "@/lib/agents/recall";
 import { asJson } from "@/lib/data/json";
 import { MAX_PLAN_PEOPLE, type TaskParsed } from "@/lib/plans/types";
 import { createSteps } from "@/lib/plans/steps";
-import { ComposeSchema, heuristicCompose, validateDraft, type PlanDraft, type RecentMessage } from "@/lib/plans/compose";
+import { ComposeSchema, heuristicCompose, validateDraft, type PlanDraft } from "@/lib/plans/compose";
 import { ensurePlanGroup } from "@/lib/plans/group";
 import { withdrawInboxForTask } from "@/lib/plans/inbox";
 import { createIntroduction, parseIntroduceCommand } from "@/lib/people/introductions";
@@ -21,7 +21,7 @@ import { describeRetry, hit } from "@/lib/limits";
 import { displayClock } from "./heuristics";
 import { threadFor } from "@/lib/agents/thread-context";
 import { askBusinessesFor, offerToAskBusiness } from "@/lib/agents/ask-business";
-import { claimsAction, honestReply } from "@/lib/agents/honesty";
+import { asksToPassOn, claimsAction, honestReply, passOnReply } from "@/lib/agents/honesty";
 import { waysOf, waysText, type Way } from "@/lib/business/booking";
 import type { Proposal } from "./schemas";
 
@@ -64,6 +64,9 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
   const ask = parseAskAround(text);
   if (ask) return startAskAround({ userId, agent, conversationId, ...ask });
 
+  // "Share this with @marco": your agent doesn't pass on what others (or AIs) wrote; you forward it yourself.
+  if (asksToPassOn(text)) return postMessage({ conversationId, from: "agent", agentId: agent.id, content: passOnReply(text) });
+
   const mentions = extractMentions(text).filter((h) => h !== agent.handle);
   if (mentions.length === 0) {
     await replyToOwner(agent, userId, conversationId, text);
@@ -82,32 +85,9 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
     say: (content) => postMessage({ conversationId, from: "agent", agentId: agent.id, content }),
     card: { conversationId },
     taskConversationId: conversationId,
-    recent: await recentMessages(conversationId),
     // Not a plan: a question, so any business mentioned is asked; otherwise your agent answers.
     onChat: () => (businesses.length ? askBusinessesFor(agent, conversationId, businesses, text) : replyToOwner(agent, userId, conversationId, text)),
   });
-}
-
-const RECENT_MESSAGES = 6;
-
-/** The latest messages in this My Agent thread before the one just sent (oldest first). */
-async function recentMessages(conversationId: string): Promise<RecentMessage[]> {
-  const thread = threadFor(conversationId);
-  let query = adminClient().from("messages").select("content, sender_agent_id").eq("conversation_id", conversationId);
-  if (thread) query = query.eq("thread_id", thread);
-  const { data } = await query.order("created_at", { ascending: false }).limit(RECENT_MESSAGES + 1);
-  // The first row is the owner's message just posted: it's the request itself.
-  return (data ?? [])
-    .slice(1)
-    .reverse()
-    .map((m) => ({ from: m.sender_agent_id ? ("agent" as const) : ("owner" as const), text: m.content.slice(0, 1500) }));
-}
-
-/** Earlier messages for the composer, marked as data (they may quote other people or websites). */
-function recentBlock(recent: RecentMessage[] | undefined): string {
-  if (!recent?.length) return "";
-  const text = recent.map((m) => `${m.from === "owner" ? "User" : "You (the agent)"}: ${m.text}`).join("\n\n");
-  return `\n\n${wrapUntrusted("recent_conversation", text.slice(-4000))}`;
 }
 
 /**
@@ -132,8 +112,6 @@ export async function composePlan(opts: {
   /** From a chat: its members are the participants (passed separately, never mixed into the owner's words). */
   chatMembers?: string[];
   onChat: () => Promise<unknown>;
-  /** My Agent: the latest messages before this one, so "share this with @marco" knows what "this" is. */
-  recent?: RecentMessage[];
 }) {
   const { userId, agent, text, say } = opts;
 
@@ -149,16 +127,16 @@ export async function composePlan(opts: {
           role: "user",
           content: opts.chatMembers?.length ? `${text}
 
-(Sent in a chat with ${opts.chatMembers.map((h) => `@${h}`).join(", ")}: they are the people to involve.)` : `${text}${recentBlock(opts.recent)}`,
+(Sent in a chat with ${opts.chatMembers.map((h) => `@${h}`).join(", ")}: they are the people to involve.)` : text,
         },
       ],
       schema: ComposeSchema,
       maxTokens: 2000,
-      mockContext: { text, chatMembers: opts.chatMembers ?? [], recent: opts.recent ?? [] },
+      mockContext: { text, chatMembers: opts.chatMembers ?? [] },
     });
   } catch {
     // Composition is checked by code anyway; fall back to deterministic composition.
-    draft = heuristicCompose(text, opts.chatMembers ?? [], opts.recent ?? []);
+    draft = heuristicCompose(text, opts.chatMembers ?? []);
   }
   if (draft.kind === "chat" || !draft.steps.length) return opts.onChat();
 
