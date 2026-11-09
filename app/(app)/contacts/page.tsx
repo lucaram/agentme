@@ -88,8 +88,8 @@ export default async function ContactsPage() {
           {/* People first, then businesses, each under its own heading. */}
           {(
             [
-              ["People", accepted.filter((r) => r.other.type !== "business")],
-              ["Businesses", accepted.filter((r) => r.other.type === "business")],
+              ["People", byName(accepted.filter((r) => r.other.type !== "business"))],
+              ["Businesses", byName(accepted.filter((r) => r.other.type === "business"))],
             ] as const
           ).map(([title, rows]) =>
             rows.length ? (
@@ -194,6 +194,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 /** A labelled list inside the Contacts section (people, businesses, sent requests, blocked). */
+/** A to Z by name (ignoring capitals and accents). */
+const byName = <T extends { other: { display_name: string } }>(rows: T[]) =>
+  [...rows].sort((x, y) => x.other.display_name.localeCompare(y.other.display_name, "en", { sensitivity: "base" }));
+
 function SubList({ title, testId, children }: { title: string; testId?: string; children: React.ReactNode }) {
   return (
     // The first list in the section needs no line above it (the section already has one).
