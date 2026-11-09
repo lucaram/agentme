@@ -82,6 +82,8 @@ test("communities: create, join by accepting the rules, Announcements vs General
   const form = luca.page.getByRole("form", { name: "New community" });
   await form.getByLabel("Name").fill(name);
   await form.getByLabel("What is it about?").fill("Match days, transfers and banter");
+  // The three universal rules come filled in; the owner can change them.
+  await expect(form.getByLabel(/Rules/)).toHaveValue("Be respectful.\nNo spam or selling.\nStay on topic.");
   await form.getByLabel(/Rules/).fill("Be kind. No spam.");
   await form.getByRole("button", { name: "Create community" }).click();
   await expect(luca.page).toHaveURL(/\/communities\/[0-9a-f-]+$/);
@@ -101,6 +103,9 @@ test("communities: create, join by accepting the rules, Announcements vs General
   await eve.page.getByRole("link", { name: /General/ }).click();
   await send(eve.page, "Hello fans!");
   await expect(eve.page.getByText("Hello fans!")).toBeVisible();
+  // Spam protection: a brand-new member can't post links yet (told why).
+  await send(eve.page, "Free tickets here https://spam.example/win");
+  await expect(eve.page.getByRole("alert").filter({ hasText: "New members can't post links yet" })).toBeVisible();
 
   // Announcements are for moderators.
   await eve.page.goto(communityUrl);
