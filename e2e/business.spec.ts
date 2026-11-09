@@ -203,3 +203,43 @@ test("how to book: the business adds its own ways; its page, its agent and frien
 
   await Promise.all([shop.close(), luca.close(), marco.close()]);
 });
+
+test("my agent asks a business for me: with @ straight away, named without @ only if I tap", async ({ browser }) => {
+  const luca = await as(browser, "luca");
+  await luca.page.goto("/chats");
+  await luca.page.getByRole("link", { name: /My Agent/ }).click();
+  await expect(luca.page.getByRole("heading", { name: "My Agent" })).toBeVisible();
+
+  // With the @: my agent asks the business's agent and brings the answer back.
+  await send(luca.page, "@trattoria do you have vegetarian options?");
+  await expect(luca.page.getByText("I asked @trattoria").last()).toBeVisible();
+  await expect(luca.page.getByText(/about half the menu is vegetarian/).last()).toBeVisible();
+  await expect(luca.page.getByTestId("continue-with-business").last()).toContainText("Continue with @trattoria");
+
+  // Passing it on is mine to do: my agent doesn't forward what others wrote, and no card is made.
+  await send(luca.page, "please share this with @marco");
+  await expect(luca.page.getByText("I don't pass things on myself").last()).toBeVisible();
+  await expect(luca.page.getByRole("region", { name: "Agent task" })).toHaveCount(0);
+
+  // My own words to one contact go to our direct chat once I approve (not a new group).
+  await send(luca.page, "Tell @marco: the trattoria has lots of vegetarian dishes");
+  const task = luca.page.getByRole("region", { name: "Agent task" }).last();
+  await expect(task).toContainText("Send to @marco in your direct chat");
+  await task.getByRole("button", { name: "Approve" }).click();
+  const marco = await as(browser, "marco");
+  await marco.page.getByRole("link", { name: /lots of vegetarian dishes/ }).first().click();
+  await expect(marco.page.getByRole("heading", { name: /Luca/ })).toBeVisible();
+  const told = marco.page.getByRole("listitem").filter({ hasText: "the trattoria has lots of vegetarian dishes" });
+  await expect(told).toBeVisible();
+  await expect(told.getByTitle("Written by an AI agent")).toHaveCount(0);
+  await marco.close();
+
+  // Named without the @, in a question: my agent offers first, and asks only when I tap.
+  await send(luca.page, "Is Trattoria Sole open on Mondays?");
+  const offer = luca.page.getByTestId("business-suggestion").last();
+  await expect(luca.page.getByText("Trattoria Sole (@trattoria) is on AGENTME").last()).toBeVisible();
+  await offer.getByRole("button", { name: "Ask @trattoria" }).click();
+  await expect(luca.page.getByText("✓ Asked @trattoria").last()).toBeVisible();
+  await expect(luca.page.getByText("I asked @trattoria")).toHaveCount(2);
+  await luca.close();
+});

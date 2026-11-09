@@ -20,6 +20,8 @@ import { stepWords } from "@/lib/plans/wording";
 import { describeRetry, hit } from "@/lib/limits";
 import { displayClock } from "./heuristics";
 import { threadFor } from "@/lib/agents/thread-context";
+import { askBusinessesFor, offerToAskBusiness } from "@/lib/agents/ask-business";
+import { asksToPassOn, claimsAction, honestReply, passOnReply } from "@/lib/agents/honesty";
 import { waysOf, waysText, type Way } from "@/lib/business/booking";
 import type { Proposal } from "./schemas";
 
@@ -62,8 +64,19 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
   const ask = parseAskAround(text);
   if (ask) return startAskAround({ userId, agent, conversationId, ...ask });
 
+  // "Share this with @marco": your agent doesn't pass on what others (or AIs) wrote; you forward it yourself.
+  if (asksToPassOn(text)) return postMessage({ conversationId, from: "agent", agentId: agent.id, content: passOnReply(text) });
+
   const mentions = extractMentions(text).filter((h) => h !== agent.handle);
-  if (mentions.length === 0) return replyToOwner(agent, userId, conversationId, text);
+  if (mentions.length === 0) {
+    await replyToOwner(agent, userId, conversationId, text);
+    // A business named without its @ in a question: offer to ask its agent (only if you tap).
+    return offerToAskBusiness(agent, conversationId, text);
+  }
+  // Only businesses mentioned ("@everyeye who do I contact?"): your agent asks them for you.
+  const known = (await Promise.all(mentions.map((h) => getAgentByHandle(h)))).filter((a): a is AgentRow => a !== null);
+  const businesses = known.filter((a) => a.type === "business");
+  if (businesses.length && businesses.length === known.length) return askBusinessesFor(agent, conversationId, businesses, text);
   return composePlan({
     userId,
     agent,
@@ -72,7 +85,8 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
     say: (content) => postMessage({ conversationId, from: "agent", agentId: agent.id, content }),
     card: { conversationId },
     taskConversationId: conversationId,
-    onChat: () => replyToOwner(agent, userId, conversationId, text),
+    // Not a plan: a question, so any business mentioned is asked; otherwise your agent answers.
+    onChat: () => (businesses.length ? askBusinessesFor(agent, conversationId, businesses, text) : replyToOwner(agent, userId, conversationId, text)),
   });
 }
 
@@ -162,7 +176,7 @@ To organise it with friends, mention them too, e.g. "Dinner at @${venue.handle} 
     return say(`A plan can include up to ${MAX_PLAN_PEOPLE} people, including you. Please mention fewer people.`);
   }
 
-  const plan = validateDraft(draft, { organiser: agent.handle, participants: valid });
+  const plan = validateDraft(draft, { organiser: agent.handle, participants: valid, inChat: Boolean(opts.groupConversationId) });
   if (!plan.ok) return say(`I couldn't set that up: ${plan.error}`);
   if (venue) plan.parsed.venue = { agent_id: venue.agent_id, handle: venue.handle, name: venue.name };
 
@@ -324,6 +338,8 @@ async function replyToOwner(agent: AgentRow, userId: string, conversationId: str
   } catch (error) {
     reply = `Sorry — I couldn't think that through (${errorText(error)}).`;
   }
+  // This chat can't send, share or book anything (only approved plans do): never let it claim it did.
+  if (claimsAction(reply)) reply = honestReply(reply, text);
   await postMessage({ conversationId, from: "agent", agentId: agent.id, content: reply || "…" });
 }
 

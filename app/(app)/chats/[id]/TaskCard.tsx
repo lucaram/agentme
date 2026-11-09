@@ -75,7 +75,8 @@ const STEP_ICON: Record<string, string> = {
 };
 
 /** One line per step, so the organiser sees exactly what will happen before approving. */
-function StepLine({ step, parsed, hasProposal }: { step: StepRow; parsed: TaskParsed; hasProposal: boolean }) {
+/** inChat: the plan runs in an existing chat (started there with "@agent"). */
+function StepLine({ step, parsed, hasProposal, inChat }: { step: StepRow; parsed: TaskParsed; hasProposal: boolean; inChat: boolean }) {
   const c = (step.config ?? {}) as Record<string, unknown>;
   const people = parsed.participants ?? [];
   const list = (v: unknown) => ((v as string[]) ?? []).join(" · ");
@@ -122,7 +123,15 @@ function StepLine({ step, parsed, hasProposal }: { step: StepRow; parsed: TaskPa
       );
       break;
     case "announce":
-      body = <>Send your exact words as your own message: “{String(c.message)}”</>;
+      // To one person: your direct chat with them (or the chat it was started in). To several: a new group.
+      body =
+        people.length === 1 ? (
+          <>
+            Send to @{people[0]} {inChat ? "in this chat" : "in your direct chat"}, as your own message: “{String(c.message)}”
+          </>
+        ) : (
+          <>Send your exact words as your own message: “{String(c.message)}”</>
+        );
       break;
     case "ask_around":
       body = <>{stepWords.askAround(people)}: “{String(c.question)}”</>;
@@ -192,7 +201,7 @@ export function TaskCard({
           </>
         )}
         {ordered.map((s) => (
-          <StepLine key={s.id} step={s} parsed={task.parsed} hasProposal={hasProposal} />
+          <StepLine key={s.id} step={s} parsed={task.parsed} hasProposal={hasProposal} inChat={Boolean(task.group_conversation_id)} />
         ))}
       </ol>
 
