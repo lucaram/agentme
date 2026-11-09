@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { restoreAtLogin } from "@/lib/appearance-server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { safeNext } from "@/lib/next-path";
@@ -40,6 +41,8 @@ export async function signIn(_prev: AuthState, form: FormData): Promise<AuthStat
   // Keep the verified email matchable for "People you know" (only ever mutual).
   const agent = await getAgentForUser(data.user.id);
   if (agent) await registerAccountEmail(agent.id, { email: data.user.email ?? null, emailConfirmed: Boolean(data.user.email_confirmed_at) });
+  // Their Personalise choices follow them to this device.
+  await restoreAtLogin(data.user.id);
   redirect(safeNext(form.get("next")));
 }
 

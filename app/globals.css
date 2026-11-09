@@ -13,10 +13,15 @@
   --agent: #eef1fb;
   --agent-border: #d7ddf3;
   --danger: #b4372f;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+/*
+ * Personalise (Settings): <html data-theme data-accent data-text data-dark>.
+ * Dark applies with "Dark", or with "System" when the device is dark.
+ * Red (--danger) and the agent's bubbles (--agent) are never themed.
+ */
+:root[data-theme="dark"] {
     --background: #121311;
     --surface: #1b1c1a;
     --raised: #262823;
@@ -28,6 +33,122 @@
     --agent: #1c2131;
     --agent-border: #2c3550;
     --danger: #ef7a72;
+    color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+      --background: #121311;
+      --surface: #1b1c1a;
+      --raised: #262823;
+      --foreground: #ecebe6;
+      --muted: #a19f97;
+      --border: #2d2e2a;
+      --accent: #6fbf95;
+      --accent-soft: #1f3329;
+      --agent: #1c2131;
+      --agent-border: #2c3550;
+      --danger: #ef7a72;
+      color-scheme: dark;
+  }
+}
+
+/* Dark style "Black": true black (saves battery on OLED screens). */
+:root[data-theme="dark"][data-dark="black"] {
+    --background: #000000;
+    --surface: #0e0e0d;
+    --raised: #1a1a18;
+    --border: #232421;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"][data-dark="black"] {
+      --background: #000000;
+      --surface: #0e0e0d;
+      --raised: #1a1a18;
+      --border: #232421;
+  }
+}
+
+/* Accent colours: tested pairs (white text on the Light shade, black text on the Dark shade). Green is the default above. */
+:root[data-accent="blue"] {
+  --accent: #1f5fbf;
+  --accent-soft: #e2ebf8;
+}
+:root[data-accent="purple"] {
+  --accent: #6d3fc4;
+  --accent-soft: #ece5f9;
+}
+:root[data-accent="pink"] {
+  --accent: #b4246a;
+  --accent-soft: #f8e3ee;
+}
+:root[data-accent="orange"] {
+  --accent: #b8480f;
+  --accent-soft: #fbe9dc;
+}
+:root[data-accent="teal"] {
+  --accent: #0f6f69;
+  --accent-soft: #dcf0ed;
+}
+:root[data-theme="dark"][data-accent="blue"] {
+  --accent: #6ea8f5;
+  --accent-soft: #1b2940;
+}
+:root[data-theme="dark"][data-accent="purple"] {
+  --accent: #b096f7;
+  --accent-soft: #2a2342;
+}
+:root[data-theme="dark"][data-accent="pink"] {
+  --accent: #f17fb5;
+  --accent-soft: #3a1f2e;
+}
+:root[data-theme="dark"][data-accent="orange"] {
+  --accent: #f59a52;
+  --accent-soft: #3a2718;
+}
+:root[data-theme="dark"][data-accent="teal"] {
+  --accent: #4fd0c1;
+  --accent-soft: #15322f;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"][data-accent="blue"] {
+    --accent: #6ea8f5;
+    --accent-soft: #1b2940;
+  }
+  :root[data-theme="system"][data-accent="purple"] {
+    --accent: #b096f7;
+    --accent-soft: #2a2342;
+  }
+  :root[data-theme="system"][data-accent="pink"] {
+    --accent: #f17fb5;
+    --accent-soft: #3a1f2e;
+  }
+  :root[data-theme="system"][data-accent="orange"] {
+    --accent: #f59a52;
+    --accent-soft: #3a2718;
+  }
+  :root[data-theme="system"][data-accent="teal"] {
+    --accent: #4fd0c1;
+    --accent-soft: #15322f;
+  }
+}
+
+/* Text size: everything in rem scales with it. */
+:root[data-text="large"] {
+  font-size: 112.5%;
+}
+:root[data-text="xl"] {
+  font-size: 125%;
+}
+
+/* Tailwind's dark: variant follows the same setting. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where([data-theme="system"], [data-theme="system"] *) {
+      @slot;
+    }
   }
 }
 

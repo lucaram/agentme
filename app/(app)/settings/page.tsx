@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { isManagedLogin } from "@/lib/identities";
+import { appearanceSummary } from "@/lib/appearance";
+import { currentAppearance } from "@/lib/appearance-server";
 
 const CONTACT_POLICY: Record<string, string> = { contacts_only: "Only contacts", anyone: "Anyone", nobody: "Nobody" };
 
@@ -16,6 +18,7 @@ export default async function SettingsPage() {
   const personal = agent.type === "personal";
   const managedBusiness = isManagedLogin(user.email);
   const shared = (facts ?? []).filter((f) => f.disclosure === "contacts").length;
+  const look = await currentAppearance();
 
   const rows: { href: string; icon: string; title: string; summary: string; testId?: string; highlight?: boolean }[] = [
     {
@@ -44,6 +47,13 @@ export default async function SettingsPage() {
           title: "Business information",
           summary: "What your agent knows is managed in My Business",
         },
+    {
+      href: "/settings/personalise",
+      icon: "🎨",
+      title: "Personalise",
+      summary: appearanceSummary(look),
+      testId: "personalise-link",
+    },
     {
       href: "/settings/privacy",
       icon: "🔐",

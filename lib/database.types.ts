@@ -131,14 +131,14 @@ isOneToOne: false
                   ]
                 },"agents": {
                   Row: {
-                    "avatar": string,"bio": string | null,"business_info": NonNullable<Json>,"contact_policy": Database["public"]['Enums']["contact_policy"],"contact_sources": NonNullable<Json>,"contacts_synced_at": string | null,"created_at": string,"discoverable": boolean,"display_name": string,"group_add_policy": string,"guest": boolean,"handle": string,"id": string,"owner_id": string,"recommendations_ok": boolean,"type": Database["public"]['Enums']["agent_type"]
+                    "appearance": NonNullable<Json>,"avatar": string,"bio": string | null,"business_info": NonNullable<Json>,"contact_policy": Database["public"]['Enums']["contact_policy"],"contact_sources": NonNullable<Json>,"contacts_synced_at": string | null,"created_at": string,"discoverable": boolean,"display_name": string,"group_add_policy": string,"guest": boolean,"handle": string,"id": string,"owner_id": string,"recommendations_ok": boolean,"type": Database["public"]['Enums']["agent_type"]
                   }
                   ComputedFields: never
                   Insert: {
-                    "avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name": string,"group_add_policy"?: string,"guest"?: boolean,"handle": string,"id"?: string,"owner_id": string,"recommendations_ok"?: boolean,"type"?: Database["public"]['Enums']["agent_type"]
+                    "appearance"?: NonNullable<Json>,"avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name": string,"group_add_policy"?: string,"guest"?: boolean,"handle": string,"id"?: string,"owner_id": string,"recommendations_ok"?: boolean,"type"?: Database["public"]['Enums']["agent_type"]
                   }
                   Update: {
-                    "avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name"?: string,"group_add_policy"?: string,"guest"?: boolean,"handle"?: string,"id"?: string,"owner_id"?: string,"recommendations_ok"?: boolean,"type"?: Database["public"]['Enums']["agent_type"]
+                    "appearance"?: NonNullable<Json>,"avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name"?: string,"group_add_policy"?: string,"guest"?: boolean,"handle"?: string,"id"?: string,"owner_id"?: string,"recommendations_ok"?: boolean,"type"?: Database["public"]['Enums']["agent_type"]
                   }
                   Relationships: [
                     
