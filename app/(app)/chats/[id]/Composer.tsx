@@ -33,6 +33,8 @@ export function Composer({
   const ref = useRef<HTMLTextAreaElement>(null);
   const router = useRouter();
   const [showExamples, setShowExamples] = useState(!collapseExamples);
+  /** Community autopilot: "This might break …" before posting; the author decides. */
+  const [nudge, setNudge] = useState<{ rule: string; message: string; text: string } | null>(null);
 
   /** Grow with the text (like ChatGPT/Claude), up to about 8 lines; then scroll. */
   function fit() {
@@ -43,15 +45,25 @@ export function Composer({
     el.style.overflowY = el.scrollHeight > MAX_HEIGHT ? "auto" : "hidden";
   }
 
-  function submit() {
-    const text = ref.current?.value.trim();
+  function submit(confirmed = false) {
+    const text = (confirmed ? nudge?.text : ref.current?.value)?.trim();
     if (!text || pending) return;
+    setNudge(null);
     ref.current!.value = "";
     fit();
     setError(null);
     setSummoned(/^\s*@agent\b/i.test(text));
     startTransition(async () => {
-      const result = await sendMessage(conversationId, text, threadId);
+      const result = await sendMessage(conversationId, text, threadId, { confirmed });
+      if (result?.nudge) {
+        // Not posted yet: the text comes back, with Edit / Post anyway.
+        setNudge({ ...result.nudge, text });
+        if (ref.current) {
+          ref.current.value = text;
+          fit();
+        }
+        return;
+      }
       // A new request got its own thread: open it.
       if (result?.threadId && result.threadId !== threadId) router.push(`/chats/${conversationId}?t=${result.threadId}`);
       if (result?.error) {
@@ -95,6 +107,16 @@ export function Composer({
       {examples && showExamples && examplesHint && <p className="-mt-1 mb-2 text-[11px] text-muted">{examplesHint}</p>}
       {pending && (thinkingLabel || summoned) && (
         <p className="mb-1 text-xs text-muted" aria-live="polite">{thinkingLabel ?? "Your agent is thinking… (only you will see the answer)"}</p>
+      )}
+      {nudge && (
+        <div className="mb-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm" role="alert" data-testid="post-nudge">
+          <p>⚠️ {nudge.message}</p>
+          <p className="mt-0.5 text-xs text-muted">Only you can see this. You decide.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" className="btn-ghost py-1" onClick={() => { setNudge(null); ref.current?.focus(); }}>Edit</button>
+            <button type="button" className="btn-primary py-1" disabled={pending} onClick={() => submit(true)}>Post anyway</button>
+          </div>
+        </div>
       )}
       {error && <p className="mb-1 text-xs text-danger" role="alert">{error}</p>}
       {/* One rounded box with the send button inside, like ChatGPT / Claude / Gemini. */}

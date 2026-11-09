@@ -5,6 +5,7 @@ import {
   type ParticipantReply,
 } from "@/lib/coordination/heuristics";
 import { recordUsage } from "@/lib/usage/meter";
+import { mockModeration } from "@/lib/social/moderation";
 import { describeRecall, type RecallPlan } from "@/lib/agents/recall-format";
 import { heuristicCompose } from "@/lib/plans/compose";
 import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest } from "./types";
@@ -86,6 +87,9 @@ export class MockProvider implements LLMProvider {
           (ctx.facts ?? {}) as Partial<Record<"availability" | "food" | "location", string>>,
           String(ctx.window ?? ""),
         );
+        break;
+      case "moderation":
+        value = mockModeration(String(ctx.text ?? ""));
         break;
       case "business_faq": {
         // Deterministic: FAQs, then a line of the business's info/website mentioning the question's words.

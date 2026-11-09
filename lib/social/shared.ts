@@ -1,4 +1,5 @@
 import "server-only";
+import { hideIfReportsAgree } from "./moderation-server";
 import { adminClient } from "@/lib/supabase/admin";
 import { env } from "@/lib/env";
 import { randomToken } from "@/lib/people/crypto";
@@ -107,6 +108,8 @@ export async function reportMessage(messageId: string, userId: string, reason: s
     excerpt: msg.content.slice(0, 500),
     reason: text,
   });
+  // Community: enough different members reporting it + the AI check agreeing hides it, no moderator needed.
+  if (conv.kind === "channel") await hideIfReportsAgree(msg.id);
   return { ok: true };
 }
 
