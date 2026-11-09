@@ -14,9 +14,14 @@ export async function Notices({ area }: { area: "groups" | "communities" }) {
   const supabase = await createClient();
   const since = daysAgo(30);
   // RLS: only your own updates.
-  const { data: notices } = await supabase.from("notices").select("*").eq("area", area).gte("created_at", since).order("created_at", { ascending: false }).limit(10);
+  const [{ data: notices }, { count: total }, { count: unseenCount }] = await Promise.all([
+    supabase.from("notices").select("*").eq("area", area).gte("created_at", since).order("created_at", { ascending: false }).limit(10),
+    // The badge counts all of them (the list shows the latest 10).
+    supabase.from("notices").select("*", { count: "exact", head: true }).eq("area", area).gte("created_at", since),
+    supabase.from("notices").select("*", { count: "exact", head: true }).eq("area", area).gte("created_at", since).is("seen_at", null),
+  ]);
   if (!notices?.length) return null;
-  const unseen = notices.filter((n) => !n.seen_at).length;
+  const unseen = unseenCount ?? 0;
   // A tap-to-open section like the rest of the app; it opens by itself when something is new.
   return (
     <Fold
@@ -25,7 +30,7 @@ export async function Notices({ area }: { area: "groups" | "communities" }) {
       testId="notices"
       open={unseen > 0}
       // New updates in green; otherwise how many there are (last 30 days).
-      badge={unseen > 0 ? { count: unseen, tone: "new" } : { count: notices.length, tone: "total" }}
+      badge={unseen > 0 ? { count: unseen, tone: "new" } : { count: total ?? notices.length, tone: "total" }}
       summary={unseen ? `${unseen} new · ${notices[0].text}` : `Latest: ${notices[0].text}`}
     >
       {unseen > 0 && <MarkNoticesSeen area={area} />}
