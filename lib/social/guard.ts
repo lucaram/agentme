@@ -5,6 +5,7 @@
  * needs a moderator: messages are either posted or refused with a clear reason.
  * Pure (no server code), unit-tested.
  */
+import { houseRuleBlock } from "./rules";
 
 export type TrustLevel = "new" | "member" | "trusted" | "moderator";
 
@@ -45,9 +46,12 @@ export const sameMessage = (a: string, b: string) => {
 export type GuardResult = { ok: true; flags: string[] } | { ok: false; error: string };
 
 /** Checks one message. `recent`: the sender's own messages in this community in the last few minutes. */
-export function checkCommunityMessage(text: string, level: TrustLevel, recent: string[]): GuardResult {
+export function checkCommunityMessage(text: string, level: TrustLevel, recent: string[], houseRules: readonly string[] = []): GuardResult {
   if (level === "moderator") return { ok: true, flags: [] };
   const links = countLinks(text);
+  // House rules checked in code ("No links", "No images or videos").
+  const house = houseRuleBlock(text, houseRules, links);
+  if (house) return { ok: false, error: house };
   if (links > MAX_LINKS[level]) {
     return {
       ok: false,

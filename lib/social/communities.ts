@@ -1,11 +1,13 @@
 import "server-only";
+import { cleanRules, MAX_NAME, MIN_DESCRIPTION, rulesText } from "./rules";
 import { adminClient } from "@/lib/supabase/admin";
 import { getAgentForUser, type AgentRow } from "@/lib/data/agents";
 import { createConversation, postMessage } from "@/lib/data/chat";
 import { COMMUNITY_AVATARS, MAX_COMMUNITY_PEOPLE, communityMembership, isModerator, loadJoinLink, notify, type Result } from "./shared";
 
 type Me = { userId: string; agent: AgentRow };
-export type CommunityInput = { name: string; description: string; rules: string; avatar: string; visibility: "public" | "private" };
+/** houseRules: ids from the list (lib/social/rules.ts); the three core rules are always there. */
+export type CommunityInput = { name: string; description: string; avatar: string; visibility: "public" | "private"; houseRules?: string[]; language?: string | null };
 
 async function loadCommunity(id: string) {
   const { data } = await adminClient().from("communities").select("*").eq("id", id).maybeSingle();
@@ -17,13 +19,27 @@ async function channels(communityId: string) {
   return data ?? [];
 }
 
-function clean(input: CommunityInput) {
+/** Name, what it's about (required) and its rules (core + picked house rules), tidied and checked. */
+function clean(input: CommunityInput): Result<{
+  values: { name: string; description: string; rules: string; house_rules: string[]; language: string | null; avatar: string; visibility: "public" | "private" };
+}> {
+  const name = input.name.trim().replace(/\s+/g, " ").slice(0, MAX_NAME);
+  const description = input.description.trim().slice(0, 500);
+  if (name.length < 3) return { ok: false, error: "The name needs at least 3 characters." };
+  if (description.length < MIN_DESCRIPTION) return { ok: false, error: `Say what it's about in at least ${MIN_DESCRIPTION} characters, so people know before joining.` };
+  const rules = cleanRules({ houseRules: input.houseRules, language: input.language });
+  if (!rules.ok) return rules;
   return {
-    name: input.name.trim().replace(/\s+/g, " ").slice(0, 60),
-    description: input.description.trim().slice(0, 500) || null,
-    rules: input.rules.trim().slice(0, 2000) || null,
-    avatar: COMMUNITY_AVATARS.includes(input.avatar) ? input.avatar : "🏟️",
-    visibility: input.visibility === "private" ? ("private" as const) : ("public" as const),
+    ok: true,
+    values: {
+      name,
+      description,
+      rules: rulesText(rules.houseRules, rules.language),
+      house_rules: rules.houseRules,
+      language: rules.language,
+      avatar: COMMUNITY_AVATARS.includes(input.avatar) ? input.avatar : "🏟️",
+      visibility: input.visibility === "private" ? "private" : "public",
+    },
   };
 }
 
@@ -50,8 +66,9 @@ async function size(communityId: string) {
 /** A community with two chats: Announcements (moderators post) and General (everyone). */
 export async function createCommunity(me: Me, input: CommunityInput): Promise<Result<{ id: string }>> {
   if (me.agent.guest) return { ok: false, error: "Save your account first to create a community." };
-  const c = clean(input);
-  if (c.name.length < 3) return { ok: false, error: "The name needs at least 3 characters." };
+  const cleaned = clean(input);
+  if (!cleaned.ok) return cleaned;
+  const c = cleaned.values;
   const db = adminClient();
   const { data: community, error } = await db.from("communities").insert({ ...c, owner_id: me.userId }).select("id").single();
   if (error || !community) return { ok: false, error: error?.code === "23505" ? "A community with that name already exists." : "Couldn't create the community." };
@@ -162,9 +179,15 @@ export async function updateCommunity(id: string, me: Me, input: CommunityInput)
   const community = await loadCommunity(id);
   const role = (await communityMembership(id, me.userId))?.role;
   if (!community || !isModerator(role)) return { ok: false, error: "Not allowed." };
-  const c = clean(input);
-  const ownerOnly = role === "owner" ? { name: c.name.length >= 3 ? c.name : community.name, visibility: c.visibility, avatar: c.avatar } : {};
-  const { error } = await adminClient().from("communities").update({ description: c.description, rules: c.rules, ...ownerOnly }).eq("id", id);
+  // Moderators can't rename: check with the current name when they save.
+  const cleaned = clean(role === "owner" ? input : { ...input, name: community.name });
+  if (!cleaned.ok) return cleaned;
+  const c = cleaned.values;
+  const ownerOnly = role === "owner" ? { name: c.name, visibility: c.visibility, avatar: c.avatar } : {};
+  const { error } = await adminClient()
+    .from("communities")
+    .update({ description: c.description, rules: c.rules, house_rules: c.house_rules, language: c.language, ...ownerOnly })
+    .eq("id", id);
   if (error) return { ok: false, error: error.code === "23505" ? "A community with that name already exists." : "Couldn't save." };
   return { ok: true };
 }

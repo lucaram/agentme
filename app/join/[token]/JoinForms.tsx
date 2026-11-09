@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { AVATARS } from "@/lib/avatars";
+import { MAX_PERSON_NAME, MIN_NAME } from "@/lib/social/limits";
 import { joinAsGuestAction, joinPlanAction, type JoinState } from "./actions";
 
 /** "Join plan" for people who already have an account. */
@@ -28,13 +29,19 @@ export function GuestForm({ token }: { token: string }) {
     <form action={action} className="space-y-4">
       <input type="hidden" name="avatar" value={avatar} />
       <div>
-        <label className="label" htmlFor="display_name">Your name</label>
+        <div className="flex items-baseline justify-between gap-2">
+          <label className="label" htmlFor="display_name">Your name <span className="font-normal text-muted">· required</span></label>
+          <span className={`text-xs tabular-nums ${name.length >= MAX_PERSON_NAME - 5 ? "text-amber-600 dark:text-amber-400" : "text-muted"}`}>
+            {name.length} / {MAX_PERSON_NAME}
+          </span>
+        </div>
         <input
           className="input"
           id="display_name"
           name="display_name"
           required
-          maxLength={60}
+          minLength={MIN_NAME}
+          maxLength={MAX_PERSON_NAME}
           autoComplete="given-name"
           value={name}
           onChange={(e) => {

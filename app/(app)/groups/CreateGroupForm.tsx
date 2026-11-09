@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 import { createGroupAction } from "../social-actions";
 import { AvatarPicker } from "@/components/social/Controls";
+import { NameField } from "@/components/NameField";
+import { MAX_GROUP_NAME } from "@/lib/social/limits";
 import { ContactSearch } from "@/components/social/ContactSearch";
 
 type Person = { id: string; avatar: string; display_name: string; handle: string };
@@ -21,12 +23,9 @@ export function CreateGroupForm({ contacts, avatars }: { contacts: Person[]; ava
     <form action={action} className="card space-y-4" aria-label="New group">
       <h2 className="font-semibold">New group</h2>
       <AvatarPicker options={avatars} />
+      <NameField id="group-title" name="title" label="Group name" max={MAX_GROUP_NAME} placeholder="e.g. Sunday football" />
       <div>
-        <label className="label" htmlFor="group-title">Group name</label>
-        <input className="input" id="group-title" name="title" maxLength={80} required placeholder="e.g. Sunday football" />
-      </div>
-      <div>
-        <label className="label" htmlFor="group-description">Description (optional)</label>
+        <label className="label" htmlFor="group-description">Description <span className="font-normal text-muted">· optional</span></label>
         <textarea className="input" id="group-description" name="description" rows={2} maxLength={500} />
       </div>
       <fieldset>

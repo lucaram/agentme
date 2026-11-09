@@ -161,7 +161,9 @@ export async function dismissReportAction(reportId: string, path: string): Promi
 const communityInput = (form: FormData) => ({
   name: String(form.get("name") ?? ""),
   description: String(form.get("description") ?? ""),
-  rules: String(form.get("rules") ?? ""),
+  // Picked from the list (the three core rules are always there).
+  houseRules: form.getAll("house_rules").map(String),
+  language: String(form.get("language") ?? "") || null,
   avatar: String(form.get("avatar") ?? ""),
   visibility: form.get("visibility") === "private" ? ("private" as const) : ("public" as const),
 });

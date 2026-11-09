@@ -28,6 +28,7 @@ import { EditCommunityForm } from "../CommunityForm";
 import { JoinCommunity } from "./JoinCommunity";
 import { BusinessHandleForm } from "@/components/social/BusinessHandleForm";
 import { Fold } from "@/components/Fold";
+import { languageOf, rulesList } from "@/lib/social/rules";
 import { digestCounts, suggestModerators, touchSeen } from "@/lib/social/digest";
 
 const AUTOPILOT_ACTION: Record<string, string> = {
@@ -70,6 +71,7 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
           <h1 className="text-xl font-semibold">{community.name}</h1>
           <p className="text-xs text-muted">
             {members} of {MAX_COMMUNITY_PEOPLE.toLocaleString("en-GB")} members · {community.visibility === "private" ? "🔒 Private" : "Public"}
+            {languageOf(community.language) && ` · ${languageOf(community.language)!.flag} ${languageOf(community.language)!.name}`}
             {me && ROLE_LABEL[me.role as keyof typeof ROLE_LABEL] && ` · You're ${ROLE_LABEL[me.role as keyof typeof ROLE_LABEL].toLowerCase()}`}
           </p>
         </div>
@@ -88,12 +90,17 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
           {me && <p className="hint">Mention a partner in the chats to ask it something. It only sees messages that mention it and never posts on its own.</p>}
         </div>
       )}
-      {community.rules && (
-        <details open={!me}>
-          <summary className="cursor-pointer text-sm font-semibold">Rules</summary>
-          <p className="mt-1 whitespace-pre-wrap rounded-lg bg-accent-soft px-3 py-2 text-sm">{community.rules}</p>
-        </details>
-      )}
+      {/* Before joining, people see exactly what they accept: the core rules and the house rules. */}
+      <details open={!me}>
+        <summary className="cursor-pointer text-sm font-semibold">Rules</summary>
+        <ul className="mt-1 space-y-1 rounded-lg bg-accent-soft px-3 py-2 text-sm" data-testid="community-rules">
+          {rulesList(community.house_rules ?? [], community.language).map((r) => (
+            <li key={r.id}>
+              {r.icon} {r.label}
+            </li>
+          ))}
+        </ul>
+      </details>
       <p className="text-xs text-muted" data-testid="spam-protection">
         🛡️ Spam protection is on: new members can&apos;t post links for their first day, repeated messages and floods of links or mentions are
         blocked, and messages that look like selling are flagged to moderators.
@@ -110,7 +117,7 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
         {pending ? (
           <p className="card text-sm text-muted">Request sent. A moderator will let you in.</p>
         ) : (
-          <JoinCommunity id={id} hasRules={Boolean(community.rules)} isPrivate={community.visibility === "private"} />
+          <JoinCommunity id={id} hasRules isPrivate={community.visibility === "private"} />
         )}
       </div>
     );
@@ -409,7 +416,7 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
                 id={id}
                 isOwner={isOwner}
                 avatars={COMMUNITY_AVATARS}
-                values={{ name: community.name, description: community.description ?? "", rules: community.rules ?? "", avatar: community.avatar, visibility: community.visibility as "public" | "private" }}
+                values={{ name: community.name, description: community.description ?? "", avatar: community.avatar, visibility: community.visibility as "public" | "private", houseRules: community.house_rules ?? [], language: community.language }}
               />
             </div>
           </Fold>

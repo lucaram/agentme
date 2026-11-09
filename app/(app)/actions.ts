@@ -33,6 +33,7 @@ import { tellOwner } from "@/lib/requests/notify";
 import { canPost, type ConvRow } from "@/lib/social/shared";
 import { handOverIfOwnerLeft } from "@/lib/social/groups";
 import { answerMentions } from "@/lib/social/businesses";
+import { MIN_NAME, maxNameFor } from "@/lib/social/limits";
 import { DM_CLOSED, dmState } from "@/lib/people/dm";
 import { guardCommunityPost } from "@/lib/social/guard-server";
 import { autopilot } from "@/lib/social/moderation-server";
@@ -405,7 +406,8 @@ export async function saveSettings(form: FormData) {
   const db = adminClient();
   const policy = z.enum(["contacts_only", "anyone", "nobody"]).safeParse(form.get("contact_policy"));
   const groupPolicy = z.enum(["contacts", "nobody"]).safeParse(form.get("group_add_policy"));
-  const displayName = String(form.get("display_name") ?? "").trim().slice(0, 60);
+  const typedName = String(form.get("display_name") ?? "").trim().slice(0, maxNameFor(agent.type));
+  const displayName = typedName.length >= MIN_NAME ? typedName : "";
   await db
     .from("agents")
     .update({

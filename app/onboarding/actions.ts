@@ -1,5 +1,6 @@
 "use server";
 
+import { MAX_BUSINESS_NAME, MIN_NAME, SIGNUP_LIMITS, maxNameFor } from "@/lib/social/limits";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
@@ -26,13 +27,35 @@ export async function checkHandle(input: string): Promise<{ ok: boolean; handle:
 
 const Base = z.object({
   type: z.enum(["personal", "business"]),
-  display_name: z.string().trim().min(1, "Enter a name.").max(60),
+  display_name: z.string().trim().min(MIN_NAME, "Enter a name (at least 2 characters).").max(MAX_BUSINESS_NAME),
   handle: z.string(),
   avatar: z.string().refine((a) => AVATARS.includes(a), "Pick an avatar."),
 });
 
 const shareFlag = (v: FormDataEntryValue | null) => (v === "on" ? "contacts" : "private") as "contacts" | "private";
-const optional = (v: FormDataEntryValue | null) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 500) : null);
+const optional = (v: FormDataEntryValue | null) => (typeof v === "string" && v.trim() ? v.trim() : null);
+
+/** The optional details, checked against the same limits the form shows (an error, never a silent cut). */
+function checkDetails(form: FormData, isBusiness: boolean): string | null {
+  const tooLong = (field: string, max: number) => (optional(form.get(field))?.length ?? 0) > max;
+  if (!isBusiness) {
+    for (const [field, label] of [["availability", "Usual availability"], ["food", "Food preferences"], ["notes", "Private notes"]] as const) {
+      if (tooLong(field, SIGNUP_LIMITS.fact)) return `Keep "${label}" to ${SIGNUP_LIMITS.fact} characters.`;
+    }
+    return null;
+  }
+  if (tooLong("description", SIGNUP_LIMITS.description)) return `Keep the description to ${SIGNUP_LIMITS.description} characters. You can add more later in Business.`;
+  if (tooLong("hours", SIGNUP_LIMITS.hours)) return `Keep opening hours to ${SIGNUP_LIMITS.hours} characters.`;
+  for (const i of [1, 2, 3]) {
+    const q = optional(form.get(`faq_q_${i}`));
+    const a = optional(form.get(`faq_a_${i}`));
+    if (q && !a) return `FAQ ${i}: add an answer, or clear the question.`;
+    if (a && !q) return `FAQ ${i}: add the question, or clear the answer.`;
+    if ((q?.length ?? 0) > SIGNUP_LIMITS.faqQuestion) return `FAQ ${i}: keep the question to ${SIGNUP_LIMITS.faqQuestion} characters.`;
+    if ((a?.length ?? 0) > SIGNUP_LIMITS.faqAnswer) return `FAQ ${i}: keep the answer to ${SIGNUP_LIMITS.faqAnswer} characters.`;
+  }
+  return null;
+}
 
 export type OnboardingState = { error?: string } | undefined;
 
@@ -47,10 +70,13 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
     avatar: form.get("avatar"),
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  if (parsed.data.display_name.length > maxNameFor(parsed.data.type)) return { error: `Keep the name to ${maxNameFor(parsed.data.type)} characters.` };
   const handle = validateHandle(parsed.data.handle);
   if (!handle.ok) return { error: handle.reason };
 
   const isBusiness = parsed.data.type === "business";
+  const detailsError = checkDetails(form, isBusiness);
+  if (detailsError) return { error: detailsError };
   const faqs = isBusiness
     ? [1, 2, 3]
         .map((i) => ({ q: optional(form.get(`faq_q_${i}`)), a: optional(form.get(`faq_a_${i}`)) }))

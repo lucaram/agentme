@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { checkHandle } from "@/app/onboarding/actions";
 import { addBusinessAction } from "../identity-actions";
+import { MAX_BUSINESS_NAME, MIN_NAME } from "@/lib/social/limits";
 
 const AVATARS = ["🏪", "🍝", "☕", "🍕", "💇", "🛠️", "🏋️", "🛍️", "🎨", "🩺"];
 const suggest = (name: string) =>
@@ -40,8 +41,23 @@ export function AddBusinessForm() {
     <form action={action} className="space-y-5" aria-label="Add a business">
       <input type="hidden" name="avatar" value={avatar} />
       <div>
-        <label className="label" htmlFor="biz-name">Business name</label>
-        <input className="input" id="biz-name" name="name" required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Trattoria da Luca" />
+        <div className="flex items-baseline justify-between gap-2">
+          <label className="label" htmlFor="biz-name">Business name <span className="font-normal text-muted">· required</span></label>
+          <span className={`text-xs tabular-nums ${name.length >= MAX_BUSINESS_NAME - 5 ? "text-amber-600 dark:text-amber-400" : "text-muted"}`}>
+            {name.length} / {MAX_BUSINESS_NAME}
+          </span>
+        </div>
+        <input
+          className="input"
+          id="biz-name"
+          name="name"
+          required
+          minLength={MIN_NAME}
+          maxLength={MAX_BUSINESS_NAME}
+          value={name}
+          onChange={(e) => setName(e.target.value.slice(0, MAX_BUSINESS_NAME))}
+          placeholder="e.g. Trattoria da Luca"
+        />
       </div>
       <div>
         <label className="label" htmlFor="biz-handle">Agent address</label>

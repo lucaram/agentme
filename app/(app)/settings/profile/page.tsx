@@ -1,6 +1,8 @@
 import { requireAgent } from "@/lib/auth";
 import { deleteAccount, saveSettings } from "../../actions";
 import { SaveAccount } from "../SaveAccount";
+import { NameField } from "@/components/NameField";
+import { MIN_NAME, maxNameFor } from "@/lib/social/limits";
 import { SavedNote, SettingsHeader } from "../SettingsHeader";
 import { maskEmail } from "@/lib/people/normalise";
 import { businessesOnlyOwnedBy, isManagedLogin, realPerson } from "@/lib/identities";
@@ -30,10 +32,7 @@ export default async function ProfileSettingsPage({ searchParams }: PageProps<"/
       <form action={saveSettings} className="card space-y-4">
         <input type="hidden" name="return_to" value="/settings/profile" />
         <h2 className="font-semibold">Profile</h2>
-        <div>
-          <label className="label" htmlFor="display_name">Name</label>
-          <input className="input" id="display_name" name="display_name" defaultValue={agent.display_name} maxLength={60} />
-        </div>
+        <NameField id="display_name" name="display_name" label="Name" max={maxNameFor(agent.type)} min={MIN_NAME} defaultValue={agent.display_name} />
         <p className="hint">Your address @{agent.handle} is permanent.</p>
         {!agent.guest && !managedBusiness && (
           <p className="text-sm">✉️ {user.email && user.emailConfirmed ? `${maskEmail(user.email)} ✓` : "Your email isn't verified yet."}</p>

@@ -1,4 +1,5 @@
 import "server-only";
+import { MAX_GROUP_NAME } from "./limits";
 import { adminClient } from "@/lib/supabase/admin";
 import { asJson } from "@/lib/data/json";
 import { getAgentById, getAgentForUser, getContactRow, type AgentRow } from "@/lib/data/agents";
@@ -72,7 +73,7 @@ async function addPeople(groupId: string, groupTitle: string, me: Me, agentIds: 
 }
 
 export async function createGroup(me: Me, input: { title: string; description: string; avatar: string; memberAgentIds: string[] }): Promise<Result<{ id: string; invited: number }>> {
-  const title = input.title.trim().slice(0, 80);
+  const title = input.title.trim().replace(/ +/g, " ").slice(0, MAX_GROUP_NAME);
   if (!title) return { ok: false, error: "Give the group a name." };
   if (!input.memberAgentIds.length) return { ok: false, error: "Pick at least one contact." };
   if (input.memberAgentIds.length + 1 > MAX_GROUP_PEOPLE) return { ok: false, error: `A group can have up to ${MAX_GROUP_PEOPLE} people.` };
@@ -133,7 +134,7 @@ export async function updateGroupInfo(groupId: string, me: Me, input: { title: s
   const role = await groupRole(groupId, me.userId);
   if (!group || !role) return { ok: false, error: "Not found." };
   if (group.only_admins_edit && !isGroupAdmin(role)) return { ok: false, error: "Only admins can edit this group's info." };
-  const title = input.title.trim().slice(0, 80);
+  const title = input.title.trim().replace(/ +/g, " ").slice(0, MAX_GROUP_NAME);
   if (!title) return { ok: false, error: "Give the group a name." };
   await adminClient()
     .from("conversations")

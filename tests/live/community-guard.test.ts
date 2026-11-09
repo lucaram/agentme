@@ -25,7 +25,7 @@ describe.skipIf(!dbUp)("community spam guard (live)", () => {
       people[key] = { userId: created.user.id, agent: agent! };
     }
     const { communities } = await lib();
-    const made = await communities.createCommunity(me("owner"), { name: `Guard ${run}`, description: "", rules: "Be respectful.", avatar: "🏟️", visibility: "public" });
+    const made = await communities.createCommunity(me("owner"), { name: `Guard ${run}`, description: "A test community about football and match days", avatar: "🏟️", visibility: "public" });
     communityId = (made as { id: string }).id;
     for (const k of ["member", "fresh"] as const) await communities.joinCommunity(communityId, me(k), { acceptRules: true });
     general = (await db.from("conversations").select("id").eq("community_id", communityId).eq("channel", "general").single()).data!.id;

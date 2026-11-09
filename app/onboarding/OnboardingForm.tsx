@@ -3,6 +3,9 @@
 import { useActionState, useEffect, useState } from "react";
 import { AVATARS } from "@/lib/avatars";
 import { checkHandle, createAgent } from "./actions";
+import { NameField } from "@/components/NameField";
+import { LimitedField } from "@/components/LimitedField";
+import { MIN_NAME, SIGNUP_LIMITS, maxNameFor } from "@/lib/social/limits";
 
 type HandleStatus = { ok: boolean; message: string } | null;
 
@@ -48,10 +51,7 @@ export function OnboardingForm({ suggestedHandle, next }: { suggestedHandle: str
         ))}
       </div>
 
-      <div>
-        <label className="label" htmlFor="display_name">{type === "business" ? "Business name" : "Your name"}</label>
-        <input className="input" id="display_name" name="display_name" required maxLength={60} />
-      </div>
+      <NameField id="display_name" name="display_name" label={type === "business" ? "Business name" : "Your name"} max={maxNameFor(type)} min={MIN_NAME} />
 
       <div>
         <label className="label" htmlFor="handle">Agent address</label>
@@ -101,13 +101,13 @@ export function OnboardingForm({ suggestedHandle, next }: { suggestedHandle: str
       ) : (
         <fieldset className="space-y-3">
           <legend className="label">What should your agent know? (optional)</legend>
-          <textarea className="input" name="description" rows={2} placeholder="What your business does" />
-          <input className="input" name="hours" placeholder="Opening hours, e.g. Tue–Sun 12:00–23:00" />
+          <div>
+            <LimitedField name="description" multiline rows={2} maxRows={6} max={SIGNUP_LIMITS.description} aria-label="What your business does" placeholder="What your business does" />
+            <p className="hint mt-1">A short start. You can add much more later in Business → About your business.</p>
+          </div>
+          <LimitedField name="hours" max={SIGNUP_LIMITS.hours} aria-label="Opening hours" placeholder="Opening hours, e.g. Tue–Sun 12:00–23:00" />
           {[1, 2, 3].map((i) => (
-            <div key={i} className="grid gap-2 sm:grid-cols-2">
-              <input className="input" name={`faq_q_${i}`} placeholder={`FAQ ${i}: question`} />
-              <input className="input" name={`faq_a_${i}`} placeholder="Answer" />
-            </div>
+            <FaqPair key={i} i={i} />
           ))}
           <p className="hint">Your agent answers only from this information. It never takes bookings or payments.</p>
         </fieldset>
@@ -125,12 +125,33 @@ function Fact({ name, label, placeholder, shareDefault }: { name: string; label:
   return (
     <div>
       <label className="text-sm" htmlFor={name}>{label}</label>
-      <input className="input mt-1" id={name} name={name} placeholder={placeholder} maxLength={500} />
+      <LimitedField id={name} name={name} multiline max={SIGNUP_LIMITS.fact} placeholder={placeholder} className="mt-1" />
       {shareDefault !== undefined && (
         <label className="mt-1 flex items-center gap-2 text-xs text-muted">
           <input type="checkbox" name={`share_${name}`} defaultChecked={shareDefault} />
           Let my agent share this with my contacts&apos; agents when I approve a plan
         </label>
+      )}
+    </div>
+  );
+}
+
+/** One FAQ: a question needs its answer (and the other way round), or the pair would be dropped. */
+function FaqPair({ i }: { i: number }) {
+  const [q, setQ] = useState("");
+  const [a, setA] = useState("");
+  const half = Boolean(q.trim()) !== Boolean(a.trim());
+  const hintId = `faq-hint-${i}`;
+  return (
+    <div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <LimitedField name={`faq_q_${i}`} max={SIGNUP_LIMITS.faqQuestion} value={q} onChange={setQ} required={half && !q.trim()} aria-label={`FAQ ${i} question`} aria-describedby={half ? hintId : undefined} placeholder={`FAQ ${i}: question`} />
+        <LimitedField name={`faq_a_${i}`} multiline max={SIGNUP_LIMITS.faqAnswer} value={a} onChange={setA} required={half && !a.trim()} aria-label={`FAQ ${i} answer`} aria-describedby={half ? hintId : undefined} placeholder="Answer" />
+      </div>
+      {half && (
+        <p id={hintId} className="mt-1 text-xs text-amber-600 dark:text-amber-400" data-testid="faq-half">
+          {q.trim() ? "Add an answer, or clear the question." : "Add the question, or clear the answer."}
+        </p>
       )}
     </div>
   );

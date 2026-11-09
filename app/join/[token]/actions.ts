@@ -1,5 +1,6 @@
 "use server";
 
+import { MAX_PERSON_NAME, MIN_NAME } from "@/lib/social/limits";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getUser, requireAgent } from "@/lib/auth";
@@ -23,7 +24,7 @@ export async function joinPlanAction(token: string): Promise<JoinState> {
 }
 
 const Guest = z.object({
-  display_name: z.string().trim().min(1, "Enter your name.").max(60),
+  display_name: z.string().trim().min(MIN_NAME, "Enter your name (at least 2 characters).").max(MAX_PERSON_NAME),
   handle: z.string(),
   avatar: z.string().refine((a) => AVATARS.includes(a), "Pick an avatar."),
 });

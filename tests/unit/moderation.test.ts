@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { agreesWithReports, decide, mockModeration, type Moderation } from "@/lib/social/moderation";
 
-const m = (verdict: Moderation["verdict"], confidence: number, reason = "Because.") => ({ verdict, confidence, reason });
+const m = (verdict: Moderation["verdict"], confidence: number, reason = "Because.", rule = "") => ({ verdict, confidence, reason, rule });
 
 describe("community autopilot: code decides what happens", () => {
   it("refuses only near-certain spam and clear abuse", () => {
