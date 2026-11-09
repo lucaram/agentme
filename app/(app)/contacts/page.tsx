@@ -82,25 +82,35 @@ export default async function ContactsPage() {
             ...(blocked.length ? [`${blocked.length} blocked`] : []),
           ].join(" · ")}
         >
-          <ul className="divide-y divide-border" aria-label="Contacts">
-            {accepted.length === 0 && (
-              <li className="px-5 py-4 text-sm text-muted">No contacts yet. <Link className="text-accent underline" href="/discover">Find people</Link>.</li>
-            )}
-            {accepted.map((r) => (
-              <Row key={r.id} agent={r.other}>
-                {/* A business: its agent comes first; Message stays the main (green) action, as for people. */}
-                {r.other.type === "business" && <ActionButton action={openAgentChat.bind(null, r.other.id)} label="Ask agent" />}
-                <ActionButton action={openDirectMessage.bind(null, r.other.id)} label="Message" variant="btn-primary" />
-                <details className="relative">
-                  <summary className="btn-ghost cursor-pointer list-none">⋯</summary>
-                  <div className="absolute right-0 z-10 mt-1 flex flex-col gap-1 rounded-xl border border-border bg-surface p-2 shadow">
-                    <ActionButton action={removeContact.bind(null, r.id)} label="Remove" />
-                    <ActionButton action={blockContact.bind(null, r.id)} label="Block" variant="btn-danger" />
-                  </div>
-                </details>
-              </Row>
-            ))}
-          </ul>
+          {accepted.length === 0 && (
+            <p className="px-5 py-4 text-sm text-muted">No contacts yet. <Link className="text-accent underline" href="/discover">Find people</Link>.</p>
+          )}
+          {/* People first, then businesses, each under its own heading. */}
+          {(
+            [
+              ["People", accepted.filter((r) => r.other.type !== "business")],
+              ["Businesses", accepted.filter((r) => r.other.type === "business")],
+            ] as const
+          ).map(([title, rows]) =>
+            rows.length ? (
+              <SubList key={title} title={title} testId={`contacts-${title.toLowerCase()}`}>
+                {rows.map((r) => (
+                  <Row key={r.id} agent={r.other}>
+                    {/* A business: its agent comes first; Message stays the main (green) action, as for people. */}
+                    {r.other.type === "business" && <ActionButton action={openAgentChat.bind(null, r.other.id)} label="Ask agent" />}
+                    <ActionButton action={openDirectMessage.bind(null, r.other.id)} label="Message" variant="btn-primary" />
+                    <details className="relative">
+                      <summary className="btn-ghost cursor-pointer list-none">⋯</summary>
+                      <div className="absolute right-0 z-10 mt-1 flex flex-col gap-1 rounded-xl border border-border bg-surface p-2 shadow">
+                        <ActionButton action={removeContact.bind(null, r.id)} label="Remove" />
+                        <ActionButton action={blockContact.bind(null, r.id)} label="Block" variant="btn-danger" />
+                      </div>
+                    </details>
+                  </Row>
+                ))}
+              </SubList>
+            ) : null,
+          )}
           {outgoing.length > 0 && (
             <SubList title="Sent requests">
               {outgoing.map((r) => (
@@ -183,10 +193,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-/** A smaller list inside the Contacts section (sent requests, blocked). */
-function SubList({ title, children }: { title: string; children: React.ReactNode }) {
+/** A labelled list inside the Contacts section (people, businesses, sent requests, blocked). */
+function SubList({ title, testId, children }: { title: string; testId?: string; children: React.ReactNode }) {
   return (
-    <div className="border-t border-border">
+    // The first list in the section needs no line above it (the section already has one).
+    <div className="border-t border-border first:border-t-0" data-testid={testId}>
       <p className="px-5 pt-4 text-xs font-semibold uppercase tracking-wide text-muted sm:px-6">{title}</p>
       <ul className="divide-y divide-border">{children}</ul>
     </div>
