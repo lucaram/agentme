@@ -24,6 +24,7 @@ async function send(page: Page, text: string) {
 test("scanning a live QR code connects instantly and opens the chat", async ({ browser }) => {
   const luca = await as(browser, "luca");
   await luca.page.goto("/contacts");
+  await luca.page.getByTestId("fold-add-people").locator("summary").first().click();
   await expect(luca.page.getByTestId("personal-link")).toHaveText(/\/u\/luca$/);
   await luca.page.getByText("📷 Show my QR code").click();
   const qr = luca.page.getByTestId("qr-code");
