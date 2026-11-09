@@ -25,6 +25,7 @@ import {
   robotsRules,
   scopeOf,
   shortUrl,
+  siteDomain,
   sitemapLocs,
   type RobotsRules,
 } from "./site";
@@ -122,9 +123,17 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
   const fromSitemaps: string[] = [];
   const sitemapQueue = [...rules.sitemaps, new URL("/sitemap.xml", base).toString(), ...(scope !== "/" ? [new URL(`${scope}sitemap.xml`, base).toString()] : [])];
   const triedSitemaps = new Set<string>();
+  const ownSite = (raw: string) => {
+    try {
+      return siteDomain(new URL(raw).hostname) === siteDomain(base.hostname);
+    } catch {
+      return false;
+    }
+  };
   while (sitemapQueue.length && triedSitemaps.size < MAX_SITEMAPS) {
     const url = sitemapQueue.shift()!;
-    if (triedSitemaps.has(url)) continue;
+    // Only the business's own sitemaps (robots.txt or a sitemap index could point anywhere).
+    if (triedSitemaps.has(url) || !ownSite(url)) continue;
     triedSitemaps.add(url);
     const file = await quietly(url);
     if (!file || !/xml|text\/plain/.test(mediaType(file))) continue;
