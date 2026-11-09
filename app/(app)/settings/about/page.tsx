@@ -90,7 +90,7 @@ export default async function AboutYouPage() {
       <section className="space-y-2" aria-label="Topics">
         {TOPICS.map((topic) => (
           <Fragment key={topic.key}>
-            <TopicCard topic={topic} spacious={topic.key === "availability"} initialValue={get(topic.key)?.value ?? ""} initialShare={get(topic.key)?.disclosure === "contacts"} />
+            <TopicCard topic={topic} initialValue={get(topic.key)?.value ?? ""} initialShare={get(topic.key)?.disclosure === "contacts"} />
             {/* Time away gets its own row, right under when you're free. */}
             {topic.key === "availability" && (
               <AwayCard

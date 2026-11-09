@@ -7,30 +7,13 @@ import { saveAwayAction, saveTopicAction } from "./actions";
 
 /** A topic card; the open one stands out (accent border, raised, shadow), and only one is open at a time (same name). */
 const CARD = "group rounded-2xl border border-border bg-surface transition-shadow open:border-accent/60 open:bg-raised open:shadow-2xl open:ring-1 open:ring-black/10";
+const SECTION_TITLE = "text-xs font-semibold uppercase tracking-wide text-muted";
 
-function ShareChoice({ share, onChange, name }: { share: boolean; onChange: (share: boolean) => void; name: string }) {
-  return (
-    <fieldset className="space-y-1">
-      <legend className="sr-only">Who can see this</legend>
-      {[
-        [false, "🔒 Only my agent", "Used for your own plans, never given to anyone."],
-        [true, "👥 My contacts' agents", "Only when a contact's plan asks for this kind of thing."],
-      ].map(([value, label, hint]) => (
-        <label key={String(value)} className="flex items-start gap-2 text-sm">
-          <input type="radio" name={name} className="mt-1" checked={share === value} onChange={() => onChange(value as boolean)} />
-          <span>
-            {label as string}
-            <span className="block text-xs text-muted">{hint as string}</span>
-          </span>
-        </label>
-      ))}
-    </fieldset>
-  );
-}
+type Message = { ok: boolean; text: string } | null;
 
 function useSaver() {
   const router = useRouter();
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [message, setMessage] = useState<Message>(null);
   const [pending, start] = useTransition();
   const run = (fn: () => Promise<{ error?: string }>, done = "Saved. Your agent uses this straight away.") =>
     start(async () => {
@@ -41,163 +24,69 @@ function useSaver() {
   return { message, pending, run };
 }
 
-/** One topic: a summary line; tap to edit. */
-export function TopicCard({
-  topic,
-  label,
-  initialValue,
-  initialShare,
-  spacious = false,
-  children,
-}: {
-  topic: Topic;
-  /** Your own topic's name (built-in topics have none). */
-  label?: string;
-  initialValue: string;
-  initialShare: boolean;
-  /** The roomier layout (being trialled on one card). */
-  spacious?: boolean;
-  children?: React.ReactNode;
-}) {
-  const category = label ? "custom" : topic.key;
-  const [value, setValue] = useState(initialValue);
-  const [share, setShare] = useState(initialValue ? initialShare : topic.shareByDefault);
-  const { message, pending, run } = useSaver();
-  const shown = initialValue ? (topic.alwaysPrivate || !initialShare ? "🔒" : "👥") : null;
+// ------------------------------------------------------------- building blocks (one look for every card)
 
+/** The closed row: icon, title, what's saved (or ＋ Add), who sees it, arrow. */
+function CardSummary({ icon, title, value, share, accent }: { icon: string; title: string; /** What's saved ("" shows ＋ Add); leave out for no second line. */ value?: string; share: "👥" | "🔒" | null; accent?: string }) {
   return (
-    <details name="topics" className={CARD} data-testid={label ? "topic-custom" : `topic-${topic.key}`}>
-      <summary className={`flex items-center gap-3 ${spacious ? "px-5 py-4 sm:px-6" : "px-4 py-3"}`}>
-        <span className="text-xl" aria-hidden>{topic.icon}</span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold">{topic.title}</span>
-          <span className={`block truncate text-xs ${initialValue ? "text-muted" : "text-accent"}`}>{initialValue || "＋ Add"}</span>
-        </span>
-        {shown && <span title={shown === "👥" ? "Shared with contacts' agents when asked" : "Only your agent"}>{shown}</span>}
-        <span className="text-muted transition group-open:rotate-90" aria-hidden>›</span>
-      </summary>
-      {spacious ? (
-        <div className="border-t border-border">
-          <div className="space-y-6 px-5 py-5 sm:px-6">
-            <p className="text-sm text-muted">{topic.hint}</p>
-
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wide text-muted" htmlFor={`value-${label ?? topic.key}`}>
-                {SECTION_LABEL[topic.key] ?? "Details"}
-              </label>
-              <textarea
-                id={`value-${label ?? topic.key}`}
-                className="input min-h-24 px-4 py-3 text-[15px] leading-6"
-                rows={3}
-                maxLength={500}
-                aria-label={topic.title}
-                placeholder={topic.placeholder}
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-              />
-              {topic.chips.length > 0 && (
-                <div className="space-y-2 pt-1">
-                  <p className="text-xs text-muted">Quick add</p>
-                  <div className="flex flex-wrap gap-2" aria-label={`Quick picks for ${topic.title}`}>
-                    {topic.chips.map((chip) => (
-                      <button
-                        key={chip}
-                        type="button"
-                        className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium transition hover:border-accent hover:text-accent"
-                        onClick={() => setValue((v) => addChip(v, chip))}
-                      >
-                        ＋ {chip}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {topic.alwaysPrivate ? (
-              <p className="rounded-xl bg-background px-4 py-3 text-sm text-muted">🔒 Always private: never given to any other agent.</p>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">Who can see this</p>
-                <ShareTiles share={share} onChange={setShare} name={`share-${label ?? topic.key}`} />
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4 sm:px-6">
-            {initialValue && (
-              <button
-                type="button"
-                className="text-sm text-danger hover:underline"
-                disabled={pending}
-                onClick={() => run(() => saveTopicAction({ category, label, value: "", share: false }), "Removed.")}
-              >
-                {label ? "Delete this topic" : "Remove"}
-              </button>
-            )}
-            <span className="min-w-0 flex-1 text-right">
-              {message && <span className={`text-xs ${message.ok ? "text-accent" : "text-danger"}`} role={message.ok ? "status" : "alert"}>{message.text}</span>}
-            </span>
-            <button type="button" className="btn-primary px-6" disabled={pending} onClick={() => run(() => saveTopicAction({ category, label, value, share }))}>
-              {pending ? "Saving…" : "Save"}
-            </button>
-          </div>
-          {children}
-        </div>
-      ) : (
-      <div className="space-y-3 border-t border-border px-4 py-3">
-        <p className="hint">{topic.hint}</p>
-        <textarea
-          className="input"
-          rows={2}
-          maxLength={500}
-          aria-label={topic.title}
-          placeholder={topic.placeholder}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-        />
-        {topic.chips.length > 0 && (
-          <div className="flex flex-wrap gap-1.5" aria-label={`Quick picks for ${topic.title}`}>
-            {topic.chips.map((chip) => (
-              <button key={chip} type="button" className="rounded-full border border-border px-2.5 py-0.5 text-xs hover:bg-accent-soft" onClick={() => setValue((v) => addChip(v, chip))}>
-                ＋ {chip}
-              </button>
-            ))}
-          </div>
-        )}
-        {topic.alwaysPrivate ? (
-          <p className="hint">🔒 Always private: never given to any other agent.</p>
-        ) : (
-          <ShareChoice share={share} onChange={setShare} name={`share-${label ?? topic.key}`} />
-        )}
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className="btn-primary" disabled={pending} onClick={() => run(() => saveTopicAction({ category, label, value, share }))}>
-            Save
-          </button>
-          {initialValue && (
-            <button type="button" className="btn-ghost" disabled={pending} onClick={() => run(() => saveTopicAction({ category, label, value: "", share: false }), "Removed.")}>
-              {label ? "Delete this topic" : "Remove"}
-            </button>
-          )}
-          {message && <span className={`text-xs ${message.ok ? "text-accent" : "text-danger"}`} role={message.ok ? "status" : "alert"}>{message.text}</span>}
-        </div>
-        {children}
-      </div>
-      )}
-    </details>
+    <summary className="flex items-center gap-3 px-5 py-4 sm:px-6">
+      <span className="text-xl" aria-hidden>{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-sm font-semibold ${accent ?? ""}`}>{title}</span>
+        {value !== undefined && <span className={`block truncate text-xs ${value ? "text-muted" : "text-accent"}`}>{value || "＋ Add"}</span>}
+      </span>
+      {share && <span title={share === "👥" ? "Shared with contacts' agents when asked" : "Only your agent"}>{share}</span>}
+      <span className="text-muted transition group-open:rotate-90" aria-hidden>›</span>
+    </summary>
   );
 }
 
-/** What the text box holds, per topic (the redesigned card). */
-const SECTION_LABEL: Partial<Record<string, string>> = {
-  availability: "Your usual free times",
-  food: "What you like",
-  interests: "What you're into",
-  location: "Your area",
-  budget: "Your usual budget",
-  practical: "Things that matter for plans",
-  notes: "Notes for your agent",
-};
+/** A labelled part of a card ("YOUR USUAL FREE TIMES", "WHO CAN SEE THIS"). */
+function Section({ title, htmlFor, children }: { title: string; htmlFor?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      {htmlFor ? (
+        <label className={SECTION_TITLE} htmlFor={htmlFor}>{title}</label>
+      ) : (
+        <p className={SECTION_TITLE}>{title}</p>
+      )}
+      {children}
+    </div>
+  );
+}
+
+/** The bar at the bottom: Remove (quiet, left), the result, Save (right). */
+function CardFooter({ pending, message, onSave, saveLabel = "Save", onRemove, removeLabel = "Remove", saveDisabled, waiting }: {
+  pending: boolean;
+  message: Message;
+  onSave: () => void;
+  saveLabel?: string;
+  onRemove?: () => void;
+  removeLabel?: string;
+  saveDisabled?: boolean;
+  /** Shown instead of a result while Save can't be used yet ("Pick a date first."). */
+  waiting?: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4 sm:px-6">
+      {onRemove && (
+        <button type="button" className="text-sm text-danger hover:underline" disabled={pending} onClick={onRemove}>
+          {removeLabel}
+        </button>
+      )}
+      <span className="min-w-0 flex-1 text-right">
+        {message ? (
+          <span className={`text-xs ${message.ok ? "text-accent" : "text-danger"}`} role={message.ok ? "status" : "alert"}>{message.text}</span>
+        ) : (
+          waiting && <span className="text-xs text-muted">{waiting}</span>
+        )}
+      </span>
+      <button type="button" className="btn-primary px-6" disabled={pending || saveDisabled} onClick={onSave}>
+        {pending ? "Saving…" : saveLabel}
+      </button>
+    </div>
+  );
+}
 
 /** Sharing as two choice tiles (side by side; stacked on a phone). */
 function ShareTiles({ share, onChange, name }: { share: boolean; onChange: (share: boolean) => void; name: string }) {
@@ -227,60 +116,130 @@ function ShareTiles({ share, onChange, name }: { share: boolean; onChange: (shar
   );
 }
 
+function Chips({ chips, title, onPick }: { chips: string[]; title: string; onPick: (chip: string) => void }) {
+  if (!chips.length) return null;
+  return (
+    <div className="space-y-2 pt-1">
+      <p className="text-xs text-muted">Quick add</p>
+      <div className="flex flex-wrap gap-2" aria-label={`Quick picks for ${title}`}>
+        {chips.map((chip) => (
+          <button
+            key={chip}
+            type="button"
+            className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium transition hover:border-accent hover:text-accent"
+            onClick={() => onPick(chip)}
+          >
+            ＋ {chip}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const TEXTAREA = "input min-h-24 px-4 py-3 text-[15px] leading-6";
+const BODY = "space-y-6 border-t border-border px-5 py-5 sm:px-6";
+
+// ------------------------------------------------------------- cards
+
+/** What the text box holds, per topic. */
+const SECTION_LABEL: Partial<Record<string, string>> = {
+  availability: "Your usual free times",
+  food: "What you like",
+  interests: "What you're into",
+  location: "Your area",
+  budget: "Your usual budget",
+  practical: "Things that matter for plans",
+  notes: "Notes for your agent",
+};
+
+/** One topic: a summary line; tap to edit. */
+export function TopicCard({
+  topic,
+  label,
+  initialValue,
+  initialShare,
+}: {
+  topic: Topic;
+  /** Your own topic's name (built-in topics have none). */
+  label?: string;
+  initialValue: string;
+  initialShare: boolean;
+}) {
+  const category = label ? "custom" : topic.key;
+  const id = `value-${label ?? topic.key}`;
+  const [value, setValue] = useState(initialValue);
+  const [share, setShare] = useState(initialValue ? initialShare : topic.shareByDefault);
+  const { message, pending, run } = useSaver();
+
+  return (
+    <details name="topics" className={CARD} data-testid={label ? "topic-custom" : `topic-${topic.key}`}>
+      <CardSummary icon={topic.icon} title={topic.title} value={initialValue} share={initialValue ? (topic.alwaysPrivate || !initialShare ? "🔒" : "👥") : null} />
+      <div className={BODY}>
+        <p className="text-sm text-muted">{topic.hint}</p>
+        <Section title={label ? "Details" : SECTION_LABEL[topic.key] ?? "Details"} htmlFor={id}>
+          <textarea id={id} className={TEXTAREA} rows={3} maxLength={500} aria-label={topic.title} placeholder={topic.placeholder} value={value} onChange={(e) => setValue(e.target.value)} />
+          <Chips chips={topic.chips} title={topic.title} onPick={(chip) => setValue((v) => addChip(v, chip))} />
+        </Section>
+        {topic.alwaysPrivate ? (
+          <p className="rounded-xl bg-background px-4 py-3 text-sm text-muted">🔒 Always private: never given to any other agent.</p>
+        ) : (
+          <Section title="Who can see this">
+            <ShareTiles share={share} onChange={setShare} name={`share-${label ?? topic.key}`} />
+          </Section>
+        )}
+      </div>
+      <CardFooter
+        pending={pending}
+        message={message}
+        onSave={() => run(() => saveTopicAction({ category, label, value, share }))}
+        onRemove={initialValue ? () => run(() => saveTopicAction({ category, label, value: "", share: false }), "Removed.") : undefined}
+        removeLabel={label ? "Delete this topic" : "Remove"}
+      />
+    </details>
+  );
+}
+
 /** ✈️ Away for a while: its own row, like every topic (part of "when you're free", forgotten after that day). */
 export function AwayCard({ current, currentShare, minDate }: { current: { until: string; text: string } | null; currentShare: boolean; minDate: string }) {
   const [until, setUntil] = useState(current?.until ?? "");
   const [note, setNote] = useState(current?.text.match(/\(([^)]*)\)/)?.[1] ?? "");
   const [share, setShare] = useState(current ? currentShare : true);
   const { message, pending, run } = useSaver();
-  const summary = current?.text.split(":")[0] ?? null;
+  const summary = current?.text.split(":")[0] ?? "";
   return (
     <details name="topics" className={CARD} data-testid="topic-away">
-      <summary className="flex items-center gap-3 px-4 py-3">
-        <span className="text-xl" aria-hidden>✈️</span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold">Away for a while</span>
-          <span className={`block truncate text-xs ${summary ? "text-muted" : "text-accent"}`}>{summary || "＋ Add"}</span>
-        </span>
-        {summary && <span title={currentShare ? "Shared with contacts' agents when asked" : "Only your agent"}>{currentShare ? "👥" : "🔒"}</span>}
-        <span className="text-muted transition group-open:rotate-90" aria-hidden>›</span>
-      </summary>
-      <div className="space-y-3 border-t border-border px-4 py-3">
-        <p className="hint">Holidays, trips, busy weeks: plans before that day won&apos;t include you. It&apos;s forgotten by itself after that day.</p>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="text-sm" htmlFor="away-until">Away until</label>
-          <input id="away-until" type="date" className="input w-auto" min={minDate} value={until} onChange={(e) => setUntil(e.target.value)} />
-          <input className="input min-w-0 flex-1" aria-label="Away note" placeholder="optional, e.g. holiday" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} />
+      <CardSummary icon="✈️" title="Away for a while" value={summary} share={summary ? (currentShare ? "👥" : "🔒") : null} />
+      <div className={BODY}>
+        <p className="text-sm text-muted">Holidays, trips, busy weeks: plans before that day won&apos;t include you. It&apos;s forgotten by itself after that day.</p>
+        <div className="grid gap-4 sm:grid-cols-[auto_1fr]">
+          <Section title="Away until" htmlFor="away-until">
+            <input id="away-until" type="date" className="input w-auto px-4 py-2.5" min={minDate} value={until} onChange={(e) => setUntil(e.target.value)} />
+          </Section>
+          <Section title="Note (optional)" htmlFor="away-note">
+            <input id="away-note" className="input px-4 py-2.5" aria-label="Away note" placeholder="e.g. holiday" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} />
+          </Section>
         </div>
-        <ShareChoice share={share} onChange={setShare} name="share-away" />
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={pending}
-            onClick={() => (until ? run(() => saveAwayAction({ until, note, share })) : undefined)}
-            title={until ? undefined : "Pick a date first"}
-          >
-            Save
-          </button>
-          {current && (
-            <button
-              type="button"
-              className="btn-ghost"
-              disabled={pending}
-              onClick={() => {
+        <Section title="Who can see this">
+          <ShareTiles share={share} onChange={setShare} name="share-away" />
+        </Section>
+      </div>
+      <CardFooter
+        pending={pending}
+        message={message}
+        saveDisabled={!until}
+        waiting={until ? undefined : "Pick a date first."}
+        onSave={() => run(() => saveAwayAction({ until, note, share }))}
+        onRemove={
+          current
+            ? () => {
                 setUntil("");
                 setNote("");
                 run(() => saveAwayAction({ until: "", note: "", share: false }), "Removed.");
-              }}
-            >
-              Remove
-            </button>
-          )}
-          {!until && !message && <span className="text-xs text-muted">Pick a date first.</span>}
-          {message && <span className={`text-xs ${message.ok ? "text-accent" : "text-danger"}`} role={message.ok ? "status" : "alert"}>{message.text}</span>}
-        </div>
-      </div>
+              }
+            : undefined
+        }
+      />
     </details>
   );
 }
@@ -304,32 +263,35 @@ export function CustomTopics({ topics }: { topics: { label: string; value: strin
       ))}
       {topics.length < MAX_CUSTOM_TOPICS && (
         <details name="topics" className={`${CARD} border-dashed`} data-testid="add-own-topic">
-          <summary className="px-4 py-3 text-sm font-medium text-accent">＋ Your own topic</summary>
-          <div className="space-y-2 border-t border-border px-4 py-3">
-            <input className="input" aria-label="Topic name" placeholder="Name, e.g. Music I like" maxLength={40} value={label} onChange={(e) => setLabel(e.target.value)} />
-            <textarea className="input" rows={2} aria-label="Topic details" placeholder="e.g. Jazz, 90s hip hop, anything live" maxLength={500} value={value} onChange={(e) => setValue(e.target.value)} />
-            <ShareChoice share={share} onChange={setShare} name="share-new-topic" />
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={pending || !label.trim() || !value.trim()}
-                onClick={() =>
-                  run(async () => {
-                    const result = await saveTopicAction({ category: "custom", label, value, share });
-                    if (!result.error) {
-                      setLabel("");
-                      setValue("");
-                    }
-                    return result;
-                  }, "Added.")
-                }
-              >
-                Add topic
-              </button>
-              {message && <span className={`text-xs ${message.ok ? "text-accent" : "text-danger"}`} role={message.ok ? "status" : "alert"}>{message.text}</span>}
-            </div>
+          <CardSummary icon="✨" title="＋ Your own topic" share={null} accent="text-accent" />
+          <div className={BODY}>
+            <p className="text-sm text-muted">Anything your agent should know, under a name you choose.</p>
+            <Section title="Name" htmlFor="own-topic-name">
+              <input id="own-topic-name" className="input px-4 py-2.5" aria-label="Topic name" placeholder="e.g. Music I like" maxLength={40} value={label} onChange={(e) => setLabel(e.target.value)} />
+            </Section>
+            <Section title="Details" htmlFor="own-topic-details">
+              <textarea id="own-topic-details" className={TEXTAREA} rows={3} aria-label="Topic details" placeholder="e.g. Jazz, 90s hip hop, anything live" maxLength={500} value={value} onChange={(e) => setValue(e.target.value)} />
+            </Section>
+            <Section title="Who can see this">
+              <ShareTiles share={share} onChange={setShare} name="share-new-topic" />
+            </Section>
           </div>
+          <CardFooter
+            pending={pending}
+            message={message}
+            saveLabel="Add topic"
+            saveDisabled={!label.trim() || !value.trim()}
+            onSave={() =>
+              run(async () => {
+                const result = await saveTopicAction({ category: "custom", label, value, share });
+                if (!result.error) {
+                  setLabel("");
+                  setValue("");
+                }
+                return result;
+              }, "Added.")
+            }
+          />
         </details>
       )}
     </div>
