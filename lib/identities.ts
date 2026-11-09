@@ -10,6 +10,7 @@ import { getOrCreateMyAgentConversation, postMessage } from "@/lib/data/chat";
 import { validateHandle } from "@/lib/policy/handles";
 import { sameHash } from "@/lib/people/crypto";
 import { MAX_BUSINESS_NAME, MIN_NAME } from "@/lib/social/limits";
+import { BUSINESS_AVATARS } from "@/lib/avatars";
 
 /**
  * One person, several identities. A person signs in with their own account and
@@ -120,7 +121,6 @@ export async function forgetPerson() {
   (await cookies()).delete(PERSON_COOKIE);
 }
 
-const BUSINESS_AVATARS = ["🏪", "🍝", "☕", "🍕", "💇", "🛠️", "🏋️", "🛍️", "🎨", "🩺"];
 export { BUSINESS_AVATARS };
 
 /**

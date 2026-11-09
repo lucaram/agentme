@@ -4,9 +4,10 @@ import { useActionState, useEffect, useState } from "react";
 import { checkHandle } from "@/app/onboarding/actions";
 import { addBusinessAction } from "../identity-actions";
 import { MAX_BUSINESS_NAME, MIN_NAME } from "@/lib/social/limits";
+import { BUSINESS_AVATARS } from "@/lib/avatars";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
-const AVATARS = ["🏪", "🍝", "☕", "🍕", "💇", "🛠️", "🏋️", "🛍️", "🎨", "🩺"];
+const AVATARS = BUSINESS_AVATARS;
 const suggest = (name: string) =>
   name
     .toLowerCase()
