@@ -19,7 +19,7 @@ export function AddBusinessIntro({ guest }: { guest: boolean }) {
       </ul>
       {guest ? (
         <p className="card text-sm">
-          You&apos;re here as a guest. <Link href="/settings#account" className="font-medium text-accent underline">Save your account</Link> first, then add
+          You&apos;re here as a guest. <Link href="/settings/profile#account" className="font-medium text-accent underline">Save your account</Link> first, then add
           your business.
         </p>
       ) : (

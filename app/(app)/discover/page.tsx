@@ -72,7 +72,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/discove
             <p className="text-xs font-semibold uppercase tracking-wide text-muted">Friends can find you by</p>
             <div className="mt-2 flex flex-wrap gap-2 text-sm">
               {!agent.discoverable ? (
-                <Link href="/settings#find-me" className="rounded-full border border-dashed border-border px-3 py-1 text-muted hover:bg-accent-soft">
+                <Link href="/settings/privacy#find-me" className="rounded-full border border-dashed border-border px-3 py-1 text-muted hover:bg-accent-soft">
                   🙈 Nobody: you&apos;re hidden (change)
                 </Link>
               ) : user.email && user.emailConfirmed ? (
@@ -83,7 +83,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/discove
               {!agent.discoverable ? null : hint("phone") ? (
                 <span className="rounded-full bg-accent-soft px-3 py-1">📱 {hint("phone")} ✓</span>
               ) : (
-                <Link href="/settings#find-me" className="rounded-full border border-dashed border-accent px-3 py-1 text-accent hover:bg-accent-soft">
+                <Link href="/settings/privacy#find-me" className="rounded-full border border-dashed border-accent px-3 py-1 text-accent hover:bg-accent-soft">
                   📱 Add your phone number
                 </Link>
               )}

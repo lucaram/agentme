@@ -71,6 +71,7 @@ Our menu: ${baseURL}/demo/trattoria-menu.html`);
 test("a business's permanent QR code: printable poster, and scanning it lets anyone ask the agent", async ({ browser, baseURL }) => {
   const shop = await as(browser, "trattoria");
   await shop.page.goto("/contacts");
+  await shop.page.getByTestId("fold-add-people").locator("summary").first().click();
   await shop.page.getByText("📷 Show my QR code").click();
   // Permanent: the plain business page, no expiring token.
   await expect(shop.page.getByTestId("qr-code")).toHaveAttribute("data-url", `${baseURL}/u/trattoria`);

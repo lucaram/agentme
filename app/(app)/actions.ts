@@ -396,13 +396,16 @@ export async function saveSettings(form: FormData) {
 
   // What the agent knows about you is edited in Settings → What your agent knows (its own page).
   // Business details are edited in My Business (they'd be wiped if saved from here).
-  revalidatePath("/settings");
-  redirect("/settings?saved=1");
+  // Back to the settings page the form was on.
+  const returnTo = String(form.get("return_to") ?? "");
+  const page = ["/settings/profile", "/settings/privacy"].includes(returnTo) ? returnTo : "/settings";
+  revalidatePath("/settings", "layout");
+  redirect(`${page}?saved=1`);
 }
 
 export async function deleteAccount(form: FormData) {
   const { user, agent } = await requireAgent();
-  if (String(form.get("confirm") ?? "").trim().toLowerCase() !== agent.handle) redirect("/settings?error=confirm");
+  if (String(form.get("confirm") ?? "").trim().toLowerCase() !== agent.handle) redirect("/settings/profile?error=confirm");
   const person = await realPerson(user, agent);
   const db = adminClient();
   const removeLogin = async (userId: string) => {
