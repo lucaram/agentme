@@ -9,6 +9,7 @@ import type { AgentRow } from "@/lib/data/agents";
 import { getOrCreateMyAgentConversation, postMessage } from "@/lib/data/chat";
 import { validateHandle } from "@/lib/policy/handles";
 import { sameHash } from "@/lib/people/crypto";
+import { MAX_BUSINESS_NAME, MIN_NAME } from "@/lib/social/limits";
 
 /**
  * One person, several identities. A person signs in with their own account and
@@ -128,8 +129,8 @@ export { BUSINESS_AVATARS };
  */
 export async function createBusinessFor(personId: string, input: { name: string; handle: string; avatar: string; about: string }): Promise<{ ok: true; agentId: string } | { ok: false; error: string }> {
   const db = adminClient();
-  const name = input.name.trim().slice(0, 60);
-  if (!name) return { ok: false, error: "Give your business a name." };
+  const name = input.name.trim().slice(0, MAX_BUSINESS_NAME);
+  if (name.length < MIN_NAME) return { ok: false, error: "Give your business a name." };
   const handle = validateHandle(input.handle);
   if (!handle.ok) return { ok: false, error: handle.reason };
   const { data: taken } = await db.from("agents").select("id").eq("handle", handle.handle).maybeSingle();

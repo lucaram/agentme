@@ -1,5 +1,6 @@
 "use server";
 
+import { MAX_BUSINESS_NAME, MIN_NAME, maxNameFor } from "@/lib/social/limits";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
@@ -26,7 +27,7 @@ export async function checkHandle(input: string): Promise<{ ok: boolean; handle:
 
 const Base = z.object({
   type: z.enum(["personal", "business"]),
-  display_name: z.string().trim().min(1, "Enter a name.").max(60),
+  display_name: z.string().trim().min(MIN_NAME, "Enter a name (at least 2 characters).").max(MAX_BUSINESS_NAME),
   handle: z.string(),
   avatar: z.string().refine((a) => AVATARS.includes(a), "Pick an avatar."),
 });
@@ -47,6 +48,7 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
     avatar: form.get("avatar"),
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  if (parsed.data.display_name.length > maxNameFor(parsed.data.type)) return { error: `Keep the name to ${maxNameFor(parsed.data.type)} characters.` };
   const handle = validateHandle(parsed.data.handle);
   if (!handle.ok) return { error: handle.reason };
 

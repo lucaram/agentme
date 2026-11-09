@@ -3,6 +3,8 @@
 import { useActionState, useEffect, useState } from "react";
 import { AVATARS } from "@/lib/avatars";
 import { checkHandle, createAgent } from "./actions";
+import { NameField } from "@/components/NameField";
+import { MIN_NAME, maxNameFor } from "@/lib/social/limits";
 
 type HandleStatus = { ok: boolean; message: string } | null;
 
@@ -48,10 +50,7 @@ export function OnboardingForm({ suggestedHandle, next }: { suggestedHandle: str
         ))}
       </div>
 
-      <div>
-        <label className="label" htmlFor="display_name">{type === "business" ? "Business name" : "Your name"}</label>
-        <input className="input" id="display_name" name="display_name" required maxLength={60} />
-      </div>
+      <NameField id="display_name" name="display_name" label={type === "business" ? "Business name" : "Your name"} max={maxNameFor(type)} min={MIN_NAME} />
 
       <div>
         <label className="label" htmlFor="handle">Agent address</label>
