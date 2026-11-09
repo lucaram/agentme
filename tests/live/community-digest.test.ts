@@ -116,4 +116,48 @@ describe.skipIf(!dbUp)("community appeals, digest and quiet moderators (live)", 
     // Suggestions skip anyone refused or hidden this month.
     expect((await digest.suggestModerators(communityId)).map((s) => s.userId)).not.toContain(people.other.userId);
   });
+
+  it("an appeal's update for moderators is pinned until no appeal is left waiting", async () => {
+    const db = admin();
+    const { data: pinned } = await db.from("notices").select("resolved_at").eq("user_id", people.owner.userId).eq("kind", "appeal");
+    // All appeals in this community were settled by the earlier tests: their updates are handled.
+    expect(pinned?.length).toBeGreaterThan(0);
+    expect(pinned?.every((n) => n.resolved_at !== null)).toBe(true);
+  });
+});
+
+describe.skipIf(!dbUp)("updates: badges skip cleared and muted ones (live)", () => {
+  it("tab badge counts new updates, not cleared ones, not from a muted group", async () => {
+    const { createClient } = await import("@supabase/supabase-js");
+    const { ANON_KEY, SUPABASE_URL } = await import("./env");
+    const shared = await import("@/lib/social/shared");
+    const notices = await import("@/lib/social/notices");
+    const db = admin();
+    const handle = `tn${run}`.slice(0, 20);
+    const email = `${handle}@notices.test`;
+    const { data: created } = await db.auth.admin.createUser({ email, password: "notices-password", email_confirm: true });
+    const userId = created.user!.id;
+    try {
+      const { data: g } = await db.from("conversations").insert({ kind: "group", title: "Muted group", created_by: userId }).select("id").single();
+      await db.from("conversation_members").insert({ conversation_id: g!.id, user_id: userId, role: "owner" });
+      await shared.notify([userId], "groups", "One", `/groups/${g!.id}`);
+      await shared.notify([userId], "groups", "Two", `/groups/${g!.id}`);
+      const { data: rows } = await db.from("notices").select("id, ref_id, kind").eq("user_id", userId);
+      expect(rows?.every((r) => r.ref_id === g!.id && r.kind === "info")).toBe(true);
+      const c = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
+      await c.auth.signInWithPassword({ email, password: "notices-password" });
+      const badge = async () => Number((await c.rpc("action_counts")).data?.[0]?.groups ?? 0);
+      expect(await badge()).toBe(2);
+      await notices.dismissNotices(userId, "groups", rows![0].id);
+      expect(await badge()).toBe(1);
+      await db.from("conversation_members").update({ muted: true }).eq("conversation_id", g!.id).eq("user_id", userId);
+      expect(await badge()).toBe(0); // muted: still listed, not counted
+      await notices.dismissNotices(userId, "groups");
+      expect((await db.from("notices").select("id").eq("user_id", userId).is("dismissed_at", null)).data).toEqual([]);
+    } finally {
+      await db.from("conversations").delete().eq("created_by", userId);
+      await db.auth.admin.deleteUser(userId);
+    }
+  });
+
 });

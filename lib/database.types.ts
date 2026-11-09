@@ -633,14 +633,14 @@ isOneToOne: false
                   ]
                 },"notices": {
                   Row: {
-                    "area": string,"created_at": string,"id": string,"link": string | null,"seen_at": string | null,"text": string,"user_id": string
+                    "area": string,"created_at": string,"dismissed_at": string | null,"id": string,"kind": string,"link": string | null,"needs_action": boolean,"ref_id": string | null,"resolved_at": string | null,"seen_at": string | null,"text": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "area": string,"created_at"?: string,"id"?: string,"link"?: string | null,"seen_at"?: string | null,"text": string,"user_id": string
+                    "area": string,"created_at"?: string,"dismissed_at"?: string | null,"id"?: string,"kind"?: string,"link"?: string | null,"needs_action"?: boolean,"ref_id"?: string | null,"resolved_at"?: string | null,"seen_at"?: string | null,"text": string,"user_id": string
                   }
                   Update: {
-                    "area"?: string,"created_at"?: string,"id"?: string,"link"?: string | null,"seen_at"?: string | null,"text"?: string,"user_id"?: string
+                    "area"?: string,"created_at"?: string,"dismissed_at"?: string | null,"id"?: string,"kind"?: string,"link"?: string | null,"needs_action"?: boolean,"ref_id"?: string | null,"resolved_at"?: string | null,"seen_at"?: string | null,"text"?: string,"user_id"?: string
                   }
                   Relationships: [
                     
@@ -984,6 +984,9 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: {
               "id": string,"kind": string,"last_activity_at": string,"preview": string,"task_id": string,"task_status": string,"title": string,"unread": number
             }[]
+                           },
+"notice_is_muted":
+{ Args: { "p_area": string,"p_ref": string,"p_user": string }; Returns: boolean
                            },
 "rate_limit_hit":
 { Args: { "p_key": string,"p_max": number,"p_window_seconds": number }; Returns: {

@@ -18,6 +18,8 @@ export async function touchSeen(communityId: string, userId: string) {
     .eq("community_id", communityId)
     .eq("user_id", userId)
     .lt("last_seen_at", new Date(Date.now() - 3_600_000).toISOString());
+  // The owner came back: the "no moderator around" reminder is handled.
+  await adminClient().from("notices").update({ resolved_at: new Date().toISOString() }).eq("user_id", userId).eq("ref_id", communityId).eq("kind", "quiet_moderators").is("resolved_at", null);
 }
 
 export type DigestCounts = { refused: number; hidden: number; nudged: number; appeals: number };
@@ -62,7 +64,7 @@ export async function sendDigests(only?: string[]): Promise<number> {
     await db.from("communities").update({ digest_sent_at: new Date().toISOString() }).eq("id", c.id);
     if (!text) continue;
     const { data: mods } = await db.from("community_members").select("user_id").eq("community_id", c.id).in("role", ["owner", "moderator"]);
-    await notify((mods ?? []).map((m) => m.user_id), "communities", text, `/communities/${c.id}`);
+    await notify((mods ?? []).map((m) => m.user_id), "communities", text, `/communities/${c.id}`, { kind: "digest" });
     sent++;
   }
   return sent;
@@ -121,7 +123,7 @@ export async function nudgeInactiveModerators(only?: string[]): Promise<number> 
     const text = suggestions.length
       ? `👋 ${c.name} hasn't had a moderator around for a month. ${suggestions.length === 1 ? "An active member could" : `${suggestions.length} active members could`} help: open the community to make them a moderator.`
       : `👋 ${c.name} hasn't had a moderator around for 2 weeks. Its agent keeps it tidy, but appeals wait for you.`;
-    await notify([c.owner_id], "communities", text.slice(0, 300), `/communities/${c.id}`);
+    await notify([c.owner_id], "communities", text.slice(0, 300), `/communities/${c.id}`, { kind: "quiet_moderators", needsAction: suggestions.length > 0 });
     await db.from("communities").update({ mods_nudged_at: new Date().toISOString() }).eq("id", c.id);
     nudged++;
   }

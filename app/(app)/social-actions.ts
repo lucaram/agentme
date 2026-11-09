@@ -10,6 +10,7 @@ import * as groups from "@/lib/social/groups";
 import * as communities from "@/lib/social/communities";
 import * as businesses from "@/lib/social/businesses";
 import * as appeals from "@/lib/social/appeals";
+import { dismissNotices } from "@/lib/social/notices";
 import {
   communityMembership,
   createJoinLink,
@@ -312,4 +313,17 @@ export async function resolveAppealAction(eventId: string, communityId: string, 
   const { userId } = await me();
   if (!Id.safeParse(eventId).success) return { error: "Not found." };
   return done([`/communities/${communityId}`], await appeals.resolveAppeal(eventId, userId, Boolean(accept)));
+}
+
+// ------------------------------------------------------------- updates (notices)
+
+/** Clear one update (✕) or all of them in a tab ("Clear all"). */
+export async function dismissNoticeAction(area: "groups" | "communities", id?: string): Promise<Out> {
+  const { userId } = await me();
+  if (area !== "groups" && area !== "communities") return { error: "Not found." };
+  if (id && !Id.safeParse(id).success) return { error: "Not found." };
+  await dismissNotices(userId, area, id);
+  revalidatePath(`/${area}`);
+  revalidatePath(`/updates/${area}`);
+  return {};
 }

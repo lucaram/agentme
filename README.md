@@ -324,6 +324,12 @@ My Agent opens on a list of your requests, one line each, like a list of recent 
     - The community page also lists those members, with **Make moderator**, whenever there are fewer than 3 moderators.
     - Reminders go out at most every 2 weeks.
   - **Housekeeping** (3-day appeals, digests, reminders) runs in the sweeper every 15 minutes.
+- **🔔 Updates** (Groups and Communities tabs, `lib/social/notices.ts`). The section opens by itself when something is new, and its counter badge is green for new updates and grey for the total.
+  - **Pinned:** 📌 updates that need you (an appeal to review, members to promote) stay at the top with **Review ›** until handled.
+  - **Grouped:** several updates about the same group or community on the same day become one line (*"3 updates about 'FC Fans'"*), which you can expand.
+  - **Short list:** the section shows the latest 5. **See all updates (N) ›** opens `/updates/groups` or `/updates/communities`, grouped by *Today · Yesterday · This week · Older*, with a filter by group or community.
+  - **Clearing:** ✕ on each update, and **Clear all**. Updates expire after 30 days anyway.
+  - **Mute:** updates about a group (or a community's General chat) you muted still show, but don't add to the tab badge.
     - **Tests** use a predictable mock model, never the real one.
 - **Enforced in code:** posting rules (`canPost`) and every permission check (`lib/social/*`). The browser only reads through RLS. Membership, requests, reports and links are server-written, and reports are visible only to the admins or moderators who handle them.
 

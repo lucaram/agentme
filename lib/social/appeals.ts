@@ -47,7 +47,10 @@ export async function appeal(eventId: string, userId: string): Promise<Result> {
     const { data: msg } = await adminClient().from("messages").select("metadata").eq("id", event.message_id).single();
     await adminClient().from("messages").update({ metadata: { ...((msg?.metadata ?? {}) as object), appeal: "pending" } }).eq("id", event.message_id);
   }
-  await notify(await moderatorsOf(event.community_id), "communities", "🤖 A member appealed something the community's agent did. You can accept or reject it (optional).", `/communities/${event.community_id}`);
+  await notify(await moderatorsOf(event.community_id), "communities", "🤖 A member appealed something the community's agent did. You can accept or reject it (optional).", `/communities/${event.community_id}`, {
+    kind: "appeal",
+    needsAction: true,
+  });
   return { ok: true };
 }
 
@@ -69,6 +72,11 @@ async function settle(event: EventRow, accept: boolean, by: string | null) {
     .eq("appeal_status", "pending")
     .select("id");
   if (!won?.length) return; // someone else settled it first
+  // No appeals left waiting here: the moderators' "needs you" updates are handled.
+  const { count: stillPending } = await adminClient().from("moderation_events").select("*", { count: "exact", head: true }).eq("community_id", event.community_id).eq("appeal_status", "pending");
+  if (!stillPending) {
+    await adminClient().from("notices").update({ resolved_at: new Date().toISOString() }).eq("kind", "appeal").eq("ref_id", event.community_id).is("resolved_at", null);
+  }
   if (accept) await restore(event);
   else if (event.message_id) {
     const { data: msg } = await adminClient().from("messages").select("metadata").eq("id", event.message_id).single();
