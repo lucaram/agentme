@@ -48,6 +48,14 @@ test("a new user creates a working agent in under 60 seconds", async ({ page }) 
 
   await expect(page.getByText(`I'm @nadia${id}, your agent`)).toBeVisible();
   expect(Date.now() - started).toBeLessThan(60_000);
+
+  // The avatar picked at sign-up can be changed later in Settings → Profile & account.
+  await page.goto("/settings/profile");
+  await expect(page.getByRole("button", { name: "Avatar 🦊" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Avatar 🐼" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page).toHaveURL(/saved=1/);
+  await expect(page.getByRole("button", { name: "Avatar 🐼" })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("three agents coordinate a dinner and humans approve it", async ({ browser }) => {

@@ -1,13 +1,15 @@
 import { requireAgent } from "@/lib/auth";
 import { deleteAccount, saveSettings } from "../../actions";
 import { SaveAccount } from "../SaveAccount";
+import { AvatarChoice } from "./AvatarChoice";
+import { avatarsFor } from "@/lib/avatars";
 import { NameField } from "@/components/NameField";
 import { MIN_NAME, maxNameFor } from "@/lib/social/limits";
 import { SavedNote, SettingsHeader } from "../SettingsHeader";
 import { maskEmail } from "@/lib/people/normalise";
 import { businessesOnlyOwnedBy, isManagedLogin, realPerson } from "@/lib/identities";
 
-/** Settings → Profile & account: your name, your login, and deleting the account. */
+/** Settings → Profile & account: your name and avatar, your login, and deleting the account. */
 export default async function ProfileSettingsPage({ searchParams }: PageProps<"/settings/profile">) {
   const { user, agent } = await requireAgent();
   const { saved, error } = await searchParams;
@@ -34,6 +36,7 @@ export default async function ProfileSettingsPage({ searchParams }: PageProps<"/
         <h2 className="font-semibold">Profile</h2>
         <NameField id="display_name" name="display_name" label="Name" max={maxNameFor(agent.type)} min={MIN_NAME} defaultValue={agent.display_name} />
         <p className="hint">Your address @{agent.handle} is permanent.</p>
+        <AvatarChoice options={avatarsFor(agent.type, agent.avatar)} initial={agent.avatar} />
         {!agent.guest && !managedBusiness && (
           <p className="text-sm">✉️ {user.email && user.emailConfirmed ? `${maskEmail(user.email)} ✓` : "Your email isn't verified yet."}</p>
         )}
