@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { removeMessageAction, reportMessageAction } from "../../social-actions";
+import { ClosableDetails } from "@/components/ClosableDetails";
 
 /** ⋯ on a message in a group or community chat: report it, or remove it (own message / admins / moderators). */
 export function MessageActions({ messageId, conversationId, canReport, canRemove }: { messageId: string; conversationId: string; canReport: boolean; canRemove: boolean }) {
@@ -9,7 +10,7 @@ export function MessageActions({ messageId, conversationId, canReport, canRemove
   const [note, setNote] = useState<string | null>(null);
   if (!canReport && !canRemove) return null;
   return (
-    <details className="relative">
+    <ClosableDetails className="relative">
       <summary className="cursor-pointer list-none px-1 text-xs text-muted hover:text-foreground" aria-label="Message options">⋯</summary>
       <div className="absolute z-10 mt-1 flex min-w-36 flex-col rounded-xl border border-border bg-surface p-1 text-sm shadow">
         {canReport && (
@@ -47,6 +48,6 @@ export function MessageActions({ messageId, conversationId, canReport, canRemove
         )}
         {note && <p className="px-2 py-1 text-xs text-muted" role="status">{note}</p>}
       </div>
-    </details>
+    </ClosableDetails>
   );
 }
