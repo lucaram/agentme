@@ -403,9 +403,13 @@ test("an announcement is sent with the organiser's exact words, as their own mes
 test("the composer: a template becomes an editable plan of blocks, run in one group", async ({ browser }) => {
   const luca = await as(browser, "luca");
   await openMyAgent(luca.page);
-  // Template chips are filled with Luca's own contacts.
-  await luca.page.getByRole("button", { name: "⚽ Five-a-side" }).click();
-  await expect(luca.page.getByLabel("Message", { exact: true })).toHaveValue(/Organise five-a-side on Thursday at 7pm with @\w+ and @\w+, need 3, someone bring a ball and bibs/);
+  // Template chips are filled with Luca's own contacts (after a few requests they sit behind 💡 Ideas).
+  const ideas = luca.page.getByRole("button", { name: "💡 Ideas" });
+  if (await ideas.count()) await ideas.click();
+  await luca.page.getByRole("button", { name: "📊 Polls" }).click();
+  await expect(luca.page.getByLabel("Message", { exact: true })).toHaveValue(/^Ask @\w+ and @\w+ to vote: /);
+  // A combined plan typed by hand: an invitation plus a sign-up list.
+  await luca.page.getByLabel("Message", { exact: true }).fill("Organise five-a-side on Thursday at 7pm with @marco and @paul, need 3, someone bring a ball and bibs");
   await luca.page.getByRole("button", { name: "Send" }).click();
 
   // The preview shows each block before anything is sent.

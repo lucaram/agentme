@@ -16,9 +16,13 @@ const GROUPS: { key: ThreadGroup; title: string }[] = [
  * by what they need, newest activity first, each with its own badge. Typing
  * below starts a new request.
  */
-export async function MyAgentHome({ conversationId, examples, now }: { conversationId: string; examples: { label: string; text: string }[]; now: number }) {
+export async function MyAgentHome({ conversationId, examples, now }: { conversationId: string; examples: { label: string; text?: string; href?: string }[]; now: number }) {
   const supabase = await createClient();
-  const { data } = await supabase.rpc("my_agent_threads");
+  const [{ data }, { count: requestsMade }] = await Promise.all([
+    supabase.rpc("my_agent_threads"),
+    // RLS: your own plans. After a few, the template chips step aside (💡 Ideas brings them back).
+    supabase.from("tasks").select("*", { count: "exact", head: true }),
+  ]);
   const threads = (data ?? []).map((t) => ({ ...t, ...threadStatus(t, now) }));
   const older = threads.filter((t) => t.group === "older");
 
@@ -64,7 +68,7 @@ export async function MyAgentHome({ conversationId, examples, now }: { conversat
       </div>
 
       <div className="flex-1" />
-      <Composer conversationId={conversationId} threadId="new" placeholder="Start a new request, e.g. Arrange dinner with @marco on Saturday evening" thinkingLabel="Agent is thinking…" examples={examples} />
+      <Composer conversationId={conversationId} threadId="new" placeholder="Start a new request, e.g. Arrange dinner with @marco on Saturday evening" thinkingLabel="Agent is thinking…" examples={examples} collapseExamples={(requestsMade ?? 0) >= 3} />
     </div>
   );
 }

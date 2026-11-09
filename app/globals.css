@@ -90,6 +90,22 @@ body {
   }
 }
 
+/* Quiet scrollbars for growing text boxes (no arrows). */
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+.thin-scrollbar::-webkit-scrollbar-button {
+  display: none;
+}
+
 /* Horizontal chip rows: scroll by swipe/trackpad without a visible scrollbar. */
 @utility no-scrollbar {
   scrollbar-width: none;
