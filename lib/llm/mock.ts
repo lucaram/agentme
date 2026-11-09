@@ -99,7 +99,7 @@ export class MockProvider implements LLMProvider {
         // Deterministic: FAQs, then a line of the business's info/website mentioning the question's words.
         const knowledge = String(ctx.knowledge ?? "");
         const answer = answerFaq(String(ctx.question ?? ""), (ctx.businessInfo ?? {}) as BusinessInfo, knowledge);
-        value = { answer, needs_team: answer.startsWith("I don't have"), source_url: sourceOf(answer, knowledge) };
+        value = { answer, needs_team: answer.startsWith("I don't have"), source_url: mockSourceOf(answer, knowledge) };
         break;
       }
       case "business_learn":
@@ -136,14 +136,22 @@ async function meterMock(req: LLMRequest, output: string) {
   });
 }
 
-/** The website page an answer line came from: the nearest "From <url> (read …):" above it. */
-function sourceOf(answer: string, knowledge: string): string {
-  const at = knowledge.indexOf(answer);
-  if (at < 0 || !answer) return "";
-  const before = knowledge.slice(0, at);
-  const header = [...before.matchAll(/^From (\S+) \(read [^)]*\):$/gm)].pop();
-  // Only a page of the website/links block (not the owner's own words, which come first).
-  return header && before.lastIndexOf("<website_content>") >= 0 && header.index > before.lastIndexOf("<website_content>") ? header[1] : "";
+/**
+ * The website page an answer line came from: a page block ("From <url> (read …):")
+ * containing it. Not the owner's own words, and not the reviewed summary (which
+ * repeats the same sentences but isn't a page).
+ */
+export function mockSourceOf(answer: string, knowledge: string): string {
+  const start = knowledge.indexOf("<website_content>");
+  if (!answer || start < 0) return "";
+  let page = "";
+  for (const raw of knowledge.slice(start).split("\n")) {
+    const line = raw.trim();
+    const header = line.match(/^From (\S+) \((read [^)]*|summary[^)]*)\):$/);
+    if (header) page = header[2].startsWith("read") ? header[1] : "";
+    else if (page && line.includes(answer)) return page;
+  }
+  return "";
 }
 
 const STOPWORDS = new Set(["the", "you", "your", "can", "are", "have", "has", "for", "and", "any", "there", "what", "with", "does", "how", "our"]);

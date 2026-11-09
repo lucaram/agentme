@@ -274,3 +274,20 @@ describe("questions your website doesn't answer", () => {
     expect(gapTitle(gaps[1])).toBe("A customer asked: “Do you sell gift cards?”");
   });
 });
+
+describe("test stand-in: where an answer came from", () => {
+  it("names the page, even when the reviewed summary repeats the same sentence first", async () => {
+    const { mockSourceOf } = await import("@/lib/llm/mock");
+    const knowledge = [
+      "Business: Aurora",
+      "<website_content>",
+      "From https://a.example/ (summary of the website, reviewed by the owner):",
+      "Q: Do you have oat milk?\nA: Yes, oat and almond milk. (a.example/faq)",
+      "From https://a.example/faq (read 2026-11-09):",
+      "Yes, oat and almond milk.",
+      "</website_content>",
+    ].join("\n");
+    expect(mockSourceOf("Yes, oat and almond milk.", knowledge)).toBe("https://a.example/faq");
+    expect(mockSourceOf("Business: Aurora", knowledge)).toBe("");
+  });
+});
