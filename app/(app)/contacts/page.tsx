@@ -106,8 +106,10 @@ export default async function ContactsPage() {
         )}
         {accepted.map((r) => (
           <Row key={r.id} agent={r.other}>
-            <ActionButton action={openDirectMessage.bind(null, r.other.id)} label="Message" variant="btn-primary" />
-            {r.other.type === "business" && <ActionButton action={openAgentChat.bind(null, r.other.id)} label="Ask agent" />}
+            {/* A business: its agent answers straight away, so that comes first. */}
+            {r.other.type === "business" && <ActionButton action={openAgentChat.bind(null, r.other.id)} label="Ask agent" variant="btn-primary" />}
+            <ActionButton action={openDirectMessage.bind(null, r.other.id)} label="Message" variant={r.other.type === "business" ? "btn-ghost" : "btn-primary"} />
+
             <details className="relative">
               <summary className="btn-ghost cursor-pointer list-none">⋯</summary>
               <div className="absolute right-0 z-10 mt-1 flex flex-col gap-1 rounded-xl border border-border bg-surface p-2 shadow">
