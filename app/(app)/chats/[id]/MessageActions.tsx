@@ -90,7 +90,7 @@ export function MessageActions({
               className="rounded-lg px-2 py-1 text-left text-danger hover:bg-accent-soft"
               disabled={pending}
               onClick={() => {
-                if (!window.confirm("Remove this message for everyone?"))
+                if (!window.confirm("Delete this message for everyone?"))
                   return;
                 start(async () => {
                   const result = await removeMessageAction(
@@ -101,7 +101,7 @@ export function MessageActions({
                 });
               }}
             >
-              🗑️ Remove for everyone
+              🗑️ Delete
             </button>
           )}
           {note && (

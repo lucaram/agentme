@@ -132,7 +132,7 @@ test("communities: create, join by accepting the rules, Announcements vs General
   await expect(luca.page.getByRole("listitem").filter({ hasText: "Ref was an idiot today" }).getByTestId("flag-disrespectful")).toBeVisible();
   const message = luca.page.getByRole("listitem").filter({ hasText: "Hello fans!" });
   await message.getByLabel("Message options").click();
-  await message.getByRole("button", { name: /Remove for everyone/ }).click();
+  await message.getByRole("button", { name: /Delete/ }).click();
   await expect(luca.page.getByTestId("removed-message").filter({ hasText: "removed by a moderator" })).toBeVisible();
   await luca.close();
   await eve.close();
@@ -265,7 +265,7 @@ test("↩ Reply: quote a message, jump to it, let @agent use it, and a removed o
   await luca.page.reload();
   const mine = luca.page.getByRole("listitem").filter({ hasText: "Pitch is booked for 7pm" }).first();
   await mine.getByLabel("Message options").click();
-  await mine.getByRole("button", { name: /Remove for everyone/ }).click();
+  await mine.getByRole("button", { name: /Delete/ }).click();
   await marco.page.reload();
   await expect(marco.page.getByRole("listitem").filter({ hasText: "Great, I'll bring the ball" }).getByTestId("quote")).toContainText("Original message removed");
   await Promise.all([luca.close(), marco.close()]);
