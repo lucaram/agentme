@@ -58,6 +58,16 @@ export const emptyStep = (type: ComposableStep): StepDraft => ({
 
 const stripArticle = (s: string) => s.replace(/^(a|an|the|some)\s+/i, "").trim();
 
+/**
+ * The owner's request together with the message it replies to ("Organise this with @marco" about
+ * "Dinner at Trattoria Sole on Saturday at 8pm"), for the deterministic composer. @mentions in the
+ * quoted message are dropped: the people to involve come only from the owner's own words.
+ */
+export function withQuoted(text: string, quoted?: string | null): string {
+  const about = quoted?.replace(/@[a-z0-9_]+/gi, "").replace(/\s+/g, " ").trim().slice(0, 600);
+  return about ? `${text} — ${about}` : text;
+}
+
 /** Used by the mock model and as a fallback when the real model fails. */
 export function heuristicCompose(text: string, chatMembers: string[] = []): PlanDraft {
   const intent = heuristicIntent(text, chatMembers);
