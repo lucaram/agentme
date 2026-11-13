@@ -128,6 +128,10 @@ export class MockProvider implements LLMProvider {
       case "route":
         value = mockRoute(String(ctx.text ?? ""));
         break;
+      case "keywords":
+        // The stand-in keeps the question's own words (no translation).
+        value = { words: keywords(String(ctx.question ?? "")).join(" ") };
+        break;
       case "pick":
         value = { pages: overlapPick(String(ctx.question ?? ""), (ctx.candidates ?? []) as { url: string; title: string }[], 2).map((i) => i + 1) };
         break;

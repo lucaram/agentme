@@ -20,7 +20,8 @@ export type LLMPurpose =
   | "route" // is this a request to research public facts, or ordinary chat?
   | "research" // look something up on the public web, with sources
   | "find" // search for pages that may answer a question (addresses only, no answer)
-  | "pick"; // choose which of the pages found to read
+  | "pick" // choose which of the pages found to read
+  | "keywords"; // turn a question into the words a page about it would use, in the website's language
 
 export type LLMTier = "smart" | "fast";
 
