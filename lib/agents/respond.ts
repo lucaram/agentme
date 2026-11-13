@@ -241,9 +241,11 @@ export async function draftBusinessAnswer(
   question: string,
   sources: KnowledgeSource[],
   audience: "public" | "customers",
+  /** Pages just read for this question (the look-up on the business's own website): given whole. */
+  focus: readonly string[] = [],
 ) {
   const trimmed = question.trim().slice(0, 1000);
-  const { info, websites } = businessKnowledge(recipient, sources, audience, trimmed);
+  const { info, websites } = businessKnowledge(recipient, sources, audience, trimmed, focus);
   const raw = await llm().generateObject({
     purpose: "business_faq",
     tier: "fast",

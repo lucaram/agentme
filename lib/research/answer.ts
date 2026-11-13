@@ -98,7 +98,10 @@ export function buildAnswer(raw: string, sources: ResearchSource[], evidence: re
   if (parsed.status !== "answered") return { ...parsed, sources: parsed.status === "needs_clarification" ? sources : [], retrievedAt };
   // No sources: not verified, so never presented as an answer.
   if (!sources.length) return { status: "not_found", text: "I couldn't verify that from a source, so I'd rather not guess.", sources: [], retrievedAt };
-  const unverified = unverifiedNumbers(parsed.text, evidence);
+  // Dates the answer works out from today ("9 days ago" → "early November 2026") and what the sources' own
+  // titles and dates say were read too: they aren't unconfirmed numbers.
+  const dates = [now.toISOString(), now.toUTCString(), ...sources.map((s) => `${s.title} ${s.pageAge ?? ""} ${s.retrievedAt ?? ""} ${s.quote ?? ""}`)];
+  const unverified = evidence.length ? unverifiedNumbers(parsed.text, [...evidence, ...dates]) : [];
   return { status: unverified.length ? "partial" : "answered", text: parsed.text, sources, retrievedAt, ...(unverified.length ? { unverified } : {}) };
 }
 

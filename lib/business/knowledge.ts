@@ -28,6 +28,8 @@ export function businessKnowledge(
   sources: KnowledgeSource[],
   audience: "public" | "customers",
   question?: string,
+  /** Pages just read for this very question: included whole, before the relevant parts of the others. */
+  focus: readonly string[] = [],
 ): { info: string; websites: string } {
   const info = (agent.business_info ?? {}) as BusinessInfo;
   const about = info.about?.trim() || [info.description, info.hours && `Opening hours: ${info.hours}`].filter(Boolean).join("\n");
@@ -46,8 +48,10 @@ ${waysText(ways)}` : "",
     .join("\n\n");
   const visible = sources.filter((s) => s.content && (s.visibility === "public" || audience === "customers"));
   const pinned = visible.filter((s) => s.origin === "learned");
-  const pages = visible.filter((s) => s.origin !== "learned");
-  const chosen = question && size(pages) > PAGE_BUDGET ? pickRelevant(pages, question, PAGE_BUDGET) : pages;
+  const focused = visible.filter((s) => s.origin !== "learned" && focus.includes(s.url));
+  const pages = visible.filter((s) => s.origin !== "learned" && !focus.includes(s.url));
+  const room = Math.max(0, PAGE_BUDGET - size(focused));
+  const chosen = [...focused, ...(question && size(pages) > room ? pickRelevant(pages, question, room) : pages)];
   const label = (s: KnowledgeSource) =>
     s.origin === "learned" ? `From ${s.url} (summary of the website, reviewed by the owner):` : `From ${s.url} (read ${s.last_read_at?.slice(0, 10) ?? "recently"}):`;
   const text = [...pinned, ...chosen].map((s) => `${label(s)}\n${s.content}`).join("\n\n");

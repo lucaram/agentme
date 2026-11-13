@@ -25,7 +25,7 @@ export class MockProvider implements LLMProvider {
   readonly name = "mock";
 
   async research(req: LLMResearchRequest): Promise<LLMResearchResult> {
-    const result = { ...mockResearch(req.question), errors: [] };
+    const result = { ...mockResearch(req.question), errors: [], pagesRead: 1 };
     await meterMock({ purpose: "research", system: req.system, messages: [{ role: "user", content: req.question }] }, result.text);
     return result;
   }
@@ -59,6 +59,14 @@ export class MockProvider implements LLMProvider {
           default:
             text = "I can summarise this chat, translate or draft a reply for you, or organise something with everyone here. Try “@agent poll: pizza or sushi?”.";
         }
+        break;
+      }
+      case "research": {
+        // Answering from pages the app read itself: the first line of a page that mentions the question's words.
+        const pages = (ctx.pages ?? []) as { text: string }[];
+        const words = new Set(keywords(String(ctx.question ?? "")));
+        const line = pages.flatMap((p) => p.text.split("\n")).find((l) => keywords(l).some((w) => words.has(w)));
+        text = line ? `STATUS: answered\n${line.trim()}` : "STATUS: not_found\nThe pages don't say.";
         break;
       }
       case "business_ingest":

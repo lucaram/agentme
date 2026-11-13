@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { answerForDraft, answerMessage, buildAnswer, cacheSeconds, cacheText, mockRoute, parseResearchText, unverifiedNumbers } from "@/lib/research/answer";
 import { mockResearch } from "@/lib/research/mock";
-import { indexWords, isPublicDomain, rankIndexHits, sitemapEntries } from "@/lib/business/site";
+import { clipPage, indexWords, isPublicDomain, newestFirst, rankIndexHits, sitemapEntries } from "@/lib/business/site";
+import { businessKnowledge } from "@/lib/business/knowledge";
 import { splitInline, summonsAgent } from "@/lib/agents/commands";
 import { readResearch } from "@/lib/llm/anthropic";
 
@@ -28,6 +29,13 @@ describe("research: what code checks before anything is called an answer", () =>
   it("a decimal comma and a decimal point are the same number; single digits aren't checked", () => {
     expect(unverifiedNumbers("Rated 8.5, in 3 parts", ["Voto: 8,5"])).toEqual([]);
     expect(unverifiedNumbers("It costs £3.80", ["Latte £3.90"])).toEqual(["3.80"]);
+  });
+
+  it("dates worked out from today, and what a source's title says, aren't unconfirmed numbers", () => {
+    const source = { url: "https://everyeye.it/r", title: "Zelda Remake: recensione", pageAge: "9 days ago" };
+    const a = buildAnswer("STATUS: answered\nReviewed in early November 2026: 9.5 out of 10.", [source], ["Voto: 9.5 su 10"], NOW);
+    expect(a.status).toBe("answered");
+    expect(buildAnswer("STATUS: answered\nReviewed in 2019: 9.5.", [source], ["Voto: 9.5"], NOW).unverified).toEqual(["2019"]);
   });
 
   it("an unclear request becomes a question with options, not a guess", () => {
@@ -96,6 +104,25 @@ describe("research: reading what the web tools returned", () => {
     expect(r.sources).toEqual([{ url: "https://w.example/falkirk", title: "Falkirk", quote: "12°C, light rain", pageAge: "2 hours ago" }]);
     expect(r.evidence).toContain("12°C, light rain");
     expect(r.errors).toEqual([]);
+    expect(r.pagesRead).toBe(0); // snippets only: the app then reads the page itself
+  });
+
+  it("a page that couldn't be opened is an error; one that could counts as read", () => {
+    const blocks = [
+      { type: "server_tool_use", id: "f1", name: "web_fetch", input: { url: "https://a.example/1" } },
+      { type: "web_fetch_tool_result", tool_use_id: "f1", content: { type: "web_fetch_tool_result_error", error_code: "url_not_accessible" } },
+      { type: "server_tool_use", id: "f2", name: "web_fetch", input: { url: "https://a.example/2" } },
+      {
+        type: "web_fetch_tool_result",
+        tool_use_id: "f2",
+        content: { type: "web_fetch_result", url: "https://a.example/2", retrieved_at: "2026-11-13T10:00:00Z", content: { type: "document", title: "Two", source: { type: "text", media_type: "text/plain", data: "Voto: 9.5" } } },
+      },
+      { type: "text", text: "STATUS: answered\nIt got 9.5.", citations: null },
+    ] as unknown as Parameters<typeof readResearch>[0];
+    const r = readResearch(blocks);
+    expect(r.errors).toEqual(["fetch: url_not_accessible"]);
+    expect(r.pagesRead).toBe(1);
+    expect(r.sources).toEqual([{ url: "https://a.example/2", title: "Two", retrievedAt: "2026-11-13T10:00:00Z" }]);
   });
 
   it("a failed search is an error, not an answer with sources", () => {
@@ -136,6 +163,49 @@ describe("a business's address index (pages found, read only when asked)", () =>
     expect(rankIndexHits(["castlevania", "nocturne", "recension"], rows).map((r) => r.url)).toEqual(["/b", "/a"]);
     expect(rankIndexHits(["parking", "nearby"], rows)).toEqual([]);
     expect(rankIndexHits([], rows)).toEqual([]);
+  });
+
+  it("a long question still finds its page: three matching words are enough", () => {
+    const rows = [
+      { url: "/review", words: "articoli recensione the legend of zelda ocarina of time remake ritorno capolavoro scuola 67789", lastmod: "2026-11-04T00:00:00.000Z" },
+      { url: "/news", words: "notizie zelda ocarina of time remake botto milioni copie", lastmod: "2026-11-12T00:00:00.000Z" },
+      { url: "/other", words: "notizie lego set lancio sconti", lastmod: "2026-11-12T00:00:00.000Z" },
+    ];
+    const asked = ["everyeye", "summarise", "review", "legend", "zelda", "ocarina", "time", "remake", "including", "overall", "rating", "give", "end"];
+    expect(rankIndexHits(asked, rows).map((r) => r.url)).toEqual(["/review", "/news"]);
+  });
+
+  it("a site with more pages than the index holds keeps its newest; undated ones last", () => {
+    const rows = [
+      { url: "/old", lastmod: "2002-09-18T00:00:00.000Z" },
+      { url: "/undated-1", lastmod: null },
+      { url: "/new", lastmod: "2026-11-12T00:00:00.000Z" },
+      { url: "/undated-2", lastmod: null },
+    ];
+    expect(newestFirst(rows).map((r) => r.url)).toEqual(["/new", "/old", "/undated-1", "/undated-2"]);
+  });
+
+  it("a long page keeps its beginning and its end (a review's verdict)", () => {
+    const page = `Intro. ${"middle ".repeat(5000)}Voto finale: 9.5`;
+    const clipped = clipPage(page, 1000);
+    expect(clipped.length).toBeLessThanOrEqual(1000);
+    expect(clipped.startsWith("Intro.")).toBe(true);
+    expect(clipped.endsWith("Voto finale: 9.5")).toBe(true);
+    expect(clipPage("short", 1000)).toBe("short");
+  });
+
+  it("a page just read for the question is given whole, before the relevant parts of the others", () => {
+    const filler = Array.from({ length: 40 }, (_, i) => `Line ${i} about opening hours and parking.`).join("\n");
+    const sources = [
+      ...Array.from({ length: 30 }, (_, i) => ({ url: `https://x.com/p${i}`, visibility: "public", content: filler, last_read_at: null, origin: "site" })),
+      { url: "https://x.com/review", visibility: "public", content: `Zelda review.\n${"A long article line.\n".repeat(600)}Voto: 9.5`, last_read_at: null, origin: "on_demand" },
+    ];
+    const agent = { display_name: "X", handle: "x", business_info: {} };
+    const without = businessKnowledge(agent, sources, "public", "What rating does the Zelda review give?").websites;
+    const withFocus = businessKnowledge(agent, sources, "public", "What rating does the Zelda review give?", ["https://x.com/review"]).websites;
+    expect(without).not.toContain("Voto: 9.5"); // the verdict has none of the question's words
+    expect(withFocus).toContain("Voto: 9.5");
+    expect(withFocus.indexOf("https://x.com/review")).toBeLessThan(withFocus.indexOf("https://x.com/p"));
   });
 
   it("only a public domain can be searched on the web", () => {

@@ -66,6 +66,8 @@ export interface LLMResearchResult {
   /** Text that was actually read (quotes and fetched pages), to check facts against. */
   evidence: string[];
   errors: string[];
+  /** Pages opened and read in full (0 = the answer rests on search snippets only). */
+  pagesRead: number;
 }
 
 export interface LLMProvider {

@@ -268,8 +268,23 @@ export function shortUrl(raw: string): string {
 /** A domain a web search can reach (not localhost, an IP address or a port). */
 export const isPublicDomain = (domain: string) => /^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/i.test(domain);
 
-export const MAX_INDEX_URLS = 20_000;
-export const MAX_INDEX_SITEMAPS = 40;
+export const MAX_INDEX_URLS = 50_000;
+export const MAX_INDEX_SITEMAPS = 150;
+
+/** Newest first; addresses without a date last (their order kept). */
+export function newestFirst<T extends { lastmod: string | null }>(rows: T[]): T[] {
+  return rows
+    .map((row, i) => ({ row, i }))
+    .sort((a, b) => (b.row.lastmod ?? "").localeCompare(a.row.lastmod ?? "") || a.i - b.i)
+    .map((x) => x.row);
+}
+
+/** A long page keeps its beginning and its end (where a review's verdict or a price list's notes are). */
+export function clipPage(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const tail = Math.floor(max * 0.3);
+  return `${text.slice(0, max - tail - 3).trimEnd()}\n…\n${text.slice(-tail).trimStart()}`;
+}
 
 export type SitemapEntry = { loc: string; lastmod: string | null; title: string | null };
 
@@ -310,7 +325,8 @@ export function indexWords(url: string, title?: string | null): string {
  */
 export function rankIndexHits<T extends { url: string; words: string; lastmod: string | null }>(terms: readonly string[], rows: T[], limit = 3): T[] {
   if (!terms.length) return [];
-  const need = Math.max(1, Math.ceil(terms.length / 2));
+  // Half of the words, but never more than three: a long question has many words no address contains.
+  const need = Math.min(3, Math.max(1, Math.ceil(terms.length / 2)));
   return rows
     .map((row) => {
       const words = row.words.split(" ");

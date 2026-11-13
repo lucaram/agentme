@@ -149,6 +149,7 @@ export function readResearch(blocks: Anthropic.Beta.BetaContentBlock[]): LLMRese
     sources.set(url, { ...current, ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v)) });
   };
   let lastTool = -1;
+  let pagesRead = 0;
   blocks.forEach((b, i) => {
     if (b.type === "web_search_tool_result") {
       lastTool = i;
@@ -161,6 +162,7 @@ export function readResearch(blocks: Anthropic.Beta.BetaContentBlock[]): LLMRese
         const doc = b.content.content;
         add(b.content.url, { title: doc.title ?? "", retrievedAt: b.content.retrieved_at ?? undefined });
         if (doc.source.type === "text") evidence.push(doc.source.data);
+        pagesRead++;
       } else errors.push(`fetch: ${b.content.error_code}`);
     } else if (b.type === "server_tool_use") lastTool = i;
   });
@@ -173,7 +175,7 @@ export function readResearch(blocks: Anthropic.Beta.BetaContentBlock[]): LLMRese
     }
     if (i > lastTool) text += b.text;
   });
-  return { text: text.trim(), sources: [...sources.values()], evidence, errors };
+  return { text: text.trim(), sources: [...sources.values()], evidence, errors, pagesRead };
 }
 
 /** Puts PDFs/images in front of the text of the last user message. */
