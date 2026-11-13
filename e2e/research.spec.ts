@@ -17,7 +17,7 @@ async function as(browser: Browser, handle: string) {
 
 async function send(page: Page, text: string) {
   await page.getByLabel("Message", { exact: true }).fill(text);
-  await page.getByRole("button", { name: "Send" }).click();
+  await page.getByRole("button", { name: "Send", exact: true }).click();
 }
 
 test("My Agent looks up a public fact and answers with its source; what it can't verify it doesn't guess", async ({ browser }) => {
@@ -91,15 +91,26 @@ test("📍 Near me now: where you are is used for one message, as a town, and th
 
 test("↩ Reply + @agent look-up: the quoted message completes the question, and you see what was searched", async ({ browser }) => {
   const walk = `Anyone fancy a walk in Falkirk on Sunday? (${Date.now()})`;
+  // A group of its own, so the private messages left here don't show up in other tests' chats.
+  const name = `Walk ${`${Date.now()}`.slice(-6)}`;
   const luca = await as(browser, "luca");
-  await luca.page.getByRole("link", { name: /^👥 Dinner — Italian/ }).click();
+  await luca.page.getByRole("navigation").getByRole("link", { name: "Groups" }).click();
+  await luca.page.getByRole("button", { name: "＋ New group" }).click();
+  const form = luca.page.getByRole("form", { name: "New group" });
+  await form.getByLabel("Group name").fill(name);
+  await form.getByRole("combobox", { name: "Search contacts" }).fill("mar");
+  await form.getByRole("option", { name: /Marco/ }).click();
+  await form.getByRole("button", { name: "Create group" }).click();
+  await expect(luca.page.getByRole("heading", { name })).toBeVisible();
+  const chatUrl = luca.page.url().replace("/groups/", "/chats/");
+  await luca.page.goto(chatUrl);
   await send(luca.page, walk);
   await expect(luca.page.getByRole("listitem").filter({ hasText: walk })).toBeVisible();
 
   // Marco replies to it and asks his agent, without naming the place: it comes from the quoted message
   // (not from where he usually is), and he is shown the question that went to the search.
   const marco = await as(browser, "marco");
-  await marco.page.getByRole("link", { name: /^👥 Dinner — Italian/ }).click();
+  await marco.page.goto(chatUrl);
   const original = marco.page.getByRole("listitem").filter({ hasText: walk }).first();
   await original.getByLabel("Message options").click();
   await original.getByRole("button", { name: "↩ Reply" }).click();
