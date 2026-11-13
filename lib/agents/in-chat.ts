@@ -6,7 +6,7 @@ import type { AgentRow } from "@/lib/data/agents";
 import { getOrCreateMyAgentConversation, postMessage } from "@/lib/data/chat";
 import { composePlan } from "@/lib/coordination/orchestrator";
 import { CHAT_ASSIST_SYSTEM, wrapUntrusted } from "./prompts";
-import { parseAgentCommand, splitInline } from "./commands";
+import { DEFAULT_DRAFT, parseAgentCommand, splitInline } from "./commands";
 import { routeRequest, researchWeb } from "@/lib/research";
 import { answerForDraft, answerMessage, lookedUpNote } from "@/lib/research/answer";
 import { describeRetry, hit } from "@/lib/limits";
@@ -138,6 +138,8 @@ export async function handleAgentCommand(opts: { userId: string; agent: AgentRow
       return reply(`🌐 ${command.language}: ${translation}`);
     }
     case "draft": {
+      // "@agent answer what's the weather in Miami": what to write is a public fact, so it's looked up, not made up.
+      if (command.instruction !== DEFAULT_DRAFT && (await research(command.instruction))) return;
       const draft = await assist("draft", `${chatBlock}${about}\n\nThe owner's instruction: ${command.instruction}`, { instruction: command.instruction });
       if (inline) return draftCard(withOwn(draft));
       return reply(`✍️ Draft reply (only you can see this):\n${draft}`, { kind: "draft", draft });

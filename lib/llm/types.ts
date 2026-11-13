@@ -65,7 +65,8 @@ export interface LLMResearchRequest {
 export interface LLMResearchResult {
   /** The final text, after the last search or fetch. */
   text: string;
-  sources: { url: string; title: string; quote?: string; retrievedAt?: string; pageAge?: string }[];
+  /** `cited`: the answer itself cites this page (others were only found or opened along the way). */
+  sources: { url: string; title: string; quote?: string; retrievedAt?: string; pageAge?: string; cited?: boolean }[];
   /** Text that was actually read (quotes and fetched pages), to check facts against. */
   evidence: string[];
   errors: string[];
