@@ -89,6 +89,32 @@ test("📍 Near me now: where you are is used for one message, as a town, and th
   await context.close();
 });
 
+test("↩ Reply + @agent look-up: the quoted message completes the question, and you see what was searched", async ({ browser }) => {
+  const walk = `Anyone fancy a walk in Falkirk on Sunday? (${Date.now()})`;
+  const luca = await as(browser, "luca");
+  await luca.page.getByRole("link", { name: /^👥 Dinner — Italian/ }).click();
+  await send(luca.page, walk);
+  await expect(luca.page.getByRole("listitem").filter({ hasText: walk })).toBeVisible();
+
+  // Marco replies to it and asks his agent, without naming the place: it comes from the quoted message
+  // (not from where he usually is), and he is shown the question that went to the search.
+  const marco = await as(browser, "marco");
+  await marco.page.getByRole("link", { name: /^👥 Dinner — Italian/ }).click();
+  const original = marco.page.getByRole("listitem").filter({ hasText: walk }).first();
+  await original.getByLabel("Message options").click();
+  await original.getByRole("button", { name: "↩ Reply" }).click();
+  await expect(marco.page.getByTestId("replying-to")).toContainText("Replying to Luca");
+  await send(marco.page, "@agent what's the weather like?");
+  const answer = marco.page.getByTestId("private-message").filter({ hasText: "Looked up:" }).last();
+  await expect(answer).toContainText("🔎 Looked up: what's the weather like? (about: Anyone fancy a walk in Falkirk on Sunday?", { timeout: 15_000 });
+  await expect(answer).toContainText("In Falkirk it's 12°C with light rain right now.");
+  await expect(answer).not.toContainText("Islington");
+  // Still only a private draft: Luca sees nothing of it.
+  await expect(luca.page.getByText(/Looked up:/)).toHaveCount(0);
+  await luca.close();
+  await marco.close();
+});
+
 test("@agent inside a message: your own words plus what it found, as a private draft you send once", async ({ browser }) => {
   const luca = await as(browser, "luca");
   await luca.page.getByRole("link", { name: /^👥 Dinner — Italian/ }).click();
