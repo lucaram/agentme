@@ -68,6 +68,52 @@
   }
 }
 
+/*
+ * Background "Tinted" (data-tint): a hint of the accent colour in the page, cards and borders.
+ * A few percent only, mixed into the same neutrals as above, so text keeps its contrast in every
+ * accent and in Light and Dark. "Black" keeps its true-black page (OLED); its cards take the tint.
+ */
+:root[data-theme="light"][data-tint="tinted"] {
+  --background: color-mix(in srgb, var(--accent) 7%, #f6f5f1);
+  --surface: color-mix(in srgb, var(--accent) 4%, #ffffff);
+  --raised: color-mix(in srgb, var(--accent) 3%, #ffffff);
+  --border: color-mix(in srgb, var(--accent) 14%, #e4e1d8);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"][data-tint="tinted"] {
+    --background: color-mix(in srgb, var(--accent) 7%, #f6f5f1);
+    --surface: color-mix(in srgb, var(--accent) 4%, #ffffff);
+    --raised: color-mix(in srgb, var(--accent) 3%, #ffffff);
+    --border: color-mix(in srgb, var(--accent) 14%, #e4e1d8);
+  }
+}
+:root[data-theme="dark"][data-tint="tinted"] {
+  --background: color-mix(in srgb, var(--accent) 7%, #121311);
+  --surface: color-mix(in srgb, var(--accent) 7%, #1b1c1a);
+  --raised: color-mix(in srgb, var(--accent) 7%, #262823);
+  --border: color-mix(in srgb, var(--accent) 14%, #2d2e2a);
+}
+:root[data-theme="dark"][data-dark="black"][data-tint="tinted"] {
+  --background: #000000;
+  --surface: color-mix(in srgb, var(--accent) 8%, #0e0e0d);
+  --raised: color-mix(in srgb, var(--accent) 8%, #1a1a18);
+  --border: color-mix(in srgb, var(--accent) 14%, #232421);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"][data-tint="tinted"] {
+    --background: color-mix(in srgb, var(--accent) 7%, #121311);
+    --surface: color-mix(in srgb, var(--accent) 7%, #1b1c1a);
+    --raised: color-mix(in srgb, var(--accent) 7%, #262823);
+    --border: color-mix(in srgb, var(--accent) 14%, #2d2e2a);
+  }
+  :root[data-theme="system"][data-dark="black"][data-tint="tinted"] {
+    --background: #000000;
+    --surface: color-mix(in srgb, var(--accent) 8%, #0e0e0d);
+    --raised: color-mix(in srgb, var(--accent) 8%, #1a1a18);
+    --border: color-mix(in srgb, var(--accent) 14%, #232421);
+  }
+}
+
 /* Accent colours: tested pairs (white text on the Light shade, black text on the Dark shade). Green is the default above. */
 :root[data-accent="blue"] {
   --accent: #1f5fbf;
