@@ -9,9 +9,9 @@ import { mockModeration } from "@/lib/social/moderation";
 import { describeRecall, type RecallPlan } from "@/lib/agents/recall-format";
 import { heuristicCompose } from "@/lib/plans/compose";
 import { mockChanges, mockLearn, type PageText } from "@/lib/business/learn";
-import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest, type LLMResearchRequest, type LLMResearchResult } from "./types";
+import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest, type LLMFindRequest, type LLMFindResult, type LLMResearchRequest, type LLMResearchResult } from "./types";
 import { mockResearch } from "@/lib/research/mock";
-import { mockRoute } from "@/lib/research/answer";
+import { mockRoute, overlapPick } from "@/lib/research/answer";
 
 type Faq = { q: string; a: string };
 type BusinessInfo = { description?: string; hours?: string; faqs?: Faq[] };
@@ -28,6 +28,13 @@ export class MockProvider implements LLMProvider {
     const result = { ...mockResearch(req.question), errors: [], pagesRead: 1 };
     await meterMock({ purpose: "research", system: req.system, messages: [{ role: "user", content: req.question }] }, result.text);
     return result;
+  }
+
+  async findPages(req: LLMFindRequest): Promise<LLMFindResult> {
+    // The stand-in for the web only knows the pages its research stand-in cites.
+    const pages = mockResearch(req.question).sources.map((s) => ({ url: s.url, title: s.title }));
+    await meterMock({ purpose: "find", system: "", messages: [{ role: "user", content: req.question }] }, JSON.stringify(pages));
+    return { pages, errors: [] };
   }
 
   async generateText(req: LLMRequest): Promise<string> {
@@ -120,6 +127,9 @@ export class MockProvider implements LLMProvider {
       }
       case "route":
         value = mockRoute(String(ctx.text ?? ""));
+        break;
+      case "pick":
+        value = { pages: overlapPick(String(ctx.question ?? ""), (ctx.candidates ?? []) as { url: string; title: string }[], 2).map((i) => i + 1) };
         break;
       case "business_learn":
         value = mockLearn((ctx.pages ?? []) as PageText[]);

@@ -2,11 +2,10 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { adminClient } from "@/lib/supabase/admin";
 import { draftBusinessAnswer, type RecipientAgent } from "@/lib/agents/respond";
-import { researchWeb } from "@/lib/research";
+import { findOnWeb, pickPages, recallLookup, rememberLookup, type FoundPage } from "@/lib/research";
 import { hit } from "@/lib/limits";
 import { htmlToText } from "./extract";
 import { safeFetch } from "./fetch";
-import { citation } from "./learn";
 import { searchIndex } from "./site-index";
 import { clipPage, isPublicDomain, pageTitle, shortUrl, siteDomain } from "./site";
 import { businessSources } from "./sources";
@@ -15,11 +14,13 @@ import { businessSources } from "./sources";
  * If it's on the business's website, its agent answers: the team is only
  * asked when the website doesn't say. Not found in what it has read, the
  * agent looks on the business's OWN website:
- *   1. its address index (the pages the site lists) → reads the matching pages;
- *   2. otherwise a web search limited to the business's domain → reads the
- *      pages that search found, itself.
- * Either way it answers from the page it read, with where it came from, and
- * keeps the page, so the next person gets the answer at once.
+ *   1. its address index (the pages the site lists);
+ *   2. otherwise a search limited to the business's domain, which only finds
+ *      pages (a small model, no answer).
+ * Either way the candidates are narrowed to the two most likely, the app
+ * reads those pages itself, and ONE call answers from them, with where it
+ * came from. The pages are kept, and what was found (or that nothing was) is
+ * remembered, so the same question doesn't cost a search every time.
  * Only for a live website, and the business can turn it off.
  */
 
@@ -27,6 +28,10 @@ const KEEP_FRESH_DAYS = 7;
 const MAX_ON_DEMAND = 300;
 /** A page read because someone asked: the beginning and the end of a long one. */
 const ON_DEMAND_TEXT = 16_000;
+/** Candidates shown to the picker from each step. */
+const CANDIDATES = 8;
+
+export type LookupResult = { answer: string; needs_team: boolean; step: "index" | "search" };
 
 /** Reads one page of the business's site and keeps it with its knowledge. True when it's there to answer from. */
 async function readAndKeep(agentId: string, url: string): Promise<boolean> {
@@ -75,42 +80,61 @@ export async function lookUpOnSite(
   agent: Pick<RecipientAgent, "id" | "display_name" | "handle" | "business_info">,
   question: string,
   audience: "public" | "customers",
-): Promise<{ answer: string; needs_team: boolean } | null> {
+): Promise<LookupResult | null> {
   if ((agent.business_info as { lookup?: boolean } | null)?.lookup === false) return null;
   const db = adminClient();
   const { data: site } = await db.from("business_sites").select("domain, live_at").eq("agent_id", agent.id).maybeSingle();
   if (!site?.live_at) return null;
-  if (!(await hit("siteLookupsPerAgent", agent.id)).allowed) return null;
 
-  /** Reads these pages and answers from them (given whole, with the rest of what the agent knows). */
-  const answerFrom = async (urls: string[]) => {
+  /** Reads these pages and answers from them (given whole, with the rest of what the agent knows). One answer call. */
+  const answerFrom = async (urls: string[], step: LookupResult["step"]): Promise<LookupResult | null> => {
     const read = (await Promise.all(urls.map(async (url) => ((await readAndKeep(agent.id, url)) ? url : null)))).filter((u): u is string => u !== null);
     if (!read.length) return null;
     void trim(agent.id);
     const reply = await draftBusinessAnswer(agent, question, await businessSources(agent.id), audience, read);
-    return reply.needs_team ? null : reply;
+    return reply.needs_team ? null : { answer: reply.answer, needs_team: false, step };
+  };
+  /** Narrows the candidates to the two most likely, reads them and answers; remembers which pages answered. */
+  const tryPages = async (candidates: FoundPage[], step: LookupResult["step"]): Promise<LookupResult | null> => {
+    if (!candidates.length) return null;
+    const chosen = (await pickPages(question, candidates)).map((c) => c.url);
+    const reply = await answerFrom(chosen, step);
+    if (reply) await rememberLookup(agent.id, question, { pages: chosen, step });
+    return reply;
   };
 
-  // 1. The address index: read the pages whose address matches the question.
-  const hits = await searchIndex(agent.id, question);
-  const fromIndex = hits.length ? await answerFrom(hits.slice(0, 2).map((h) => h.url)) : null;
+  // Asked before: the pages that answered it (no search), or nothing did (no search either, for a few hours).
+  const before = await recallLookup(agent.id, question);
+  if (before && "miss" in before) return null;
+  if (before) {
+    const again = await answerFrom(before.pages, before.step);
+    if (again) return again;
+  }
+  if (!(await hit("siteLookupsPerAgent", agent.id)).allowed) return null;
+
+  // 1. The address index: pages whose address matches the question (free).
+  const hits = await searchIndex(agent.id, question, CANDIDATES);
+  const fromIndex = await tryPages(hits.map((h) => ({ url: h.url, title: "" })), "index");
   if (fromIndex) return fromIndex;
 
-  // 2. A web search of the business's own website only (older pages, or a question in another language).
-  if (!isPublicDomain(site.domain)) return null;
-  const found = await researchWeb({ question, allowedDomains: [site.domain] });
-  const own = found.sources.filter((s) => {
-    try {
-      return siteDomain(new URL(s.url).hostname) === site.domain;
-    } catch {
-      return false;
-    }
-  });
-  if (!own.length) return null;
-  // The pages the search found are read by the agent itself: it answers from the page, not from a search snippet.
-  const fromSearch = await answerFrom(own.slice(0, 2).map((s) => s.url));
-  if (fromSearch) return fromSearch;
-  // Unconfirmed numbers or nothing found: the team answers instead.
-  if (found.status !== "answered") return null;
-  return { answer: `${found.text}\n\n${citation(own[0].url, found.retrievedAt)}`, needs_team: false };
+  // 2. A search of the business's own website only (older pages, or a question in another language).
+  if (isPublicDomain(site.domain)) {
+    const found = await findOnWeb({ question, allowedDomains: [site.domain] });
+    // The search itself failed: not a miss to remember.
+    if (found === null) return null;
+    const tried = new Set(hits.slice(0, 2).map((h) => h.url));
+    const own = found.filter((p) => {
+      try {
+        return siteDomain(new URL(p.url).hostname) === site.domain && !tried.has(p.url);
+      } catch {
+        return false;
+      }
+    });
+    const fromSearch = await tryPages(own.slice(0, CANDIDATES), "search");
+    if (fromSearch) return fromSearch;
+  }
+
+  // The website doesn't say: remembered, so the next few askers don't each cost a search. The team answers.
+  await rememberLookup(agent.id, question, { miss: true });
+  return null;
 }

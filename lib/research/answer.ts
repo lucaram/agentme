@@ -49,6 +49,31 @@ export function mockRoute(text: string): Route {
   };
 }
 
+export const PickSchema = z.object({
+  pages: z.array(z.number().int()).max(4).describe("The numbers of the pages most likely to contain the answer, best first (at most 2). Empty if none look relevant."),
+});
+
+const words = (s: string) => new Set(s.toLowerCase().normalize("NFKD").match(/[a-z0-9]{3,}/g) ?? []);
+
+/** The candidates sharing most words with the question (their positions, best first; earlier wins a tie). Also the fallback when the model's choice is unusable. */
+export function overlapPick(question: string, candidates: readonly { url: string; title: string }[], max = 2): number[] {
+  const wanted = words(question);
+  return candidates
+    .map((c, i) => ({ i, score: [...words(`${c.title} ${c.url.replace(/^https?:\/\/[^/]+/i, "")}`)].filter((w) => wanted.has(w)).length }))
+    .sort((a, b) => b.score - a.score || a.i - b.i)
+    .slice(0, max)
+    .map((x) => x.i);
+}
+
+/** The model's choice (numbers from 1), kept only where valid; otherwise the first candidates, in the order found. */
+export function chosenPages<T>(picked: readonly number[], candidates: readonly T[], max = 2): T[] {
+  const valid = [...new Set(picked)].filter((n) => Number.isInteger(n) && n >= 1 && n <= candidates.length).slice(0, max);
+  return valid.length ? valid.map((n) => candidates[n - 1]) : candidates.slice(0, max);
+}
+
+/** How long "not found" is remembered, so the same unanswerable question isn't searched for again and again. */
+export const MISS_SECONDS = 6 * 3600;
+
 /** How long a researched answer may be reused. */
 export function cacheSeconds(time: TimeClass): number {
   return time === "now" ? 30 * 60 : time === "recent" ? 6 * 3600 : 7 * 86_400;

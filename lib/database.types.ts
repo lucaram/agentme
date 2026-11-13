@@ -143,6 +143,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"business_answer_log": {
+                  Row: {
+                    "agent_id": string,"created_at": string,"id": number,"step": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "agent_id": string,"created_at"?: string,"id"?: never,"step": string
+                  }
+                  Update: {
+                    "agent_id"?: string,"created_at"?: string,"id"?: never,"step"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "business_answer_log_agent_id_fkey"
+      columns: ["agent_id"]
+isOneToOne: false
+      referencedRelation: "agents"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"business_managers": {
                   Row: {
                     "business_agent_id": string,"created_at": string,"role": string,"user_id": string

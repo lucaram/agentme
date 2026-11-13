@@ -6,6 +6,7 @@ import { refreshDueSources } from "@/lib/business/sources";
 import { nudgeBusinessGaps, refreshDueSites } from "@/lib/business/website";
 import { autoResolveAppeals } from "@/lib/social/appeals";
 import { pruneResearchCache } from "@/lib/research";
+import { pruneAnswerLog } from "@/lib/business/answer-log";
 import { nudgeInactiveModerators, sendDigests } from "@/lib/social/digest";
 
 const SWEEP_EVERY_MS = 30_000;
@@ -41,6 +42,7 @@ export function startSweeper() {
         await refreshDueSites();
         await nudgeBusinessGaps();
         await pruneResearchCache();
+        await pruneAnswerLog();
         // Communities: appeals nobody answered in 3 days, the daily digest, quiet moderators.
         await autoResolveAppeals();
         await sendDigests();
