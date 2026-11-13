@@ -8,7 +8,7 @@
  */
 import { z } from "zod";
 
-export type ResearchSource = { url: string; title: string; quote?: string; retrievedAt?: string; pageAge?: string };
+export type ResearchSource = { url: string; title: string; quote?: string; retrievedAt?: string; pageAge?: string; /** The answer itself cites this page. */ cited?: boolean };
 
 export type AnswerStatus = "answered" | "partial" | "needs_clarification" | "not_found" | "unavailable";
 export type Answer = {
@@ -18,6 +18,8 @@ export type Answer = {
   retrievedAt: string;
   /** Numbers in the text that weren't found in what was read. */
   unverified?: string[];
+  /** Websites or publishers the text names that aren't among the pages read. */
+  unsourced?: string[];
   clarification?: { question: string; options: string[] };
 };
 
@@ -126,6 +128,53 @@ export function unverifiedNumbers(text: string, evidence: readonly string[]): st
   return [...out];
 }
 
+/**
+ * Where an answer came from: the pages it cites, in the order found. Pages
+ * that were only found or opened along the way are left out, so the source
+ * shown is never a different website from the one the facts are from. When
+ * nothing is marked as cited (a page the app read itself, the test stand-in),
+ * every page counts.
+ */
+export function usedSources(sources: readonly ResearchSource[]): ResearchSource[] {
+  const cited = sources.filter((s) => s.cited);
+  return (cited.length ? cited : [...sources]).map((s) => {
+    const { cited: _cited, ...rest } = s;
+    void _cited;
+    return rest;
+  });
+}
+
+const compact = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]/g, "");
+/** "according to AccuWeather", "per the Met Office", "AccuWeather's forecast", "source: BBC Weather". */
+const ATTRIBUTION = [
+  /\b(?:according to|as reported by|reported by|per|via|source:|sources:|data from|figures from)\s+(?:the\s+)?((?:[A-Z][\p{L}\p{N}&.'-]*)(?:\s+[A-Z][\p{L}\p{N}&.'-]*){0,3})/gu,
+  /\b((?:[A-Z][\p{L}\p{N}&.-]*)(?:\s+[A-Z][\p{L}\p{N}&.-]*){0,2})['’]s\s+(?:reading|readings|forecast|report|review|data|figures|numbers|page|website|site|article|listing)\b/gu,
+];
+const DOMAIN = /\b((?:[a-z0-9-]+\.)+(?:com|org|net|io|co|uk|it|de|fr|es|eu|us|ca|au|info|news|tv|gov|edu))\b/gi;
+
+/**
+ * Websites or publishers the text names that are neither among the sources
+ * (their address or title) nor mentioned in what was read. "AccuWeather's
+ * reading…" with weather.com as the only source is one.
+ */
+export function namedElsewhere(text: string, sources: readonly ResearchSource[], evidence: readonly string[] = []): string[] {
+  const known = compact(`${sources.map((s) => `${s.url} ${s.title}`).join(" ")} ${evidence.join(" ")}`);
+  const out = new Map<string, string>();
+  const consider = (raw: string) => {
+    const name = raw.replace(/[.,;:'’]+$/, "").trim();
+    const key = compact(name);
+    // Short words ("It", "The") and names found in the sources or in what was read are fine.
+    if (key.length < 4 || known.includes(key)) return;
+    out.set(key, name);
+  };
+  for (const pattern of ATTRIBUTION) for (const m of text.matchAll(pattern)) consider(m[1]);
+  for (const m of text.matchAll(DOMAIN)) {
+    // A source link written in the text itself (the draft's "Source: …") names a source by definition.
+    if (!sources.some((s) => compact(s.url).includes(compact(m[1])))) consider(m[1]);
+  }
+  return [...out.values()];
+}
+
 /** Applies the code rules to what the model wrote. */
 export function buildAnswer(raw: string, sources: ResearchSource[], evidence: readonly string[], now = new Date()): Answer {
   const parsed = parseResearchText(raw);
@@ -137,7 +186,12 @@ export function buildAnswer(raw: string, sources: ResearchSource[], evidence: re
   // titles and dates say were read too: they aren't unconfirmed numbers.
   const dates = [now.toISOString(), now.toUTCString(), ...sources.map((s) => `${s.title} ${s.pageAge ?? ""} ${s.retrievedAt ?? ""} ${s.quote ?? ""}`)];
   const unverified = evidence.length ? unverifiedNumbers(parsed.text, [...evidence, ...dates]) : [];
-  return { status: unverified.length ? "partial" : "answered", text: parsed.text, sources, retrievedAt, ...(unverified.length ? { unverified } : {}) };
+  // Where it came from: the pages the answer cites, first and only (not ones merely found or opened along the way).
+  const from = usedSources(sources);
+  // A website the text names must be one of them (or at least be mentioned in what was read).
+  const unsourced = namedElsewhere(parsed.text, from, evidence);
+  const doubtful = unverified.length > 0 || unsourced.length > 0;
+  return { status: doubtful ? "partial" : "answered", text: parsed.text, sources: from, retrievedAt, ...(unverified.length ? { unverified } : {}), ...(unsourced.length ? { unsourced } : {}) };
 }
 
 const host = (url: string) => {
@@ -154,7 +208,9 @@ export function answerMessage(a: Answer): string {
     return `${a.clarification.question}\n${a.clarification.options.map((o) => `- ${o}`).join("\n")}\n\nTell me which one and I'll look it up.`;
   }
   if (a.status === "not_found" || a.status === "unavailable") return a.text;
-  const caution = a.unverified?.length ? `\n\n⚠️ I couldn't confirm ${a.unverified.join(", ")} in the pages I read: check the source.` : "";
+  const caution =
+    (a.unverified?.length ? `\n\n⚠️ I couldn't confirm ${a.unverified.join(", ")} in the pages I read: check the source.` : "") +
+    (a.unsourced?.length ? `\n\n⚠️ It mentions ${a.unsourced.join(", ")}, which ${a.unsourced.length > 1 ? "aren't" : "isn't"} among the pages I read: check the source.` : "");
   // The sources themselves are shown as links under the message (metadata.sources); the text names where it's from.
   const from = [...new Set(a.sources.slice(0, 3).map((s) => host(s.url)))].join(", ");
   return `${a.text}${caution}\n\n🔗 From ${from}`;

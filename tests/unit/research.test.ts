@@ -103,7 +103,7 @@ describe("research: reading what the web tools returned", () => {
     ] as unknown as Parameters<typeof readResearch>[0];
     const r = readResearch(blocks);
     expect(r.text).toBe("STATUS: answered\nIt's 12°C.");
-    expect(r.sources).toEqual([{ url: "https://w.example/falkirk", title: "Falkirk", quote: "12°C, light rain", pageAge: "2 hours ago" }]);
+    expect(r.sources).toEqual([{ url: "https://w.example/falkirk", title: "Falkirk", quote: "12°C, light rain", pageAge: "2 hours ago", cited: true }]);
     expect(r.evidence).toContain("12°C, light rain");
     expect(r.errors).toEqual([]);
     expect(r.pagesRead).toBe(0); // snippets only: the app then reads the page itself

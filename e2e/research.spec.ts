@@ -126,6 +126,36 @@ test("↩ Reply + @agent look-up: the quoted message completes the question, and
   await marco.close();
 });
 
+test("@agent 'summarise' or 'answer' about something else is looked up, not taken as a command about the chat", async ({ browser }) => {
+  // A group of its own (the private messages left here stay out of other tests' chats).
+  const name = `Words ${`${Date.now()}`.slice(-6)}`;
+  const luca = await as(browser, "luca");
+  await luca.page.getByRole("navigation").getByRole("link", { name: "Groups" }).click();
+  await luca.page.getByRole("button", { name: "＋ New group" }).click();
+  const form = luca.page.getByRole("form", { name: "New group" });
+  await form.getByLabel("Group name").fill(name);
+  await form.getByRole("combobox", { name: "Search contacts" }).fill("mar");
+  await form.getByRole("option", { name: /Marco/ }).click();
+  await form.getByRole("button", { name: "Create group" }).click();
+  await expect(luca.page.getByRole("heading", { name })).toBeVisible();
+  await luca.page.goto(luca.page.url().replace("/groups/", "/chats/"));
+
+  // "summarise … the weather in Miami" is about Miami, not about this chat.
+  await send(luca.page, "@agent summarise very concisely the weather in Miami");
+  const first = luca.page.getByRole("form", { name: "Draft reply" }).last();
+  await expect(first.getByLabel("Edit draft")).toHaveValue(/^In Miami it's 12°C with light rain right now\./, { timeout: 15_000 });
+  await expect(luca.page.getByTestId("private-message").filter({ hasText: "📝 Summary" })).toHaveCount(0);
+
+  // "answer <a question about public facts>" is looked up too, not made up as a chatty reply.
+  await send(luca.page, "@agent answer what's the weather in Leith");
+  await expect(luca.page.getByRole("form", { name: "Draft reply" }).last().getByLabel("Edit draft")).toHaveValue(/^In Leith it's 12°C with light rain right now\./, { timeout: 15_000 });
+
+  // And "summarise" on its own still summarises this chat.
+  await send(luca.page, "@agent summarise");
+  await expect(luca.page.getByTestId("private-message").filter({ hasText: "📝 Summary" })).toBeVisible({ timeout: 15_000 });
+  await luca.close();
+});
+
 test("@agent inside a message: your own words plus what it found, as a private draft you send once", async ({ browser }) => {
   const luca = await as(browser, "luca");
   await luca.page.getByRole("link", { name: /^👥 Dinner — Italian/ }).click();
