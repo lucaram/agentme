@@ -37,9 +37,13 @@ function clientIp(request: Request): string {
   return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "local";
 }
 
-// Tasks complete synchronously, so an in-memory store per process is enough for
-// the MVP. Swap for @a2a-js/sdk/server/database to support getTask across restarts.
-const taskStore = new InMemoryTaskStore();
+/**
+ * The only A2A method this endpoint serves. Every exchange completes inside
+ * one request, so nothing legitimate needs to read a task back; "get task"
+ * and "list tasks" would let any caller (even an anonymous one) read answers
+ * given to other agents.
+ */
+export const A2A_METHODS: readonly string[] = ["SendMessage"];
 
 function jsonRpcError(id: unknown, code: number, message: string, status = 200) {
   return Response.json({ jsonrpc: "2.0", id: id ?? null, error: { code, message } }, { status });
@@ -58,6 +62,11 @@ export async function handleA2ARequest(request: Request, handle: string): Promis
     body = await request.json();
   } catch {
     return jsonRpcError(null, -32700, "Parse error");
+  }
+
+  // --- Only sending a message. Refused before anything else, for every caller.
+  if (typeof body.method !== "string" || !A2A_METHODS.includes(body.method)) {
+    return jsonRpcError(body.id, -32601, "Method not found: this agent only accepts SendMessage");
   }
 
   const recipient = await getAgentByHandle(handle);
@@ -106,7 +115,8 @@ export async function handleA2ARequest(request: Request, handle: string): Promis
     );
   }, (response, a2aTaskId, requestData) => recordExchange(recipient, caller, response, a2aTaskId, requestData));
 
-  const handler = new DefaultRequestHandler(card, taskStore, executor);
+  // A task store of its own for each request: nothing one caller was told is kept where another could reach it.
+  const handler = new DefaultRequestHandler(card, new InMemoryTaskStore(), executor);
   const context = new ServerCallContext({
     requestedVersion: request.headers.get(A2A_VERSION_HEADER) ?? undefined,
   });

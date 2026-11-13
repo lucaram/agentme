@@ -26,6 +26,12 @@ import type { StepHandler, StepType, TaskParsed, TaskRow } from "./types";
 //  - handlers are idempotent: they reuse what earlier runs already did.
 
 const LEASE_SECONDS = 180;
+/**
+ * How many runs in a row may be interrupted (a crash, a lost lease) before the
+ * plan gives up. Runs that end in order (waiting on people, or finished) set
+ * the count back to zero, so a plan many people answer one by one never
+ * reaches it.
+ */
 export const MAX_ATTEMPTS = 3;
 /** A freshly approved/woken task gets this long to be claimed before the sweeper steps in. */
 const UNCLAIMED_GRACE_MS = 30_000;
@@ -117,7 +123,8 @@ async function executeTask(task: TaskRow) {
   const release = async (status: "waiting" | "proposal_ready" | "accepted" | "completed" | "failed", error?: string) => {
     const { data } = await db
       .from("tasks")
-      .update({ status, error: error ?? null, lease_until: null })
+      // A run that ends in order starts the count of interrupted runs again (see MAX_ATTEMPTS).
+      .update({ status, error: error ?? null, lease_until: null, ...(status === "failed" ? {} : { interrupted_runs: 0 }) })
       .eq("id", taskId)
       .eq("status", "running")
       .eq("lease_token", token)
@@ -140,7 +147,7 @@ async function executeTask(task: TaskRow) {
     }
   };
 
-  if (task.attempts > MAX_ATTEMPTS) {
+  if (task.interrupted_runs > MAX_ATTEMPTS) {
     return fail("I was interrupted several times, so I stopped. Nothing was booked or shared beyond what's shown here. You can ask me again.");
   }
 
@@ -185,7 +192,8 @@ async function executeTask(task: TaskRow) {
         // Park only if nobody answered while we were running.
         const { data: parked } = await db
           .from("tasks")
-          .update({ status: outcome.taskStatus, error: null, lease_until: null })
+          // Waiting on people is the plan working, not an interruption: the count starts again.
+          .update({ status: outcome.taskStatus, error: null, lease_until: null, interrupted_runs: 0 })
           .eq("id", taskId)
           .eq("status", "running")
           .eq("lease_token", token)

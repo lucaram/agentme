@@ -11,6 +11,7 @@ import { AssignCard } from "./AssignCard";
 import { leaveConversation, openAgentChat } from "../../actions";
 import { MarkRead } from "@/components/MarkRead";
 import { DraftReply } from "./DraftReply";
+import { MAX_MESSAGES_SHOWN, MESSAGES_PER_PAGE, shownCount } from "@/lib/social/paging";
 import { RichText } from "@/components/RichText";
 import { LocalTime } from "@/components/LocalTime";
 import { InviteLink } from "./InviteLink";
@@ -46,7 +47,7 @@ const FLAG_LABEL: Record<string, string> = {
 
 export default async function ChatPage({ params, searchParams }: PageProps<"/chats/[id]">) {
   const { id } = await params;
-  const { t } = await searchParams;
+  const { t, earlier } = await searchParams;
   const { user, agent } = await requireAgent();
   const supabase = await createClient();
 
@@ -64,14 +65,20 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
       ? await supabase.from("agent_threads").select("id, title, kind").eq("id", threadParam).maybeSingle()
       : { data: null };
   const showMessages = !isMyAgent || Boolean(thread);
-  const [{ data: messages }, { data: agents }] = await Promise.all([
+  // The latest messages (a long chat used to show its first 200 and nothing after); "Show earlier messages" loads more.
+  const shown = shownCount(earlier);
+  const [{ data: newestFirst }, { data: agents }] = await Promise.all([
     showMessages
       ? (thread ? supabase.from("messages").select("*").eq("conversation_id", id).eq("thread_id", thread.id) : supabase.from("messages").select("*").eq("conversation_id", id))
-          .order("created_at")
-          .limit(200)
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .limit(shown + 1)
       : Promise.resolve({ data: [] as Database["public"]["Tables"]["messages"]["Row"][] }),
     supabase.from("agents").select("id, owner_id, handle, display_name, avatar, type, verified_domain"),
   ]);
+  // One more than shown was asked for, to know whether there are earlier ones. Oldest first on the page.
+  const hasEarlier = (newestFirst?.length ?? 0) > shown;
+  const messages = (newestFirst ?? []).slice(0, shown).reverse();
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));
   const byOwner = new Map((agents ?? []).map((a) => [a.owner_id, a]));
   // Businesses placed in this group or community, to mention (RLS: members see them).
@@ -263,6 +270,17 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
         </div>
       )}
 
+      {hasEarlier && (
+        <p className="mb-3 text-center text-xs">
+          {shown < MAX_MESSAGES_SHOWN ? (
+            <Link href={`/chats/${id}?${new URLSearchParams({ ...(thread ? { t: thread.id } : {}), earlier: String(shown / MESSAGES_PER_PAGE) })}`} className="font-medium text-accent hover:underline" data-testid="show-earlier">
+              ↑ Show earlier messages
+            </Link>
+          ) : (
+            <span className="text-muted">Showing the latest {MAX_MESSAGES_SHOWN.toLocaleString("en-GB")} messages. Use search to find older ones.</span>
+          )}
+        </p>
+      )}
       <ol className="flex flex-1 flex-col gap-3" aria-label="Messages">
         {(messages ?? []).map((m) => {
           const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string; flags?: string[]; auto_hidden?: boolean; appeal?: string; business_id?: string; handle?: string; forwarded?: Forwarded; sources?: { url?: string; title?: string }[] };
