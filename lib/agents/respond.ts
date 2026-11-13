@@ -229,7 +229,9 @@ export type BusinessContext = {
   /** May this unanswered question go to the business's team? (signed-in callers, rate-limited) */
   requestHandoff: () => Promise<boolean>;
   /** Not in what it has read: look on the business's own website (address index, then a site-only search). */
-  lookup?: (question: string, audience: "public" | "customers") => Promise<{ answer: string; needs_team: boolean } | null>;
+  lookup?: (question: string, audience: "public" | "customers") => Promise<{ answer: string; needs_team: boolean; step: "index" | "search" } | null>;
+  /** How the question was answered (for the business's own figures; the question itself isn't kept). */
+  record?: (step: "knowledge" | "index" | "search" | "team" | "none") => Promise<void>;
 };
 
 /**
@@ -275,10 +277,15 @@ async function answerBusinessQuestion(recipient: RecipientAgent, question: strin
   const audience = incoming.relationship === "accepted" && !inGroup ? "customers" : "public";
   let reply: { answer: string; needs_team: boolean } = await draftBusinessAnswer(recipient, trimmed, business.sources, audience);
   // Before asking the team: look on the business's own website.
-  if (reply.needs_team && business.lookup) reply = (await business.lookup(trimmed, audience).catch(() => null)) ?? reply;
+  let step: "knowledge" | "index" | "search" = "knowledge";
+  if (reply.needs_team && business.lookup) {
+    const looked = await business.lookup(trimmed, audience).catch(() => null);
+    if (looked) [reply, step] = [looked, looked.step];
+  }
 
   // Not in the business's information: its team answers instead (never a guess).
   if (reply.needs_team && incoming.callerHandle && (await business.requestHandoff())) {
+    await business.record?.("team").catch(() => undefined);
     return {
       status: "needs_human",
       skill: "business.faq",
@@ -289,5 +296,6 @@ async function answerBusinessQuestion(recipient: RecipientAgent, question: strin
       inbox: { kind: "question", question: trimmed, business: true },
     };
   }
+  await business.record?.(reply.needs_team ? "none" : step).catch(() => undefined);
   return { status: "completed", skill: "business.faq", text: reply.answer, disclosed: ["business_info"] };
 }

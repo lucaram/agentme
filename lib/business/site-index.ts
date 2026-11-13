@@ -81,12 +81,12 @@ export async function indexSite(agentId: string, siteUrl: string, extra: string[
   return rows.length;
 }
 
-/** The indexed addresses that best match a question (at most three). */
-export async function searchIndex(agentId: string, question: string) {
+/** The indexed addresses that best match a question (at most `limit`). */
+export async function searchIndex(agentId: string, question: string, limit = 3) {
   const wanted = [...new Set(terms(question))].slice(0, 16);
   if (!wanted.length) return [];
   // "castlevania:* | nocturne:*": any of the words, as a prefix (terms are [a-z0-9] only); best matches first.
   const query = wanted.map((t) => `${t}:*`).join(" | ");
   const { data } = await adminClient().rpc("search_site_index", { p_agent: agentId, p_query: query, p_limit: 300 });
-  return rankIndexHits(wanted, data ?? []);
+  return rankIndexHits(wanted, data ?? [], limit);
 }

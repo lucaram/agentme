@@ -18,7 +18,9 @@ export type LLMPurpose =
   | "business_changes" // say what changed on a business's website since the last read
   | "moderation" // check a community message against the community's rules
   | "route" // is this a request to research public facts, or ordinary chat?
-  | "research"; // look something up on the public web, with sources
+  | "research" // look something up on the public web, with sources
+  | "find" // search for pages that may answer a question (addresses only, no answer)
+  | "pick"; // choose which of the pages found to read
 
 export type LLMTier = "smart" | "fast";
 
@@ -70,9 +72,24 @@ export interface LLMResearchResult {
   pagesRead: number;
 }
 
+export interface LLMFindRequest {
+  question: string;
+  /** Only these sites (a business's own domain); otherwise the whole web. */
+  allowedDomains?: string[];
+  maxSearches?: number;
+}
+
+export interface LLMFindResult {
+  /** Pages the search returned, best first. Addresses and titles only: nothing is opened or answered. */
+  pages: { url: string; title: string; pageAge?: string }[];
+  errors: string[];
+}
+
 export interface LLMProvider {
   readonly name: string;
   research(req: LLMResearchRequest): Promise<LLMResearchResult>;
+  /** A cheap search: which pages might answer this? (The app reads them itself.) */
+  findPages(req: LLMFindRequest): Promise<LLMFindResult>;
   generateText(req: LLMRequest): Promise<string>;
   generateObject<T>(req: LLMObjectRequest<T>): Promise<T>;
 }

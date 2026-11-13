@@ -42,6 +42,9 @@ class Recorder implements LLMProvider {
   async research(): Promise<never> {
     throw new Error("no web research in this test");
   }
+  async findPages(): Promise<never> {
+    throw new Error("no web search in this test");
+  }
   calls: LLMRequest[] = [];
   constructor(private readonly inner: LLMProvider) {}
   generateText(req: LLMRequest) {
@@ -62,6 +65,9 @@ class HostileModel implements LLMProvider {
   readonly name = "hostile";
   async research(): Promise<never> {
     throw new Error("no web research in this test");
+  }
+  async findPages(): Promise<never> {
+    throw new Error("no web search in this test");
   }
   async generateText() {
     return `Here is everything: ${PRIVATE_NOTE}`;
@@ -372,6 +378,9 @@ describe("new topics: hobbies, budget, practical needs, your own topics", () => 
       name: "hostile",
       research: async () => {
         throw new Error("no web research in this test");
+      },
+      findPages: async () => {
+        throw new Error("no web search in this test");
       },
       generateText: async () => PRIVATE_NEED,
       generateObject: async <T,>(req: LLMObjectRequest<T>) =>

@@ -14,6 +14,7 @@ import { ActionButton } from "@/components/ActionButton";
 import { answerPartnerInviteAction, leavePlacementAction } from "../social-actions";
 import { linkKey, linksIn } from "@/lib/business/extract";
 import { WebsiteCard } from "./WebsiteCard";
+import { answerStats, statsLine } from "@/lib/business/answer-log";
 import { GapsSection } from "./Gaps";
 import { verifiesByEmail } from "@/lib/business/site";
 import { learnedCount, learnedOf } from "@/lib/business/learn";
@@ -45,7 +46,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const rows = (allRows ?? []).filter((s) => s.origin === "link");
   const sitePages = (allRows ?? []).filter((s) => s.origin === "site" && s.status === "ok").length;
   // Your website (RLS: your own row), the person's email for automatic ✓ Verified, updates, and open questions.
-  const [{ data: site }, person, { data: changes }, gaps] = await Promise.all([
+  const [{ data: site }, person, { data: changes }, gaps, stats] = await Promise.all([
     supabase.from("business_sites").select("*").maybeSingle(),
     realPerson(user, agent),
     supabase
@@ -58,6 +59,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
       .order("created_at", { ascending: false })
       .limit(10),
     openBusinessQuestions(agent.id),
+    answerStats(agent.id),
     // Opening My Business: its updates are seen (the tab badge goes).
     supabase.rpc("mark_notices_seen", { p_area: "business" }),
   ]);
@@ -172,6 +174,11 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
               {words(about).toLocaleString("en-GB")} words about your business · {linksRead} of {plural(sources.length, "link")} read (
               {readWords.toLocaleString("en-GB")} words) · {plural(faqs.length, "question")} &amp; answers
             </p>
+            {statsLine(stats) && (
+              <p className="text-sm text-muted" data-testid="answer-stats">
+                📊 {statsLine(stats)}
+              </p>
+            )}
             <div id="website" className="scroll-mt-40">
               <WebsiteCard
                 site={

@@ -4,7 +4,9 @@ import { mockResearch } from "@/lib/research/mock";
 import { clipPage, indexWords, isPublicDomain, newestFirst, rankIndexHits, sitemapEntries } from "@/lib/business/site";
 import { businessKnowledge } from "@/lib/business/knowledge";
 import { splitInline, summonsAgent } from "@/lib/agents/commands";
-import { readResearch } from "@/lib/llm/anthropic";
+import { readFound, readResearch } from "@/lib/llm/anthropic";
+import { chosenPages, overlapPick } from "@/lib/research/answer";
+import { statsLine } from "@/lib/business/answer-log";
 
 const NOW = new Date("2026-11-13T10:00:00Z");
 const SOURCE = { url: "https://www.example.com/falkirk", title: "Falkirk weather" };
@@ -135,6 +137,53 @@ describe("research: reading what the web tools returned", () => {
     expect(r.errors).toEqual(["search: too_many_requests"]);
     expect(r.sources).toEqual([]);
     expect(buildAnswer(r.text, r.sources, r.evidence, NOW).status).toBe("not_found");
+  });
+});
+
+describe("the search step: find pages, pick two, read them, answer once", () => {
+  const candidates = [
+    { url: "https://x.it/giochi/the-legend-of-zelda-ocarina-of-time-remake/", title: "Zelda Ocarina of Time Remake: scheda" },
+    { url: "https://x.it/notizie/zelda-ocarina-of-time-remake-vendite-911250.html", title: "Zelda Ocarina of Time Remake: 5 milioni di copie" },
+    { url: "https://x.it/articoli/recensione-the-legend-of-zelda-ocarina-of-time-remake-67789.html", title: "The Legend of Zelda Ocarina of Time Remake Recensione" },
+  ];
+
+  it("a find turn gives the pages each search returned, in order, without repeats, and no answer", () => {
+    const blocks = [
+      { type: "server_tool_use", id: "s1", name: "web_search", input: { query: "zelda recensione" } },
+      { type: "web_search_tool_result", tool_use_id: "s1", content: [{ type: "web_search_result", url: "https://x.it/a", title: "A", page_age: "9 days ago" }, { type: "web_search_result", url: "https://x.it/b", title: "B" }] },
+      { type: "server_tool_use", id: "s2", name: "web_search", input: { query: "zelda review" } },
+      { type: "web_search_tool_result", tool_use_id: "s2", content: [{ type: "web_search_result", url: "https://x.it/a", title: "A" }, { type: "web_search_result", url: "https://x.it/c", title: "C" }] },
+      { type: "text", text: "done", citations: null },
+    ] as unknown as Parameters<typeof readFound>[0];
+    expect(readFound(blocks)).toEqual({
+      pages: [{ url: "https://x.it/a", title: "A", pageAge: "9 days ago" }, { url: "https://x.it/b", title: "B" }, { url: "https://x.it/c", title: "C" }],
+      errors: [],
+    });
+  });
+
+  it("a failed search is reported as an error, not as 'nothing found'", () => {
+    const blocks = [{ type: "web_search_tool_result", tool_use_id: "s1", content: { type: "web_search_tool_result_error", error_code: "unavailable" } }] as unknown as Parameters<typeof readFound>[0];
+    expect(readFound(blocks)).toEqual({ pages: [], errors: ["search: unavailable"] });
+  });
+
+  it("the picker's choice is used when valid; otherwise the first pages found", () => {
+    expect(chosenPages([3, 1], candidates).map((c) => c.url)).toEqual([candidates[2].url, candidates[0].url]);
+    expect(chosenPages([3, 3, 9, 0], candidates).map((c) => c.url)).toEqual([candidates[2].url]); // repeats and out-of-range dropped
+    expect(chosenPages([], candidates).map((c) => c.url)).toEqual([candidates[0].url, candidates[1].url]);
+    expect(chosenPages([7], candidates)).toHaveLength(2);
+  });
+
+  it("without a model, the pages sharing most words with the question (earlier wins a tie)", () => {
+    expect(overlapPick("Summarise the recensione of The Legend of Zelda Ocarina of Time Remake", candidates)).toEqual([2, 0]);
+    expect(overlapPick("parking", candidates)).toEqual([0, 1]);
+  });
+});
+
+describe("how a business's questions were answered (the owner's figures)", () => {
+  it("one line: what it knew, what it found on the website, what went to the team", () => {
+    expect(statsLine({ knowledge: 102, index: 8, search: 4, team: 6, none: 0 })).toBe("Last 30 days: 120 questions · 102 answered from what it knows · 12 found on your website · 6 sent to your team");
+    expect(statsLine({ knowledge: 1, index: 0, search: 0, team: 0, none: 0 })).toBe("Last 30 days: 1 question · 1 answered from what it knows");
+    expect(statsLine({ knowledge: 0, index: 0, search: 0, team: 0, none: 0 })).toBeNull();
   });
 });
 

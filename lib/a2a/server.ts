@@ -1,6 +1,7 @@
 import "server-only";
 import { businessSources } from "@/lib/business/sources";
 import { lookUpOnSite } from "@/lib/business/lookup";
+import { logAnswer } from "@/lib/business/answer-log";
 import { NEEDS_ANSWER, tellOwner } from "@/lib/requests/notify";
 import {
   A2A_VERSION_HEADER,
@@ -101,7 +102,7 @@ export async function handleA2ARequest(request: Request, handle: string): Promis
     // AI cost of this reply is attributed to the recipient's owner and, when the
     // platform-signed token names one, to the coordination task it serves.
     return withUsageContext({ taskId: caller.taskId ?? null, agentId: recipient.id, userId: recipient.owner_id }, () =>
-      respondAsAgent(recipient, { callerHandle: caller.agent?.handle ?? null, relationship, text, data }, facts, tips, { sources, requestHandoff, lookup: (q, audience) => lookUpOnSite(recipient, q, audience) }),
+      respondAsAgent(recipient, { callerHandle: caller.agent?.handle ?? null, relationship, text, data }, facts, tips, { sources, requestHandoff, lookup: (q, audience) => lookUpOnSite(recipient, q, audience), record: (step) => logAnswer(recipient.id, step) }),
     );
   }, (response, a2aTaskId, requestData) => recordExchange(recipient, caller, response, a2aTaskId, requestData));
 
