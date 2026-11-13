@@ -107,6 +107,53 @@ describe.skipIf(!up)("RLS: plans shared in a group (live)", () => {
     expect(responses).toEqual([{ value: { response: "in" } }]);
   });
 
+  it("what participants told the organiser (availability, food, budget, answers, tips) is not readable by the group", async () => {
+    const { updateStep, ensureSteps, PRIVATE_RESULT_MARK } = await import("@/lib/plans/steps");
+    const secret = "Only free after 9pm; tight budget this month; needs step-free access";
+    // One step of each kind whose result is what people told the organiser, written the way the engine writes it.
+    const kinds = ["collect", "question", "ask_around"] as const;
+    const results = {
+      collect: { replies: [{ handle: "paul", availability: secret, food: "vegan", budget: secret, practical: secret }] },
+      question: { answers: { paul: { status: "answered", answer: secret } }, posted: [] },
+      ask_around: { tips: [{ handle: "paul", answer: secret, by: "human" }], posted: [], summarised: false },
+    };
+    const made: string[] = [];
+    for (const [i, type] of kinds.entries()) {
+      const { data: step } = await db.from("plan_steps").insert({ task_id: taskId, position: 10 + i, type, status: "pending" }).select("id").single();
+      made.push(step!.id);
+      await updateStep(step!.id, { status: "done", result: results[type] });
+    }
+
+    // Marco is in the group (and is not Paul's contact for this purpose): he can see the steps exist, not what was said.
+    const marco = await signIn("marco");
+    const { data: steps } = await marco.from("plan_steps").select("id, type, status, result").in("id", made);
+    expect(steps).toHaveLength(3);
+    expect(steps!.every((s) => s.status === "done")).toBe(true);
+    expect(steps!.map((s) => s.result)).toEqual([PRIVATE_RESULT_MARK, PRIVATE_RESULT_MARK, PRIVATE_RESULT_MARK]);
+    expect(JSON.stringify(steps)).not.toContain("budget");
+    // The table that holds it answers nothing to anyone signed in: not a group member, not even the organiser.
+    for (const who of ["marco", "luca", "paul"]) {
+      const client = await signIn(who);
+      const { data: rows } = await client.from("plan_step_private").select("result");
+      expect(rows ?? [], who).toEqual([]);
+    }
+    // Nothing of it in the rows the database itself shows group members.
+    const { data: raw } = await db.from("plan_steps").select("result").in("id", made);
+    expect(JSON.stringify(raw)).not.toContain(secret);
+
+    // The server still has it, for the organiser's plan (the proposal is built from these replies).
+    const { data: task } = await db.from("tasks").select("*").eq("id", taskId).single();
+    const full = (await ensureSteps(task!)).filter((s) => made.includes(s.id));
+    expect(full.map((s) => s.result)).toEqual(kinds.map((k) => results[k]));
+
+    // A step for the group (who's in) is untouched: its result stays where members read it.
+    const { data: rsvp } = await marco.from("plan_steps").select("result").eq("id", stepId).single();
+    expect(rsvp!.result).toBeNull();
+    await updateStep(stepId, { result: { open: true } });
+    const { data: after } = await marco.from("plan_steps").select("result").eq("id", stepId).single();
+    expect(after!.result).toEqual({ open: true });
+  });
+
   it("people outside the group see neither", async () => {
     const paul = await signIn("paul");
     const { data: proposals } = await paul.from("proposals").select("id").eq("id", proposalId);

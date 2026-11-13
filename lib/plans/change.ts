@@ -8,6 +8,7 @@ import { displayClock, relevantClause, type ParticipantReply } from "@/lib/coord
 import { validateProposal } from "@/lib/coordination/validate";
 import type { Proposal } from "@/lib/coordination/schemas";
 import type { CollectResult } from "./blocks/collect";
+import { privateResultOf } from "./steps";
 
 const ChangeInput = z.object({
   title: z.string().trim().min(1, "Give the plan a name.").max(120),
@@ -59,8 +60,8 @@ export async function changePlan(proposalId: string, userId: string, input: Chan
   // Heads-up if the new time clashes with what the agents said (code check, not AI).
   const warnings: string[] = [];
   if (timingChanged && organiser) {
-    const { data: collect } = await db.from("plan_steps").select("result").eq("task_id", task.id).eq("type", "collect").maybeSingle();
-    const replies = (collect?.result as CollectResult | null)?.replies ?? [];
+    // What the agents replied is kept where only the server reads (never in the row group members can read).
+    const replies = ((await privateResultOf(task.id, "collect")) as CollectResult | null)?.replies ?? [];
     if (replies.length) {
       const facts = await getFacts(organiser.id);
       const ownAvailability = facts.find((f) => f.category === "availability")?.value ?? null;

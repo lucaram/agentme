@@ -30,12 +30,9 @@ import { buildMessage, dataPart, extractContent, textPart } from "./messages";
 import type { Relationship } from "@/lib/policy/contactPolicy";
 import { asJson } from "@/lib/data/json";
 import { hit } from "@/lib/limits";
+import { ipTrustFromEnv, trustedClientIp } from "./client-ip";
 import { withUsageContext } from "@/lib/usage/context";
 
-/** Best-effort client IP. Behind a proxy/host this is set by the platform; locally it's "local". */
-function clientIp(request: Request): string {
-  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "local";
-}
 
 /**
  * The only A2A method this endpoint serves. Every exchange completes inside
@@ -85,9 +82,14 @@ export async function handleA2ARequest(request: Request, handle: string): Promis
   }
 
   // --- Rate limiting, before any work (and any model cost) happens.
-  const limit = caller.agent
+  // Anonymous callers: per address only when the deployment says which address can be trusted (a caller can
+  // write any X-Forwarded-For); otherwise they all share one allowance. And, whatever the addresses, a cap on
+  // all anonymous requests to one agent, since each can cost the business an AI answer.
+  const ip = caller.agent ? null : trustedClientIp(request.headers, ipTrustFromEnv());
+  let limit = caller.agent
     ? await hit("a2aPerCaller", `${caller.agent.id}->${recipient.id}`)
-    : await hit("a2aAnonymousPerIp", `${clientIp(request)}->${recipient.id}`);
+    : await hit("a2aAnonymousPerIp", `${ip ?? "untrusted"}->${recipient.id}`);
+  if (limit.allowed && !caller.agent) limit = await hit("a2aAnonymousPerAgent", recipient.id);
   if (!limit.allowed) {
     return Response.json(
       { jsonrpc: "2.0", id: body.id ?? null, error: { code: -32005, message: "Rate limit exceeded" } },

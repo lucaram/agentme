@@ -50,7 +50,36 @@ export async function createSteps(taskId: string, steps: NewStep[]): Promise<voi
   if (error && error.code !== "23505") throw error;
 }
 
-/** Steps of a task, creating the default ones for tasks made before plans had steps. */
+/**
+ * Steps whose result is what people (or their agents) told the organiser:
+ * availability, food, budget and practical needs; personal answers; tips.
+ * plan_steps can be read by every member of the group a plan is shared in, so
+ * these results are kept in plan_step_private, which only the server reads.
+ * The row group members can read holds a marker instead.
+ */
+export const PRIVATE_RESULT_STEPS: readonly string[] = ["collect", "question", "ask_around"];
+export const PRIVATE_RESULT_MARK = { private: true } as const;
+export const hasPrivateResult = (type: string) => PRIVATE_RESULT_STEPS.includes(type);
+
+/** For the server's own work: these steps with their real results (null when there is none yet). */
+export async function withPrivateResults<T extends { id: string; type: string; result: unknown }>(steps: T[]): Promise<T[]> {
+  const ids = steps.filter((s) => hasPrivateResult(s.type)).map((s) => s.id);
+  if (!ids.length) return steps;
+  const { data } = await adminClient().from("plan_step_private").select("step_id, result").in("step_id", ids);
+  const kept = new Map((data ?? []).map((r) => [r.step_id, r.result]));
+  return steps.map((s) => (hasPrivateResult(s.type) ? { ...s, result: kept.get(s.id) ?? null } : s));
+}
+
+/** The private result of a task's step of this type (e.g. what the agents replied to "collect"), or null. */
+export async function privateResultOf(taskId: string, type: string): Promise<unknown> {
+  const db = adminClient();
+  const { data: step } = await db.from("plan_steps").select("id").eq("task_id", taskId).eq("type", type).maybeSingle();
+  if (!step) return null;
+  const { data } = await db.from("plan_step_private").select("result").eq("step_id", step.id).maybeSingle();
+  return data?.result ?? null;
+}
+
+/** Steps of a task (with their real results), creating the default ones for tasks made before plans had steps. */
 export async function ensureSteps(task: TaskRow): Promise<StepRow[]> {
   const load = async () =>
     (await adminClient().from("plan_steps").select("*").eq("task_id", task.id).order("position")).data ?? [];
@@ -59,15 +88,29 @@ export async function ensureSteps(task: TaskRow): Promise<StepRow[]> {
     await createSteps(task.id, coordinationSteps(task.parsed as unknown as TaskParsed));
     steps = await load();
   }
-  return steps;
+  return (await withPrivateResults(steps)) as StepRow[];
 }
 
 export async function updateStep(stepId: string, fields: { status?: StepRow["status"]; result?: unknown; config?: unknown }) {
-  await adminClient()
+  const db = adminClient();
+  let result = fields.result;
+  if (result !== undefined) {
+    // What people told the organiser goes where only the server reads; the shared row gets a marker.
+    const { data: step } = await db.from("plan_steps").select("type").eq("id", stepId).maybeSingle();
+    if (step && hasPrivateResult(step.type)) {
+      if (result === null) await db.from("plan_step_private").delete().eq("step_id", stepId);
+      else {
+        const { error } = await db.from("plan_step_private").upsert({ step_id: stepId, result: asJson(result) });
+        if (error) throw error; // never fall back to the shared row
+        result = PRIVATE_RESULT_MARK;
+      }
+    }
+  }
+  await db
     .from("plan_steps")
     .update({
       ...(fields.status ? { status: fields.status } : {}),
-      ...(fields.result !== undefined ? { result: asJson(fields.result) } : {}),
+      ...(result !== undefined ? { result: asJson(result) } : {}),
       ...(fields.config !== undefined ? { config: asJson(fields.config) } : {}),
     })
     .eq("id", stepId);
