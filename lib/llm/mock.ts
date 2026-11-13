@@ -126,7 +126,7 @@ export class MockProvider implements LLMProvider {
         break;
       }
       case "route":
-        value = mockRoute(String(ctx.text ?? ""));
+        value = mockRoute(String(ctx.text ?? ""), String(ctx.quoted ?? ""));
         break;
       case "keywords":
         // The stand-in keeps the question's own words (no translation).

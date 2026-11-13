@@ -26,7 +26,7 @@ import { quoteContext, withReplyContext } from "@/lib/social/quote";
 import type { ReplyInfo } from "@/lib/social/quote-server";
 import { waysOf, waysText, type Way } from "@/lib/business/booking";
 import { routeRequest, researchWeb } from "@/lib/research";
-import { answerMessage } from "@/lib/research/answer";
+import { answerMessage, lookedUpNote } from "@/lib/research/answer";
 import { WHICH_PLACE, placeNote } from "@/lib/research/place";
 import { placeFor } from "@/lib/research/usual-place";
 import type { Proposal } from "./schemas";
@@ -78,7 +78,7 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
   const mentions = extractMentions(text).filter((h) => h !== agent.handle);
   if (mentions.length === 0) {
     // Public facts (weather, news, a score, a review) are looked up, with sources; everything else is a chat.
-    if (!(await answerFromWeb(agent, userId, conversationId, text, opts.here))) await replyToOwner(agent, userId, conversationId, text, replyCtx, opts.here);
+    if (!(await answerFromWeb(agent, userId, conversationId, text, opts.here, opts.reply?.text))) await replyToOwner(agent, userId, conversationId, text, replyCtx, opts.here);
     // A business named without its @ in a question: offer to ask its agent (only if you tap).
     return offerToAskBusiness(agent, conversationId, text);
   }
@@ -315,7 +315,15 @@ export async function updateDraft(taskId: string, userId: string, draft: PlanDra
  * with its sources (never from memory). Only a standalone question is sent out:
  * nothing from the owner's profile, plans or chats. False when it isn't one.
  */
-async function answerFromWeb(agent: AgentRow, userId: string, conversationId: string, text: string, here?: string | null): Promise<boolean> {
+async function answerFromWeb(
+  agent: AgentRow,
+  userId: string,
+  conversationId: string,
+  text: string,
+  here?: string | null,
+  /** ↩ Reply: the text of the message the owner replied to. It only helps complete the question; the search never sees it. */
+  quoted?: string | null,
+): Promise<boolean> {
   const db = adminClient();
   const say = (content: string, metadata: Record<string, unknown> = {}) => postMessage({ conversationId, from: "agent", agentId: agent.id, content, metadata });
   // "Which Castlevania do you mean?" → "Nocturne": the answer completes the question asked before.
@@ -325,7 +333,7 @@ async function answerFromWeb(agent: AgentRow, userId: string, conversationId: st
   const before = (last?.metadata ?? {}) as { kind?: string; research?: string; question?: string };
   const pending = before.kind === "research_answer" && before.research === "needs_clarification" && before.question ? before.question : null;
 
-  const route = pending ? { kind: "research" as const, question: `${pending} (${text.trim().slice(0, 200)})`, time: "none" as const, place: "" } : await routeRequest(text);
+  const route = pending ? { kind: "research" as const, question: `${pending} (${text.trim().slice(0, 200)})`, time: "none" as const, place: "" } : await routeRequest(text, quoted);
   if (route.kind !== "research" || !route.question.trim()) return false;
   const limit = await hit("researchPerUser", userId);
   if (!limit.allowed) {
@@ -339,9 +347,9 @@ async function answerFromWeb(agent: AgentRow, userId: string, conversationId: st
     return true;
   }
   const answer = await researchWeb({ question: where.question, time: route.time, place: where.place });
-  await say(`${where.assumed ? `${placeNote(where.assumed, where.now)}
-
-` : ""}${answerMessage(answer)}`, { kind: "research_answer", research: answer.status, question: route.question.slice(0, 500), sources: answer.sources.slice(0, 3) });
+  // What was taken from a quoted message is shown: the question that actually went out.
+  const notes = [quoted && !pending ? lookedUpNote(where.question) : "", where.assumed ? placeNote(where.assumed, where.now) : ""].filter(Boolean);
+  await say([...notes, answerMessage(answer)].join("\n\n"), { kind: "research_answer", research: answer.status, question: route.question.slice(0, 500), sources: answer.sources.slice(0, 3) });
   return true;
 }
 

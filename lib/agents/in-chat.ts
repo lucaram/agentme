@@ -8,7 +8,7 @@ import { composePlan } from "@/lib/coordination/orchestrator";
 import { CHAT_ASSIST_SYSTEM, wrapUntrusted } from "./prompts";
 import { parseAgentCommand, splitInline } from "./commands";
 import { routeRequest, researchWeb } from "@/lib/research";
-import { answerForDraft, answerMessage } from "@/lib/research/answer";
+import { answerForDraft, answerMessage, lookedUpNote } from "@/lib/research/answer";
 import { describeRetry, hit } from "@/lib/limits";
 import { WHICH_PLACE, placeNote } from "@/lib/research/place";
 import { placeFor } from "@/lib/research/usual-place";
@@ -95,7 +95,9 @@ export async function handleAgentCommand(opts: { userId: string; agent: AgentRow
 
   /** A question about public facts: looked up on the web (only the question is sent), offered as a draft. */
   const research = async (request: string): Promise<boolean> => {
-    const route = await routeRequest(request);
+    // ↩ Reply: the quoted message only helps complete the question ("what's the score?" → which match).
+    const quoted = opts.reply?.text;
+    const route = await routeRequest(request, quoted);
     if (route.kind !== "research" || !route.question.trim()) return false;
     const limit = await hit("researchPerUser", userId);
     if (!limit.allowed) {
@@ -110,11 +112,11 @@ export async function handleAgentCommand(opts: { userId: string; agent: AgentRow
     }
     const answer = await researchWeb({ question: where.question, time: route.time, place: where.place });
     const addition = answerForDraft(answer);
-    const note = where.assumed ? `${placeNote(where.assumed)}
-
-` : "";
-    if (!addition) await keepOwn(`${note}${answerMessage(answer)}`);
-    else await draftCard(withOwn(addition), `🔎 ${note}${answerMessage(answer)}`, { sources: answer.sources.slice(0, 3), research: answer.status });
+    // What was taken from a quoted message is shown: the question that actually went out.
+    const notes = [quoted ? lookedUpNote(where.question) : "", where.assumed ? placeNote(where.assumed) : ""].filter(Boolean);
+    const shown = [...notes, answerMessage(answer)].join("\n\n");
+    if (!addition) await keepOwn(shown);
+    else await draftCard(withOwn(addition), quoted ? shown : `🔎 ${shown}`, { sources: answer.sources.slice(0, 3), research: answer.status });
     return true;
   };
 

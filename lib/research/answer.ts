@@ -38,16 +38,22 @@ const NOW_HINT = /\b(weather|forecast|temperature|rain(ing)?|snow(ing)?|right no
 const RECENT_HINT = /\b(news|headlines?|latest|this week|notizie|ultime)\b/i;
 
 /** Deterministic stand-in for the router (tests, no API key). */
-export function mockRoute(text: string): Route {
+export function mockRoute(text: string, quoted = ""): Route {
+  // Whether it's a look-up is decided from the request itself; a quoted message only completes the subject.
   const research = RESEARCH_HINT.test(text);
-  const place = text.match(/\b(?:in|at|near|a|ad)\s+([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+)?)/u)?.[1] ?? "";
+  const about = quoted.trim().replace(/\s+/g, " ").slice(0, 120);
+  const placed = /\b(?:in|at|near|a|ad)\s+([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+)?)/u;
+  const place = text.match(placed)?.[1] ?? (research ? about.match(placed)?.[1] : undefined) ?? "";
   return {
     kind: research ? "research" : "chat",
-    question: research ? text.trim().slice(0, 300) : "",
+    question: research ? `${text.trim().slice(0, 300)}${about ? ` (about: ${about})` : ""}` : "",
     time: NOW_HINT.test(text) ? "now" : RECENT_HINT.test(text) ? "recent" : "none",
     place,
   };
 }
+
+/** Shown with an answer whose question was completed from a quoted message: what actually went to the search. */
+export const lookedUpNote = (question: string) => `🔎 Looked up: ${question.trim().replace(/\s+/g, " ").slice(0, 200)}`;
 
 export const WordsSchema = z.object({
   words: z.string().describe("3 to 8 words that the title or address of the page answering the question would contain, in the website's language. Names (people, products, titles) stay exactly as written. No filler words, no punctuation."),
