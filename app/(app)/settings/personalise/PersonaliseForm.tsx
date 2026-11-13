@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, type CSSProperties, type ReactNode } from "react";
-import { ACCENTS, DARK_STYLES, TEXT_SIZES, THEMES, appearanceAttributes, type Appearance } from "@/lib/appearance";
+import { ACCENTS, DARK_STYLES, TEXT_SIZES, THEMES, TINTS, appearanceAttributes, type Appearance } from "@/lib/appearance";
 import { saveAppearanceAction } from "./actions";
 
 const SECTION_TITLE = "text-xs font-semibold uppercase tracking-wide text-muted";
@@ -58,6 +58,14 @@ export function PersonaliseForm({ initial, name }: { initial: Appearance; name: 
           </div>
           <p className="hint">Buttons, links, highlights and your own messages. Red stays for warnings, and your agent&apos;s messages keep their own colour so you can always tell them apart.</p>
         </section>
+
+        <Choices
+          title="Background"
+          hint="Tinted adds a hint of your accent colour to the page and its cards. Text stays just as easy to read."
+          value={look.tint}
+          options={TINTS}
+          onPick={(tint) => change({ tint })}
+        />
 
         <Choices title="Text size" value={look.text} options={TEXT_SIZES} onPick={(text) => change({ text })} />
 

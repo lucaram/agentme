@@ -50,3 +50,49 @@ test("Personalise: theme, accent and text size apply at once, and follow you to 
   await context.close();
   await other.close();
 });
+
+test("Personalise: a tinted background takes a hint of the accent colour, and is remembered", async ({ browser }) => {
+  const context = await browser.newContext({ colorScheme: "light" });
+  const page = await context.newPage();
+  await page.goto("/login");
+  await page.getByLabel("Email").fill("eve@agentme.test");
+  await page.getByLabel("Password").fill("password123");
+  await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page).toHaveURL(/chats/);
+
+  await page.goto("/settings");
+  await page.getByTestId("personalise-link").click();
+  const html = page.locator("html");
+  const card = page.getByTestId("personalise-preview");
+  const cardColour = () => card.evaluate((el) => getComputedStyle(el).backgroundColor);
+  await expect(html).toHaveAttribute("data-tint", "plain");
+  const neutral = await cardColour();
+
+  // Tinted: the card and the page change colour at once; the choice is one of two, never a free colour.
+  await page.getByRole("radio", { name: "Tinted", exact: true }).click();
+  await expect(html).toHaveAttribute("data-tint", "tinted");
+  await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+  await expect.poll(cardColour).not.toBe(neutral);
+  const tinted = await cardColour();
+  // A different accent gives a different tint.
+  await page.getByRole("radio", { name: "Pink", exact: true }).click();
+  await expect(html).toHaveAttribute("data-accent", "pink");
+  await expect.poll(cardColour).not.toBe(tinted);
+
+  // Remembered after a reload, and named in Settings.
+  await page.reload();
+  await expect(html).toHaveAttribute("data-tint", "tinted");
+  await page.goto("/settings");
+  await expect(page.getByTestId("personalise-link")).toContainText("Tinted");
+
+  // Back to how the account was, for the other tests.
+  await page.getByTestId("personalise-link").click();
+  await page.getByRole("radio", { name: "Neutral", exact: true }).click();
+  await expect(html).toHaveAttribute("data-tint", "plain");
+  await page.getByRole("radio", { name: "Green", exact: true }).click();
+  await expect(html).toHaveAttribute("data-accent", "green");
+  await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Neutral", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect.poll(cardColour).toBe(neutral);
+  await context.close();
+});

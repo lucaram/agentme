@@ -31,44 +31,52 @@ export const DARK_STYLES = [
   { id: "black", label: "Black" },
 ] as const;
 
-type Id<T extends readonly { id: string }[]> = T[number]["id"];
-export type Appearance = { theme: Id<typeof THEMES>; accent: Id<typeof ACCENTS>; text: Id<typeof TEXT_SIZES>; dark: Id<typeof DARK_STYLES> };
+/** The page and cards: plain neutrals, or the same neutrals with a hint of the accent colour (a few percent, so text keeps its contrast). */
+export const TINTS = [
+  { id: "plain", label: "Neutral" },
+  { id: "tinted", label: "Tinted" },
+] as const;
 
-export const DEFAULT_APPEARANCE: Appearance = { theme: "system", accent: "green", text: "standard", dark: "dim" };
+type Id<T extends readonly { id: string }[]> = T[number]["id"];
+export type Appearance = { theme: Id<typeof THEMES>; accent: Id<typeof ACCENTS>; text: Id<typeof TEXT_SIZES>; dark: Id<typeof DARK_STYLES>; tint: Id<typeof TINTS> };
+
+export const DEFAULT_APPEARANCE: Appearance = { theme: "system", accent: "green", text: "standard", dark: "dim", tint: "plain" };
 /** Remembered on the device so the page is drawn in your colours straight away (no flash). */
 export const APPEARANCE_COOKIE = "agentme_look";
 
 const pick = <T extends readonly { id: string }[]>(list: T, value: unknown, fallback: Id<T>): Id<T> =>
   (list.some((o) => o.id === value) ? value : fallback) as Id<T>;
 
-/** From the cookie ("dark.blue.large.black"), the saved account value ({theme, …}) or anything else: always a valid appearance. */
+/** From the cookie ("dark.blue.large.black.tinted"; older ones have no last part), the saved account value ({theme, …}) or anything else: always a valid appearance. */
 export function parseAppearance(raw: unknown): Appearance {
   let v: Record<string, unknown> = {};
   if (typeof raw === "string") {
-    const [theme, accent, text, dark] = raw.split(".");
-    v = { theme, accent, text, dark };
+    const [theme, accent, text, dark, tint] = raw.split(".");
+    v = { theme, accent, text, dark, tint };
   } else if (raw && typeof raw === "object") v = raw as Record<string, unknown>;
   return {
     theme: pick(THEMES, v.theme, DEFAULT_APPEARANCE.theme),
     accent: pick(ACCENTS, v.accent, DEFAULT_APPEARANCE.accent),
     text: pick(TEXT_SIZES, v.text, DEFAULT_APPEARANCE.text),
     dark: pick(DARK_STYLES, v.dark, DEFAULT_APPEARANCE.dark),
+    tint: pick(TINTS, v.tint, DEFAULT_APPEARANCE.tint),
   };
 }
 
-export const serializeAppearance = (a: Appearance) => [a.theme, a.accent, a.text, a.dark].join(".");
+export const serializeAppearance = (a: Appearance) => [a.theme, a.accent, a.text, a.dark, a.tint].join(".");
 
 /** The attributes on <html> that the colour tokens in globals.css follow. */
-export const appearanceAttributes = (a: Appearance) => ({ "data-theme": a.theme, "data-accent": a.accent, "data-text": a.text, "data-dark": a.dark });
+export const appearanceAttributes = (a: Appearance) => ({ "data-theme": a.theme, "data-accent": a.accent, "data-text": a.text, "data-dark": a.dark, "data-tint": a.tint });
 
 const label = <T extends readonly { id: string; label: string }[]>(list: T, id: string) => list.find((o) => o.id === id)?.label ?? id;
 
-/** "Dark · Blue · Large text" (+ "· Black" when the black dark style can apply). */
+/** "Dark · Blue · Large text" (+ "· Black" when the black dark style can apply, "· Tinted" for a tinted background). */
 export function appearanceSummary(a: Appearance): string {
   return [
     label(THEMES, a.theme),
     label(ACCENTS, a.accent),
     `${label(TEXT_SIZES, a.text)} text`,
     ...(a.dark === "black" && a.theme !== "light" ? ["Black"] : []),
+    ...(a.tint === "tinted" ? ["Tinted"] : []),
   ].join(" · ");
 }
