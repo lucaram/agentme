@@ -230,9 +230,6 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
     await report();
   }
 
-  // The address index: every page the site lists, so pages this scan didn't read can be found when asked about.
-  await indexSite(agentId, homeUrl, [...seen, ...queue]).catch(() => 0);
-
   // Pages no longer on the website go (a page that just failed to load this time stays).
   const gone = (rows ?? []).filter((r) => r.origin === "site" && !seen.has(r.url));
   if (gone.length) {
@@ -272,6 +269,10 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
       reading_started_at: null,
     })
     .eq("agent_id", agentId);
+
+  // Last, once the owner can already review: the address index (the newest pages the site lists), so pages
+  // this scan didn't read can be found when asked about. On a very big site this takes a minute or two.
+  await indexSite(agentId, homeUrl, [...seen, ...queue]).catch(() => 0);
 }
 
 /** The basics, facts and likely questions, from the key pages first. */

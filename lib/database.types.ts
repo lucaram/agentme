@@ -197,14 +197,14 @@ isOneToOne: false
                   ]
                 },"business_site_index": {
                   Row: {
-                    "agent_id": string,"fts": unknown,"lastmod": string | null,"url": string,"words": string
+                    "agent_id": string,"fts": unknown,"indexed_at": string,"lastmod": string | null,"url": string,"words": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "agent_id": string,"fts"?: never,"lastmod"?: string | null,"url": string,"words": string
+                    "agent_id": string,"fts"?: never,"indexed_at"?: string,"lastmod"?: string | null,"url": string,"words": string
                   }
                   Update: {
-                    "agent_id"?: string,"fts"?: never,"lastmod"?: string | null,"url"?: string,"words"?: string
+                    "agent_id"?: string,"fts"?: never,"indexed_at"?: string,"lastmod"?: string | null,"url"?: string,"words"?: string
                   }
                   Relationships: [
                     {
@@ -1055,6 +1055,11 @@ isOneToOne: false
                            },
 "renew_task_lease":
 { Args: { "p_lease_seconds": number,"p_task": string,"p_token": string }; Returns: boolean
+                           },
+"search_site_index":
+{ Args: { "p_agent": string,"p_limit"?: number,"p_query": string }; Returns: {
+              "lastmod": string,"url": string,"words": string
+            }[]
                            },
 "task_thread_title":
 { Args: { "p_task": string }; Returns: string
