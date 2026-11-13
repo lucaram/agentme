@@ -27,6 +27,7 @@ import { claimItem, closePollStep, respondRsvp, unclaimItem, votePoll } from "@/
 import { changePlan, type ChangeInputT } from "@/lib/plans/change";
 import { withUsageContext } from "@/lib/usage/context";
 import { summonsAgent } from "@/lib/agents/commands";
+import { townAt } from "@/lib/geo";
 import { handleAgentCommand } from "@/lib/agents/in-chat";
 import { sendContactRequest } from "@/lib/people/requests";
 import { tellOwner } from "@/lib/requests/notify";
@@ -59,7 +60,7 @@ export async function sendMessage(
   text: string,
   threadId?: string | null,
   /** Community: the author chose "Post anyway" after a nudge. replyTo: ↩ Reply to this earlier message in the chat. */
-  options: { confirmed?: boolean; replyTo?: string | null } = {},
+  options: { confirmed?: boolean; replyTo?: string | null; /** My Agent, "📍 Near me now": the sender's position, for this message only (never stored). */ here?: { lat: number; lon: number } | null } = {},
 ): Promise<{ error?: string; threadId?: string; nudge?: { rule: string; message: string }; appealId?: string }> {
   const { user, agent } = await requireAgent();
   const content = text.trim().slice(0, 4000);
@@ -112,7 +113,8 @@ export async function sendMessage(
   await withUsageContext({ userId: user.id, agentId: agent.id }, async () => {
     if (conv.kind === "my_agent" && thread) {
       await withThread({ conversationId, threadId: thread }, async () => {
-        await handleOwnerMessage({ userId: user.id, agent, conversationId, text: content, reply });
+        // "📍 Near me now": the position becomes the nearest town here, on our server; only the town is used.
+        await handleOwnerMessage({ userId: user.id, agent, conversationId, text: content, reply, here: townAt(options.here) });
         // "I'm vegetarian now": offer to remember it (nothing is saved until you tap Save).
         await offerProfileSave(agent, conversationId, content);
       });

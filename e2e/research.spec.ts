@@ -66,6 +66,29 @@ test("no place named: your agent uses the town where you usually are, and asks w
   await marco.close();
 });
 
+test("📍 Near me now: where you are is used for one message, as a town, and then forgotten", async ({ browser }) => {
+  // Paul has no usual place saved. His browser says he's in Falkirk.
+  const context = await browser.newContext({ geolocation: { latitude: 56.0019, longitude: -3.7839 }, permissions: ["geolocation"] });
+  const page = await context.newPage();
+  await page.goto("/login");
+  await page.getByLabel("Email").fill("paul@agentme.test");
+  await page.getByLabel("Password").fill("password123");
+  await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page).toHaveURL(/\/chats/);
+  await page.getByRole("link", { name: /My Agent/ }).click();
+  await expect(page.getByRole("heading", { name: "My Agent" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Near me now" }).click();
+  await expect(page.getByTestId("near-me")).toContainText("for this message only");
+  await send(page, "What's the weather?");
+  await expect(page.getByText("📍 For Falkirk, United Kingdom, where you are now.")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("In Falkirk it's 12°C with light rain right now.")).toBeVisible();
+  // One message only: the next one doesn't carry it.
+  await expect(page.getByTestId("near-me")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Near me now" })).toHaveAttribute("aria-pressed", "false");
+  await context.close();
+});
+
 test("@agent inside a message: your own words plus what it found, as a private draft you send once", async ({ browser }) => {
   const luca = await as(browser, "luca");
   await luca.page.getByRole("link", { name: /^👥 Dinner — Italian/ }).click();

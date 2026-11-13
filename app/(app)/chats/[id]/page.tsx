@@ -476,6 +476,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
       ) : (
       <Composer
         conversationId={id}
+        nearMe={isMyAgent}
         threadId={isMyAgent ? (thread && thread.kind === "request" ? thread.id : "new") : undefined}
         placeholder={
           conv.kind === "my_agent"

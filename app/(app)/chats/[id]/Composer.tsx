@@ -17,7 +17,10 @@ export function Composer({
   examples,
   examplesHint,
   collapseExamples = false,
+  nearMe = false,
 }: {
+  /** My Agent: a 📍 button to use where you are right now for one message (weather, "near me"). */
+  nearMe?: boolean;
   conversationId: string;
   /** My Agent: the request thread this box belongs to ("new" starts one, then opens it). */
   threadId?: string;
@@ -42,6 +45,29 @@ export function Composer({
   const [appeal, setAppeal] = useState<{ id: string; sent: boolean } | null>(null);
   /** ↩ Reply: the message this one will quote (set from a message's ↩). */
   const replying = useReply(conversationId);
+  /** 📍 Near me now: your position, attached to the next message only (never saved). */
+  const [here, setHere] = useState<{ lat: number; lon: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+
+  function toggleHere() {
+    if (here) return setHere(null);
+    if (!("geolocation" in navigator)) return setError("This browser can't share your location.");
+    setError(null);
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setLocating(false);
+        // About a kilometre is plenty to find your town; the exact spot isn't sent.
+        setHere({ lat: Math.round(p.coords.latitude * 100) / 100, lon: Math.round(p.coords.longitude * 100) / 100 });
+        ref.current?.focus();
+      },
+      (e) => {
+        setLocating(false);
+        setError(e.code === e.PERMISSION_DENIED ? "Location is turned off for this site. Allow it in your browser, or name the place in your message." : "Couldn't find where you are. Name the place in your message instead.");
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 300_000 },
+    );
+  }
 
   /** Grow with the text (like ChatGPT/Claude), up to about 8 lines; then scroll. */
   function fit() {
@@ -62,7 +88,9 @@ export function Composer({
     setError(null);
     setSummoned(summonsAgent(text));
     startTransition(async () => {
-      const result = await sendMessage(conversationId, text, threadId, { confirmed, replyTo: replying?.id ?? null });
+      const result = await sendMessage(conversationId, text, threadId, { confirmed, replyTo: replying?.id ?? null, here });
+      // Your location was for this one message.
+      if (!result?.error) setHere(null);
       // Sent (or handed to the agent): the quote is done. Kept when it comes back (nudge or error).
       if (!result?.nudge && !result?.error) setReply(null);
       if (result?.nudge) {
@@ -129,6 +157,14 @@ export function Composer({
           </div>
         </div>
       )}
+      {here && (
+        <p className="mb-1 text-xs text-muted" data-testid="near-me">
+          📍 Using where you are now, for this message only. Only the town is used; your position isn&apos;t saved.{" "}
+          <button type="button" className="font-medium text-accent hover:underline" onClick={() => setHere(null)}>
+            Remove
+          </button>
+        </p>
+      )}
       {error && <p className="mb-1 text-xs text-danger" role="alert">{error}</p>}
       {appeal && (
         <p className="mb-1 text-xs text-muted" data-testid="appeal">
@@ -189,6 +225,19 @@ export function Composer({
             if (e.key === "Escape" && replying) setReply(null);
           }}
         />
+        {nearMe && (
+          <button
+            type="button"
+            aria-label="Near me now"
+            aria-pressed={Boolean(here)}
+            title={here ? "Using where you are now for this message (tap to remove)" : "Use where I am now for this message"}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg transition hover:bg-accent-soft disabled:opacity-50 ${here ? "bg-accent-soft ring-1 ring-accent" : ""}`}
+            disabled={pending || locating}
+            onClick={toggleHere}
+          >
+            {locating ? "…" : "📍"}
+          </button>
+        )}
         <button
           aria-label="Send"
           title="Send (Enter) · New line: Shift+Enter"

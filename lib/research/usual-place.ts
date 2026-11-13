@@ -8,7 +8,15 @@ import { dependsOnPlace, townOf, withPlace } from "./place";
  * Privacy). This is the one thing from the profile that goes out with a
  * search, and only the town. `ask`: no place to use, so ask instead of searching.
  */
-export async function placeFor(agent: Pick<AgentRow, "id" | "lookup_place">, text: string, route: { question: string; place: string }): Promise<{ question: string; place: string; assumed: string | null; ask: boolean }> {
+export async function placeFor(
+  agent: Pick<AgentRow, "id" | "lookup_place">,
+  text: string,
+  route: { question: string; place: string },
+  /** "📍 Near me now": the town the owner is in right now, shared for this one message. */
+  here?: string | null,
+): Promise<{ question: string; place: string; assumed: string | null; ask: boolean; now?: boolean }> {
+  // A place named in the question always wins; then where they are now (they attached it on purpose).
+  if (!route.place && here) return { question: withPlace(route.question, here), place: here, assumed: here, ask: false, now: true };
   if (route.place || !dependsOnPlace(text)) return { question: route.question, place: route.place, assumed: null, ask: false };
   const saved = agent.lookup_place === false ? null : (await getFacts(agent.id)).find((f) => f.category === "location")?.value;
   const town = saved ? townOf(saved) : null;

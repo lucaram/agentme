@@ -48,7 +48,7 @@ function errorText(error: unknown) {
  * question) that needs explicit approval before anything is sent, or reply
  * directly (general chat, or recall of their own plans).
  */
-export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow; conversationId: string; text: string; reply?: ReplyInfo | null }) {
+export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow; conversationId: string; text: string; reply?: ReplyInfo | null; /** "📍 Near me now": the town the owner is in, for this message only. */ here?: string | null }) {
   const { userId, agent, conversationId, text } = opts;
   await postMessage({ conversationId, from: "human", userId, content: text, replyTo: opts.reply?.id });
   // ↩ Reply: what the owner is replying to, for the agent (as data).
@@ -78,7 +78,7 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
   const mentions = extractMentions(text).filter((h) => h !== agent.handle);
   if (mentions.length === 0) {
     // Public facts (weather, news, a score, a review) are looked up, with sources; everything else is a chat.
-    if (!(await answerFromWeb(agent, userId, conversationId, text))) await replyToOwner(agent, userId, conversationId, text, replyCtx);
+    if (!(await answerFromWeb(agent, userId, conversationId, text, opts.here))) await replyToOwner(agent, userId, conversationId, text, replyCtx, opts.here);
     // A business named without its @ in a question: offer to ask its agent (only if you tap).
     return offerToAskBusiness(agent, conversationId, text);
   }
@@ -315,7 +315,7 @@ export async function updateDraft(taskId: string, userId: string, draft: PlanDra
  * with its sources (never from memory). Only a standalone question is sent out:
  * nothing from the owner's profile, plans or chats. False when it isn't one.
  */
-async function answerFromWeb(agent: AgentRow, userId: string, conversationId: string, text: string): Promise<boolean> {
+async function answerFromWeb(agent: AgentRow, userId: string, conversationId: string, text: string, here?: string | null): Promise<boolean> {
   const db = adminClient();
   const say = (content: string, metadata: Record<string, unknown> = {}) => postMessage({ conversationId, from: "agent", agentId: agent.id, content, metadata });
   // "Which Castlevania do you mean?" → "Nocturne": the answer completes the question asked before.
@@ -333,20 +333,20 @@ async function answerFromWeb(agent: AgentRow, userId: string, conversationId: st
     return true;
   }
   // No place named for something that depends on it: the town where the owner usually is (only the town goes out).
-  const where = pending ? { question: route.question, place: route.place, assumed: null, ask: false } : await placeFor(agent, text, route);
+  const where = pending ? { question: route.question, place: route.place, assumed: null, ask: false } : await placeFor(agent, text, route, here);
   if (where.ask) {
     await say(WHICH_PLACE);
     return true;
   }
   const answer = await researchWeb({ question: where.question, time: route.time, place: where.place });
-  await say(`${where.assumed ? `${placeNote(where.assumed)}
+  await say(`${where.assumed ? `${placeNote(where.assumed, where.now)}
 
 ` : ""}${answerMessage(answer)}`, { kind: "research_answer", research: answer.status, question: route.question.slice(0, 500), sources: answer.sources.slice(0, 3) });
   return true;
 }
 
 /** Direct reply from the owner's own agent, with Recall of the plans the owner can see. */
-async function replyToOwner(agent: AgentRow, userId: string, conversationId: string, text: string, replyCtx?: string) {
+async function replyToOwner(agent: AgentRow, userId: string, conversationId: string, text: string, replyCtx?: string, here?: string | null) {
   const db = adminClient();
   // Only this request's thread: a new request starts with a clean slate.
   const thread = threadFor(conversationId);
@@ -378,7 +378,7 @@ async function replyToOwner(agent: AgentRow, userId: string, conversationId: str
     reply = await llm().generateText({
       purpose: "owner_chat",
       tier: "smart",
-      system: `${OWNER_CHAT_SYSTEM}\nYour owner is ${agent.display_name} (@${agent.handle}). Today is ${new Date().toDateString()}.${recallBlock}${profileBlock}`,
+      system: `${OWNER_CHAT_SYSTEM}\nYour owner is ${agent.display_name} (@${agent.handle}). Today is ${new Date().toDateString()}.${here ? ` Right now your owner is in or near ${here} (they shared it for this message only: use it, never repeat it to anyone else).` : ""}${recallBlock}${profileBlock}`,
       messages: turns.length ? turns : [{ role: "user", content: `${text}${replyBlock}` }],
       maxTokens: 2000,
       mockContext: { text, recall },
