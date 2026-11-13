@@ -27,6 +27,8 @@ import type { ReplyInfo } from "@/lib/social/quote-server";
 import { waysOf, waysText, type Way } from "@/lib/business/booking";
 import { routeRequest, researchWeb } from "@/lib/research";
 import { answerMessage } from "@/lib/research/answer";
+import { WHICH_PLACE, placeNote } from "@/lib/research/place";
+import { placeFor } from "@/lib/research/usual-place";
 import type { Proposal } from "./schemas";
 
 export type { TaskParsed } from "@/lib/plans/types";
@@ -330,8 +332,16 @@ async function answerFromWeb(agent: AgentRow, userId: string, conversationId: st
     await say(`You've looked up a lot in the last hour. Try again in ${describeRetry(limit.retryAfterSeconds)}.`);
     return true;
   }
-  const answer = await researchWeb({ question: route.question, time: route.time, place: route.place });
-  await say(answerMessage(answer), { kind: "research_answer", research: answer.status, question: route.question.slice(0, 500), sources: answer.sources.slice(0, 3) });
+  // No place named for something that depends on it: the town where the owner usually is (only the town goes out).
+  const where = pending ? { question: route.question, place: route.place, assumed: null, ask: false } : await placeFor(agent, text, route);
+  if (where.ask) {
+    await say(WHICH_PLACE);
+    return true;
+  }
+  const answer = await researchWeb({ question: where.question, time: route.time, place: where.place });
+  await say(`${where.assumed ? `${placeNote(where.assumed)}
+
+` : ""}${answerMessage(answer)}`, { kind: "research_answer", research: answer.status, question: route.question.slice(0, 500), sources: answer.sources.slice(0, 3) });
   return true;
 }
 

@@ -479,6 +479,7 @@ export async function saveSettings(form: FormData) {
       ...(groupPolicy.success ? { group_add_policy: groupPolicy.data } : {}),
       // A checkbox sends nothing when unticked: only trust its absence when the form section was there.
       ...(form.get("recommendations_form") ? { recommendations_ok: form.get("recommendations_ok") === "on" } : {}),
+      ...(form.get("lookup_form") ? { lookup_place: form.get("lookup_place") === "on" } : {}),
       ...(displayName ? { display_name: displayName } : {}),
       ...(avatar ? { avatar } : {}),
     })

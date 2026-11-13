@@ -10,6 +10,8 @@ import { parseAgentCommand, splitInline } from "./commands";
 import { routeRequest, researchWeb } from "@/lib/research";
 import { answerForDraft, answerMessage } from "@/lib/research/answer";
 import { describeRetry, hit } from "@/lib/limits";
+import { WHICH_PLACE, placeNote } from "@/lib/research/place";
+import { placeFor } from "@/lib/research/usual-place";
 import { quoteContext } from "@/lib/social/quote";
 import type { ReplyInfo } from "@/lib/social/quote-server";
 
@@ -100,10 +102,19 @@ export async function handleAgentCommand(opts: { userId: string; agent: AgentRow
       await keepOwn(`You've looked up a lot in the last hour. Try again in ${describeRetry(limit.retryAfterSeconds)}.`);
       return true;
     }
-    const answer = await researchWeb({ question: route.question, time: route.time, place: route.place });
+    // No place named for something that depends on it: the town where the owner usually is (only the town goes out).
+    const where = await placeFor(agent, request, route);
+    if (where.ask) {
+      await keepOwn(WHICH_PLACE);
+      return true;
+    }
+    const answer = await researchWeb({ question: where.question, time: route.time, place: where.place });
     const addition = answerForDraft(answer);
-    if (!addition) await keepOwn(answerMessage(answer));
-    else await draftCard(withOwn(addition), `🔎 ${answerMessage(answer)}`, { sources: answer.sources.slice(0, 3), research: answer.status });
+    const note = where.assumed ? `${placeNote(where.assumed)}
+
+` : "";
+    if (!addition) await keepOwn(`${note}${answerMessage(answer)}`);
+    else await draftCard(withOwn(addition), `🔎 ${note}${answerMessage(answer)}`, { sources: answer.sources.slice(0, 3), research: answer.status });
     return true;
   };
 
