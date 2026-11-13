@@ -167,6 +167,7 @@ export async function handleAgentCommand(opts: { userId: string; agent: AgentRow
         userId,
         agent,
         text: command.request,
+        quoted: opts.reply?.text,
         participants: others,
         chatMembers: others,
         say: (content) => reply(content),
