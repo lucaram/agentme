@@ -47,7 +47,7 @@ export function withPlace(question: string, town: string): string {
 }
 
 /** Shown with the answer, so a wrong assumption is visible. */
-export const placeNote = (town: string) => `📍 For ${town}, where you usually are.`;
+export const placeNote = (town: string, now = false) => `📍 For ${town}, where you ${now ? "are now" : "usually are"}.`;
 
 /** No place named and none saved (or the owner turned this off). */
 export const WHICH_PLACE = "Which place do you mean? Tell me the town, or save where you usually are in Settings → What your agent knows and I'll use it when you don't say.";

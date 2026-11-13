@@ -68,7 +68,7 @@ export async function MyAgentHome({ conversationId, examples, now }: { conversat
       </div>
 
       <div className="flex-1" />
-      <Composer conversationId={conversationId} threadId="new" placeholder="Start a new request, e.g. Arrange dinner with @marco on Saturday evening" thinkingLabel="Agent is thinking…" examples={examples} collapseExamples={(requestsMade ?? 0) >= 3} />
+      <Composer conversationId={conversationId} threadId="new" nearMe placeholder="Start a new request, e.g. Arrange dinner with @marco on Saturday evening" thinkingLabel="Agent is thinking…" examples={examples} collapseExamples={(requestsMade ?? 0) >= 3} />
     </div>
   );
 }
