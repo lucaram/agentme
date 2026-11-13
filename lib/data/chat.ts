@@ -87,6 +87,8 @@ type NewMessage = {
   visibleTo?: string;
   /** My Agent thread (otherwise the thread the owner is typing in; the database files the rest). */
   threadId?: string;
+  /** ↩ Reply: the earlier message in this chat being quoted (checked by the caller). */
+  replyTo?: string | null;
 } & (
   | { from: "human"; userId: string }
   | { from: "agent"; agentId: string }
@@ -106,6 +108,7 @@ export async function postMessage(msg: NewMessage): Promise<MessageRow> {
       is_ai_generated: msg.from === "agent",
       visible_to: msg.visibleTo ?? null,
       thread_id: msg.threadId ?? threadFor(msg.conversationId),
+      reply_to: msg.replyTo ?? null,
     })
     .select("*")
     .single();

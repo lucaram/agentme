@@ -132,7 +132,7 @@ test("communities: create, join by accepting the rules, Announcements vs General
   await expect(luca.page.getByRole("listitem").filter({ hasText: "Ref was an idiot today" }).getByTestId("flag-disrespectful")).toBeVisible();
   const message = luca.page.getByRole("listitem").filter({ hasText: "Hello fans!" });
   await message.getByLabel("Message options").click();
-  await message.getByRole("button", { name: /Remove for everyone/ }).click();
+  await message.getByRole("button", { name: /Delete/ }).click();
   await expect(luca.page.getByTestId("removed-message").filter({ hasText: "removed by a moderator" })).toBeVisible();
   await luca.close();
   await eve.close();
@@ -221,4 +221,52 @@ test("community autopilot: a message kept out can be appealed; a moderator accep
   await expect(paul.page.getByRole("listitem").filter({ hasText: "Click here for free money: tickets giveaway" })).toBeVisible();
   await luca.close();
   await paul.close();
+});
+
+test("↩ Reply: quote a message, jump to it, let @agent use it, and a removed original says so", async ({ browser }) => {
+  const name = `Reply test ${suffix()}`;
+  const luca = await as(browser, "luca");
+  await luca.page.getByRole("navigation").getByRole("link", { name: "Groups" }).click();
+  await luca.page.getByRole("button", { name: "＋ New group" }).click();
+  const form = luca.page.getByRole("form", { name: "New group" });
+  await form.getByLabel("Group name").fill(name);
+  await form.getByRole("combobox", { name: "Search contacts" }).fill("mar");
+  await form.getByRole("option", { name: /Marco/ }).click();
+  await form.getByRole("button", { name: "Create group" }).click();
+  await expect(luca.page.getByRole("heading", { name })).toBeVisible();
+  const chatUrl = luca.page.url().replace("/groups/", "/chats/");
+  await luca.page.goto(chatUrl);
+  await send(luca.page, "Pitch is booked for 7pm");
+  await expect(luca.page.getByRole("listitem").filter({ hasText: "Pitch is booked for 7pm" })).toBeVisible();
+
+  // Marco replies to it: the box shows what he's replying to; his message carries the quote.
+  const marco = await as(browser, "marco");
+  await marco.page.goto(chatUrl);
+  const original = marco.page.getByRole("listitem").filter({ hasText: "Pitch is booked for 7pm" }).first();
+  await original.getByLabel("Message options").click();
+  await original.getByRole("button", { name: "↩ Reply" }).click();
+  await expect(marco.page.getByTestId("replying-to")).toContainText("Replying to Luca");
+  await send(marco.page, "Great, I'll bring the ball");
+  await expect(marco.page.getByTestId("replying-to")).toHaveCount(0);
+  const reply = marco.page.getByRole("listitem").filter({ hasText: "Great, I'll bring the ball" });
+  await expect(reply.getByTestId("quote")).toContainText("Luca");
+  await expect(reply.getByTestId("quote")).toContainText("Pitch is booked for 7pm");
+  // Tapping the quote jumps to the original, which flashes.
+  await reply.getByTestId("quote").click();
+  await expect(marco.page.locator("li.reply-flash")).toContainText("Pitch is booked for 7pm");
+
+  // "@agent translate" about one message: the quoted one (privately).
+  await original.getByLabel("Message options").click();
+  await original.getByRole("button", { name: "↩ Reply" }).click();
+  await send(marco.page, "@agent translate to Italian");
+  await expect(marco.page.getByTestId("private-message").filter({ hasText: "Italian:" }).last()).toContainText("Pitch is booked for 7pm");
+
+  // Luca removes his message: the quote says so (it isn't kept alive by replies).
+  await luca.page.reload();
+  const mine = luca.page.getByRole("listitem").filter({ hasText: "Pitch is booked for 7pm" }).first();
+  await mine.getByLabel("Message options").click();
+  await mine.getByRole("button", { name: /Delete/ }).click();
+  await marco.page.reload();
+  await expect(marco.page.getByRole("listitem").filter({ hasText: "Great, I'll bring the ball" }).getByTestId("quote")).toContainText("Original message removed");
+  await Promise.all([luca.close(), marco.close()]);
 });

@@ -42,6 +42,8 @@ import { renameThread, resolveThread } from "@/lib/agents/threads";
 import { withThread } from "@/lib/agents/thread-context";
 import { answerSuggestion, offerProfileSave } from "@/lib/profile/offer";
 import { answerBusinessSuggestion } from "@/lib/agents/ask-business";
+import { resolveReply } from "@/lib/social/quote-server";
+import { quoteContext } from "@/lib/social/quote";
 import { businessesOnlyOwnedBy, forgetPerson, realPerson, signInAs } from "@/lib/identities";
 
 const Id = z.uuid();
@@ -56,8 +58,8 @@ export async function sendMessage(
   conversationId: string,
   text: string,
   threadId?: string | null,
-  /** Community: the author chose "Post anyway" after a nudge. */
-  options: { confirmed?: boolean } = {},
+  /** Community: the author chose "Post anyway" after a nudge. replyTo: ↩ Reply to this earlier message in the chat. */
+  options: { confirmed?: boolean; replyTo?: string | null } = {},
 ): Promise<{ error?: string; threadId?: string; nudge?: { rule: string; message: string }; appealId?: string }> {
   const { user, agent } = await requireAgent();
   const content = text.trim().slice(0, 4000);
@@ -70,6 +72,10 @@ export async function sendMessage(
     const { state } = await dmState(conversationId, user.id, agent.id);
     if (state !== "open") return { error: DM_CLOSED[state] };
   }
+
+  // ↩ Reply: only a message in this chat that everyone here can see (otherwise it's sent without the quote).
+  const reply = await resolveReply(conversationId, options.replyTo);
+  const replyContext = reply ? quoteContext(reply.author, reply.text) : undefined;
 
   // "@agent ..." in a group, DM or community chat summons the sender's own agent (privately).
   const summoned = (conv.kind === "group" || conv.kind === "dm" || conv.kind === "channel") && isAgentCommand(content);
@@ -93,7 +99,7 @@ export async function sendMessage(
     const guard = await guardCommunityPost(conv.community_id, user.id, content, { resend: Boolean(options.confirmed) });
     if (!guard.ok) return { error: guard.error };
     // Autopilot: an AI check against the community's rules; code decides (refuse, nudge, or post).
-    const auto = await autopilot({ communityId: conv.community_id, conversationId, userId: user.id, text: content, level: guard.level, confirmed: Boolean(options.confirmed) });
+    const auto = await autopilot({ communityId: conv.community_id, conversationId, userId: user.id, text: content, level: guard.level, confirmed: Boolean(options.confirmed), replyingTo: replyContext });
     if (auto.action === "refuse") return { error: auto.message, ...(auto.eventId ? { appealId: auto.eventId } : {}) };
     if (auto.action === "nudge") return { nudge: { rule: auto.rule, message: auto.message } };
     flags = [...new Set([...guard.flags, ...auto.flags])];
@@ -105,19 +111,19 @@ export async function sendMessage(
   await withUsageContext({ userId: user.id, agentId: agent.id }, async () => {
     if (conv.kind === "my_agent" && thread) {
       await withThread({ conversationId, threadId: thread }, async () => {
-        await handleOwnerMessage({ userId: user.id, agent, conversationId, text: content });
+        await handleOwnerMessage({ userId: user.id, agent, conversationId, text: content, reply });
         // "I'm vegetarian now": offer to remember it (nothing is saved until you tap Save).
         await offerProfileSave(agent, conversationId, content);
       });
     } else if (conv.kind === "agent_chat") {
-      await askAgent({ userId: user.id, agent, conversationId, text: content });
+      await askAgent({ userId: user.id, agent, conversationId, text: content, reply });
     } else if (summoned) {
-      await handleAgentCommand({ userId: user.id, agent, conversation: conv, text: content });
+      await handleAgentCommand({ userId: user.id, agent, conversation: conv, text: content, reply });
     } else {
-      await postMessage({ conversationId, from: "human", userId: user.id, content, ...(flags.length ? { metadata: { flags } } : {}) });
+      await postMessage({ conversationId, from: "human", userId: user.id, content, replyTo: reply?.id, ...(flags.length ? { metadata: { flags } } : {}) });
       // Businesses placed in this group or community answer when @mentioned (after the reply is sent).
       if (conv.kind === "group" || conv.kind === "channel") {
-        after(() => withUsageContext({ userId: user.id, agentId: agent.id }, () => answerMentions({ conversation: conv, userId: user.id, agent, text: content })));
+        after(() => withUsageContext({ userId: user.id, agentId: agent.id }, () => answerMentions({ conversation: conv, userId: user.id, agent, text: content, replyContext })));
       }
     }
   });

@@ -34,7 +34,8 @@ async function logEvent(e: Event): Promise<string | null> {
 }
 
 /** The AI check of one message against the community's own description and rules. Fails open (posts) if the check is unavailable. */
-export async function checkAgainstRules(communityId: string, text: string): Promise<Moderation | null> {
+/** replyingTo: the message this one replies to (context, e.g. to spot a reply aimed at someone). */
+export async function checkAgainstRules(communityId: string, text: string, replyingTo?: string): Promise<Moderation | null> {
   const { data: community } = await adminClient().from("communities").select("name, description, rules, house_rules, language").eq("id", communityId).maybeSingle();
   if (!community) return null;
   try {
@@ -45,7 +46,7 @@ export async function checkAgainstRules(communityId: string, text: string): Prom
       messages: [
         {
           role: "user",
-          content: `<community>\nName: ${community.name}\nAbout: ${community.description ?? ""}\nRules:\n${community.rules ?? "Be respectful. No spam or selling. Stay on topic."}\n</community>\n\n${wrapUntrusted("untrusted_message", text.slice(0, 2000))}`,
+          content: `<community>\nName: ${community.name}\nAbout: ${community.description ?? ""}\nRules:\n${community.rules ?? "Be respectful. No spam or selling. Stay on topic."}\n</community>\n\n${replyingTo ? `${wrapUntrusted("replying_to", replyingTo.slice(0, 1000))}\n\n` : ""}${wrapUntrusted("untrusted_message", text.slice(0, 2000))}`,
         },
       ],
       schema: ModerationSchema,
@@ -66,9 +67,9 @@ export type AutopilotOutcome = Decision & { flags: string[]; eventId?: string | 
  * the AI check (most trouble comes from new accounts, and it saves cost).
  * `confirmed`: the author chose "Post anyway" after a nudge.
  */
-export async function autopilot(opts: { communityId: string; conversationId: string; userId: string; text: string; level: TrustLevel; confirmed: boolean }): Promise<AutopilotOutcome> {
+export async function autopilot(opts: { communityId: string; conversationId: string; userId: string; text: string; level: TrustLevel; confirmed: boolean; replyingTo?: string }): Promise<AutopilotOutcome> {
   if (opts.level === "trusted" || opts.level === "moderator") return { action: "post", flags: [] };
-  const m = await checkAgainstRules(opts.communityId, opts.text);
+  const m = await checkAgainstRules(opts.communityId, opts.text, opts.replyingTo);
   if (!m) return { action: "post", flags: [] };
   const decision = decide(m);
   const base = { communityId: opts.communityId, conversationId: opts.conversationId, userId: opts.userId, m, text: opts.text };

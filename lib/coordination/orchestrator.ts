@@ -22,6 +22,8 @@ import { displayClock } from "./heuristics";
 import { threadFor } from "@/lib/agents/thread-context";
 import { askBusinessesFor, offerToAskBusiness } from "@/lib/agents/ask-business";
 import { asksToPassOn, claimsAction, honestReply, passOnReply } from "@/lib/agents/honesty";
+import { quoteContext, withReplyContext } from "@/lib/social/quote";
+import type { ReplyInfo } from "@/lib/social/quote-server";
 import { waysOf, waysText, type Way } from "@/lib/business/booking";
 import type { Proposal } from "./schemas";
 
@@ -42,9 +44,11 @@ function errorText(error: unknown) {
  * question) that needs explicit approval before anything is sent, or reply
  * directly (general chat, or recall of their own plans).
  */
-export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow; conversationId: string; text: string }) {
+export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow; conversationId: string; text: string; reply?: ReplyInfo | null }) {
   const { userId, agent, conversationId, text } = opts;
-  await postMessage({ conversationId, from: "human", userId, content: text });
+  await postMessage({ conversationId, from: "human", userId, content: text, replyTo: opts.reply?.id });
+  // ↩ Reply: what the owner is replying to, for the agent (as data).
+  const replyCtx = opts.reply ? quoteContext(opts.reply.author, opts.reply.text) : undefined;
 
   // "introduce @luca to @paul": the owner's own instruction, so it goes out straight away.
   const intro = parseIntroduceCommand(text);
@@ -69,14 +73,14 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
 
   const mentions = extractMentions(text).filter((h) => h !== agent.handle);
   if (mentions.length === 0) {
-    await replyToOwner(agent, userId, conversationId, text);
+    await replyToOwner(agent, userId, conversationId, text, replyCtx);
     // A business named without its @ in a question: offer to ask its agent (only if you tap).
     return offerToAskBusiness(agent, conversationId, text);
   }
   // Only businesses mentioned ("@everyeye who do I contact?"): your agent asks them for you.
   const known = (await Promise.all(mentions.map((h) => getAgentByHandle(h)))).filter((a): a is AgentRow => a !== null);
   const businesses = known.filter((a) => a.type === "business");
-  if (businesses.length && businesses.length === known.length) return askBusinessesFor(agent, conversationId, businesses, text);
+  if (businesses.length && businesses.length === known.length) return askBusinessesFor(agent, conversationId, businesses, withReplyContext(text, replyCtx));
   return composePlan({
     userId,
     agent,
@@ -86,7 +90,7 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
     card: { conversationId },
     taskConversationId: conversationId,
     // Not a plan: a question, so any business mentioned is asked; otherwise your agent answers.
-    onChat: () => (businesses.length ? askBusinessesFor(agent, conversationId, businesses, text) : replyToOwner(agent, userId, conversationId, text)),
+    onChat: () => (businesses.length ? askBusinessesFor(agent, conversationId, businesses, withReplyContext(text, replyCtx)) : replyToOwner(agent, userId, conversationId, text, replyCtx)),
   });
 }
 
@@ -302,7 +306,7 @@ export async function updateDraft(taskId: string, userId: string, draft: PlanDra
 }
 
 /** Direct reply from the owner's own agent, with Recall of the plans the owner can see. */
-async function replyToOwner(agent: AgentRow, userId: string, conversationId: string, text: string) {
+async function replyToOwner(agent: AgentRow, userId: string, conversationId: string, text: string, replyCtx?: string) {
   const db = adminClient();
   // Only this request's thread: a new request starts with a clean slate.
   const thread = threadFor(conversationId);
@@ -318,6 +322,10 @@ async function replyToOwner(agent: AgentRow, userId: string, conversationId: str
   }));
   // The API needs the conversation to start with a user turn.
   while (turns.length && turns[0].role !== "user") turns.shift();
+  // ↩ Reply: the owner's latest message replies to an earlier one; say which (as data).
+  const replyBlock = replyCtx ? `\n\n${wrapUntrusted("replying_to", replyCtx)}` : "";
+  const last = turns[turns.length - 1];
+  if (replyBlock && last?.role === "user") last.content += replyBlock;
 
   // Plans contain other people's words, so they're passed as data, not instructions.
   const recallBlock = recall.length ? `\n\n${wrapUntrusted("your_plans", JSON.stringify(recall, null, 1))}` : "";
@@ -331,7 +339,7 @@ async function replyToOwner(agent: AgentRow, userId: string, conversationId: str
       purpose: "owner_chat",
       tier: "smart",
       system: `${OWNER_CHAT_SYSTEM}\nYour owner is ${agent.display_name} (@${agent.handle}). Today is ${new Date().toDateString()}.${recallBlock}${profileBlock}`,
-      messages: turns.length ? turns : [{ role: "user", content: text }],
+      messages: turns.length ? turns : [{ role: "user", content: `${text}${replyBlock}` }],
       maxTokens: 2000,
       mockContext: { text, recall },
     });
@@ -429,14 +437,15 @@ export async function decideProposal(proposalId: string, userId: string, decisio
 // ------------------------------------------------------------- agent chats
 
 /** The user asks another agent (e.g. a business) a question over A2A. */
-export async function askAgent(opts: { userId: string; agent: AgentRow; conversationId: string; text: string }) {
+export async function askAgent(opts: { userId: string; agent: AgentRow; conversationId: string; text: string; reply?: ReplyInfo | null }) {
   const conv = await getConversation(opts.conversationId);
   if (!conv?.target_agent || conv.kind !== "agent_chat") throw new Error("Not an agent conversation");
   const target = await getAgentById(conv.target_agent);
   if (!target) throw new Error("Agent not found");
 
-  await postMessage({ conversationId: conv.id, from: "human", userId: opts.userId, content: opts.text });
-  const result = await sendAgentMessage({ fromAgentId: opts.agent.id, toHandle: target.handle, text: opts.text });
+  await postMessage({ conversationId: conv.id, from: "human", userId: opts.userId, content: opts.text, replyTo: opts.reply?.id });
+  const replyCtx = opts.reply ? quoteContext(opts.reply.author, opts.reply.text) : undefined;
+  const result = await sendAgentMessage({ fromAgentId: opts.agent.id, toHandle: target.handle, text: withReplyContext(opts.text, replyCtx) });
   if (!result.ok) {
     await postMessage({ conversationId: conv.id, from: "system", content: `Message to @${target.handle} failed: ${result.error}`, metadata: { kind: "error" } });
     return;

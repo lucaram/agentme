@@ -234,3 +234,40 @@ body {
     display: none;
   }
 }
+
+/* ↩ Reply: the original message flashes when you jump to it from a quote. */
+.reply-flash {
+  border-radius: 1rem;
+  animation: reply-flash 1.6s ease-out;
+}
+@keyframes reply-flash {
+  0%,
+  40% {
+    background-color: var(--accent-soft);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/*
+ * Message actions (↩ Reply · ↪ Forward · ⋯): with a mouse they appear when you
+ * hover a message (and stay while its menu is open); on touch screens there's
+ * no hover, so ⋯ is always shown and the quick icons live inside it.
+ */
+@media (hover: hover) {
+  .msg-actions {
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  li:hover > div > .msg-actions,
+  .msg-actions:focus-within,
+  .msg-actions:has(details[open]) {
+    opacity: 1;
+  }
+}
+@media (hover: none) {
+  .msg-actions .hover-only {
+    display: none;
+  }
+}
