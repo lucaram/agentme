@@ -89,7 +89,7 @@ export async function businessSources(agentId: string, opts: { preview?: boolean
     db.from("business_sites").select("url, live_at, learned, hidden, last_read_at").eq("agent_id", agentId).maybeSingle(),
   ]);
   const siteOn = Boolean(site && (site.live_at || opts.preview));
-  const sources: KnowledgeSource[] = (rows ?? []).filter((s) => s.origin !== "site" || siteOn);
+  const sources: KnowledgeSource[] = (rows ?? []).filter((s) => s.origin === "link" || siteOn);
   const summary = site && siteOn ? learnedText(learnedOf(site.learned), site.hidden) : "";
   return summary ? [{ url: site!.url, visibility: "public", content: summary, last_read_at: site!.last_read_at, origin: "learned", title: null }, ...sources] : sources;
 }

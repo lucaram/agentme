@@ -9,7 +9,9 @@ import { mockModeration } from "@/lib/social/moderation";
 import { describeRecall, type RecallPlan } from "@/lib/agents/recall-format";
 import { heuristicCompose } from "@/lib/plans/compose";
 import { mockChanges, mockLearn, type PageText } from "@/lib/business/learn";
-import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest } from "./types";
+import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest, type LLMResearchRequest, type LLMResearchResult } from "./types";
+import { mockResearch } from "@/lib/research/mock";
+import { mockRoute } from "@/lib/research/answer";
 
 type Faq = { q: string; a: string };
 type BusinessInfo = { description?: string; hours?: string; faqs?: Faq[] };
@@ -21,6 +23,12 @@ type BusinessInfo = { description?: string; hours?: string; faqs?: Faq[] };
  */
 export class MockProvider implements LLMProvider {
   readonly name = "mock";
+
+  async research(req: LLMResearchRequest): Promise<LLMResearchResult> {
+    const result = { ...mockResearch(req.question), errors: [] };
+    await meterMock({ purpose: "research", system: req.system, messages: [{ role: "user", content: req.question }] }, result.text);
+    return result;
+  }
 
   async generateText(req: LLMRequest): Promise<string> {
     const ctx = (req.mockContext ?? {}) as Record<string, unknown>;
@@ -102,6 +110,9 @@ export class MockProvider implements LLMProvider {
         value = { answer, needs_team: answer.startsWith("I don't have"), source_url: mockSourceOf(answer, knowledge) };
         break;
       }
+      case "route":
+        value = mockRoute(String(ctx.text ?? ""));
+        break;
       case "business_learn":
         value = mockLearn((ctx.pages ?? []) as PageText[]);
         break;

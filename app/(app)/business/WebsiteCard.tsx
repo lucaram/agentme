@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LocalTime } from "@/components/LocalTime";
 import { verifyTag } from "@/lib/business/site";
-import { removeWebsiteAction, rereadWebsiteAction, startWebsiteAction, verifyWebsiteAction } from "./website-actions";
+import { removeWebsiteAction, rereadWebsiteAction, setSiteLookupAction, startWebsiteAction, verifyWebsiteAction } from "./website-actions";
 
 export type WebsiteSummary = {
   domain: string;
@@ -20,7 +20,7 @@ export type WebsiteSummary = {
 };
 
 /** "Your website": the whole site your agent reads (and re-reads every day), with the ✓ Verified badge. */
-export function WebsiteCard({ site, verified, canVerifyByEmail }: { site: WebsiteSummary | null; verified: boolean; canVerifyByEmail: boolean }) {
+export function WebsiteCard({ site, verified, canVerifyByEmail, lookup = true }: { site: WebsiteSummary | null; verified: boolean; canVerifyByEmail: boolean; lookup?: boolean }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +118,18 @@ export function WebsiteCard({ site, verified, canVerifyByEmail }: { site: Websit
           Remove
         </button>
       </div>
+
+      {site.live && (
+        <label className="flex items-start gap-2 text-sm" data-testid="site-lookup">
+          <input type="checkbox" className="mt-1" checked={lookup} disabled={pending} onChange={(e) => run(() => setSiteLookupAction(e.target.checked))} />
+          <span>
+            Look things up on my website when unsure
+            <span className="block text-xs text-muted">
+              If a customer asks about a page your agent hasn&apos;t read yet, it finds that page on {site.domain}, reads it and answers from it (with the page it came from). Off: it asks your team instead.
+            </span>
+          </span>
+        </label>
+      )}
 
       {!verified && site.status !== "error" && <Verify site={site} canVerifyByEmail={canVerifyByEmail} />}
       {error && <p className="text-xs text-danger" role="alert">{error}</p>}

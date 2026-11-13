@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Demo: a sitemap index. The first scan reads the main pages; the archive is only in the address index
+     (as on a big site with far more pages than a scan reads), and is read when someone asks about it. -->
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>sitemap-pages.xml</loc></sitemap>
+  <sitemap><loc>sitemap-archive.xml</loc></sitemap>
+</sitemapindex>

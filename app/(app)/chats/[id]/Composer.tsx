@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { sendMessage } from "../../actions";
 import { appealAction } from "../../social-actions";
 import { setReply, useReply } from "@/lib/client/reply";
+import { summonsAgent } from "@/lib/agents/commands";
 
 const MAX_HEIGHT = 200; // about 8 lines
 
@@ -59,7 +60,7 @@ export function Composer({
     ref.current!.value = "";
     fit();
     setError(null);
-    setSummoned(/^\s*@agent\b/i.test(text));
+    setSummoned(summonsAgent(text));
     startTransition(async () => {
       const result = await sendMessage(conversationId, text, threadId, { confirmed, replyTo: replying?.id ?? null });
       // Sent (or handed to the agent): the quote is done. Kept when it comes back (nudge or error).

@@ -195,6 +195,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"business_site_index": {
+                  Row: {
+                    "agent_id": string,"fts": unknown,"lastmod": string | null,"url": string,"words": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "agent_id": string,"fts"?: never,"lastmod"?: string | null,"url": string,"words": string
+                  }
+                  Update: {
+                    "agent_id"?: string,"fts"?: never,"lastmod"?: string | null,"url"?: string,"words"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "business_site_index_agent_id_fkey"
+      columns: ["agent_id"]
+isOneToOne: false
+      referencedRelation: "agents"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"business_sites": {
                   Row: {
                     "agent_id": string,"created_at": string,"domain": string,"error": string | null,"hidden": (string)[],"last_read_at": string | null,"learned": NonNullable<Json>,"live_at": string | null,"pages_found": number,"pages_read": number,"progress": NonNullable<Json>,"reading_started_at": string | null,"status": string,"url": string,"verify_token": string,"warning": string | null
@@ -834,6 +854,20 @@ isOneToOne: false
       referencedRelation: "messages"
       referencedColumns: ["id"]
     }
+                  ]
+                },"research_cache": {
+                  Row: {
+                    "answer": NonNullable<Json>,"expires_at": string,"key": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "answer": NonNullable<Json>,"expires_at": string,"key": string
+                  }
+                  Update: {
+                    "answer"?: NonNullable<Json>,"expires_at"?: string,"key"?: string
+                  }
+                  Relationships: [
+                    
                   ]
                 },"step_responses": {
                   Row: {

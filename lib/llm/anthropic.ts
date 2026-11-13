@@ -1,7 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { recordUsage } from "@/lib/usage/meter";
-import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest, type LLMTier } from "./types";
+import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMPurpose, type LLMRequest, type LLMResearchRequest, type LLMResearchResult, type LLMTier } from "./types";
+
+const RESEARCH_DEADLINE_MS = 120_000;
 
 // Main reasoning model, plus a cheaper worker for simple parsing.
 // Both are overridable per deployment.
@@ -32,6 +34,67 @@ export class AnthropicProvider implements LLMProvider {
       output_config: { effort: "low" as const },
       ...(fallback ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
     };
+  }
+
+  /**
+   * Public web research with Anthropic's server tools: search to find pages,
+   * fetch to read them. Called directly (no dynamic filtering) so every claim
+   * comes back with its citation. Bounded: a few searches and fetches, a
+   * capped page size, and an overall deadline.
+   */
+  async research(req: LLMResearchRequest): Promise<LLMResearchResult> {
+    const model = MODELS.smart;
+    const domains = req.allowedDomains?.length ? { allowed_domains: req.allowedDomains } : {};
+    const tools: Anthropic.Beta.BetaToolUnion[] = [
+      {
+        type: "web_search_20260318",
+        name: "web_search",
+        max_uses: req.maxSearches ?? 3,
+        allowed_callers: ["direct"],
+        ...domains,
+        ...(req.place ? { user_location: { type: "approximate" as const, city: req.place } } : {}),
+      },
+      {
+        type: "web_fetch_20260318",
+        name: "web_fetch",
+        max_uses: req.maxFetches ?? 3,
+        allowed_callers: ["direct"],
+        citations: { enabled: true },
+        max_content_tokens: 12_000,
+        ...domains,
+        ...(req.fresh ? { use_cache: false } : {}),
+      },
+    ];
+    // Fetch only reads addresses that appear in the conversation: seed pages go in the user message.
+    const seeds = req.seedUrls?.length ? `\n\nPages that may hold the answer:\n${req.seedUrls.join("\n")}` : "";
+    const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: `${req.question}${seeds}` }];
+    const blocks: Anthropic.Beta.BetaContentBlock[] = [];
+    const deadline = Date.now() + RESEARCH_DEADLINE_MS;
+    try {
+      // A long search turn can pause; sending it back unchanged resumes it.
+      for (let turn = 0; turn < 4; turn++) {
+        const response = await this.client.beta.messages.create(
+          {
+            model,
+            max_tokens: 3000,
+            system: req.system,
+            messages,
+            tools,
+            output_config: { effort: "medium" },
+            ...(supportsServerFallback(model) ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
+          },
+          { timeout: 90_000, maxRetries: 1 },
+        );
+        await meter({ purpose: "research" }, response);
+        if (response.stop_reason === "refusal") throw new LLMError("The model declined this request.", "refusal");
+        blocks.push(...response.content);
+        if (response.stop_reason !== "pause_turn" || Date.now() > deadline) break;
+        messages.push({ role: "assistant", content: response.content as Anthropic.Beta.BetaContentBlockParam[] });
+      }
+    } catch (error) {
+      throw wrap(error);
+    }
+    return readResearch(blocks);
   }
 
   async generateText(req: LLMRequest): Promise<string> {
@@ -71,6 +134,48 @@ export class AnthropicProvider implements LLMProvider {
   }
 }
 
+/**
+ * Reads a research turn: the answer is the text after the last search or
+ * fetch; sources come from citations and fetched pages; tool errors arrive
+ * as ordinary blocks (HTTP 200), so each result is checked.
+ */
+export function readResearch(blocks: Anthropic.Beta.BetaContentBlock[]): LLMResearchResult {
+  const sources = new Map<string, LLMResearchResult["sources"][number]>();
+  const evidence: string[] = [];
+  const errors: string[] = [];
+  const pageAge = new Map<string, string>();
+  const add = (url: string, patch: Partial<LLMResearchResult["sources"][number]>) => {
+    const current = sources.get(url) ?? { url, title: "" };
+    sources.set(url, { ...current, ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v)) });
+  };
+  let lastTool = -1;
+  blocks.forEach((b, i) => {
+    if (b.type === "web_search_tool_result") {
+      lastTool = i;
+      if (Array.isArray(b.content)) {
+        for (const r of b.content) if (r.page_age) pageAge.set(r.url, r.page_age);
+      } else errors.push(`search: ${(b.content as { error_code?: string }).error_code ?? "error"}`);
+    } else if (b.type === "web_fetch_tool_result") {
+      lastTool = i;
+      if (b.content.type === "web_fetch_result") {
+        const doc = b.content.content;
+        add(b.content.url, { title: doc.title ?? "", retrievedAt: b.content.retrieved_at ?? undefined });
+        if (doc.source.type === "text") evidence.push(doc.source.data);
+      } else errors.push(`fetch: ${b.content.error_code}`);
+    } else if (b.type === "server_tool_use") lastTool = i;
+  });
+  let text = "";
+  blocks.forEach((b, i) => {
+    if (b.type !== "text") return;
+    for (const c of b.citations ?? []) {
+      evidence.push(c.cited_text);
+      if (c.type === "web_search_result_location") add(c.url, { title: c.title ?? "", quote: c.cited_text, pageAge: pageAge.get(c.url) });
+    }
+    if (i > lastTool) text += b.text;
+  });
+  return { text: text.trim(), sources: [...sources.values()], evidence, errors };
+}
+
 /** Puts PDFs/images in front of the text of the last user message. */
 function withAttachments(req: LLMRequest): Anthropic.Beta.BetaMessageParam[] {
   if (!req.attachments?.length) return req.messages;
@@ -89,7 +194,7 @@ function withAttachments(req: LLMRequest): Anthropic.Beta.BetaMessageParam[] {
  * by more than one model; usage.iterations then breaks tokens down per model.
  */
 async function meter(
-  req: LLMRequest,
+  req: { purpose: LLMPurpose },
   response: { model: string; usage: Anthropic.Beta.BetaUsage; stop_reason: string | null },
 ) {
   const ok = response.stop_reason !== "refusal";

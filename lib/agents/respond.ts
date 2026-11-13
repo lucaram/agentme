@@ -228,6 +228,8 @@ export type BusinessContext = {
   sources: KnowledgeSource[];
   /** May this unanswered question go to the business's team? (signed-in callers, rate-limited) */
   requestHandoff: () => Promise<boolean>;
+  /** Not in what it has read: look on the business's own website (address index, then a site-only search). */
+  lookup?: (question: string, audience: "public" | "customers") => Promise<{ answer: string; needs_team: boolean } | null>;
 };
 
 /**
@@ -269,7 +271,9 @@ async function answerBusinessQuestion(recipient: RecipientAgent, question: strin
   const context = (incoming.data ?? {}) as { audience?: unknown; context?: unknown };
   const inGroup = context.context === "group" || context.audience === "public";
   const audience = incoming.relationship === "accepted" && !inGroup ? "customers" : "public";
-  const reply = await draftBusinessAnswer(recipient, trimmed, business.sources, audience);
+  let reply: { answer: string; needs_team: boolean } = await draftBusinessAnswer(recipient, trimmed, business.sources, audience);
+  // Before asking the team: look on the business's own website.
+  if (reply.needs_team && business.lookup) reply = (await business.lookup(trimmed, audience).catch(() => null)) ?? reply;
 
   // Not in the business's information: its team answers instead (never a guess).
   if (reply.needs_team && incoming.callerHandle && (await business.requestHandoff())) {

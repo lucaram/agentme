@@ -8,6 +8,7 @@ import { adminClient } from "@/lib/supabase/admin";
 import { asJson } from "@/lib/data/json";
 import { checkUrl, linksIn } from "@/lib/business/extract";
 import { businessSources, readSource } from "@/lib/business/sources";
+import { lookUpOnSite } from "@/lib/business/lookup";
 import { allowLocal } from "@/lib/business/fetch";
 import { draftBusinessAnswer } from "@/lib/agents/respond";
 import { withUsageContext } from "@/lib/usage/context";
@@ -132,7 +133,9 @@ export async function tryQuestionAction(question: string, asCustomer: boolean): 
   const reply = await withUsageContext({ userId: user.id, agentId: agent.id }, async () =>
     draftBusinessAnswer(agent, q, await businessSources(agent.id), asCustomer ? "customers" : "public"),
   );
-  return { answer: reply.answer, needsTeam: reply.needs_team };
+  // Like a real question: not in what it has read → it looks on your website.
+  const looked = reply.needs_team ? await withUsageContext({ userId: user.id, agentId: agent.id }, () => lookUpOnSite(agent, q, asCustomer ? "customers" : "public")).catch(() => null) : null;
+  return { answer: (looked ?? reply).answer, needsTeam: (looked ?? reply).needs_team };
 }
 
 const MAX_FAQS = 50;

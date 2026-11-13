@@ -265,7 +265,9 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
 
       <ol className="flex flex-1 flex-col gap-3" aria-label="Messages">
         {(messages ?? []).map((m) => {
-          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string; flags?: string[]; auto_hidden?: boolean; appeal?: string; business_id?: string; handle?: string; forwarded?: Forwarded };
+          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string; flags?: string[]; auto_hidden?: boolean; appeal?: string; business_id?: string; handle?: string; forwarded?: Forwarded; sources?: { url?: string; title?: string }[] };
+          // Where a looked-up answer came from: links to the pages themselves (web addresses only).
+          const sources = (Array.isArray(meta.sources) ? meta.sources : []).filter((s) => typeof s?.url === "string" && /^https?:\/\//i.test(s.url)).slice(0, 3);
           const isPrivate = Boolean(m.visible_to);
           const mine = m.sender_user_id === user.id;
           const senderAgent = m.sender_agent_id ? byId.get(m.sender_agent_id) : undefined;
@@ -375,6 +377,15 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                   </div>
                 )}
               </div>
+              {sources.length > 0 && !m.removed_at && (
+                <p className="mt-1 flex max-w-[85%] flex-wrap gap-x-3 gap-y-1 text-xs" data-testid="sources">
+                  {sources.map((s) => (
+                    <a key={s.url} href={s.url} target="_blank" rel="noopener noreferrer nofollow" className="text-accent underline">
+                      🔗 {(s.title || s.url!.replace(/^https?:\/\/(www\.)?/i, "")).slice(0, 60)}
+                    </a>
+                  ))}
+                </p>
+              )}
               {m.removed_at && meta.auto_hidden && mine && <HiddenAppeal messageId={m.id} conversationId={id} status={meta.appeal} />}
               {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}
               {meta.kind === "fact_suggestion" && isMyAgent && <FactSuggestion messageId={m.id} decided={meta.decided} />}

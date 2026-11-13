@@ -6,7 +6,10 @@ import type { AgentRow } from "@/lib/data/agents";
 import { getOrCreateMyAgentConversation, postMessage } from "@/lib/data/chat";
 import { composePlan } from "@/lib/coordination/orchestrator";
 import { CHAT_ASSIST_SYSTEM, wrapUntrusted } from "./prompts";
-import { parseAgentCommand } from "./commands";
+import { parseAgentCommand, splitInline } from "./commands";
+import { routeRequest, researchWeb } from "@/lib/research";
+import { answerForDraft, answerMessage } from "@/lib/research/answer";
+import { describeRetry, hit } from "@/lib/limits";
 import { quoteContext } from "@/lib/social/quote";
 import type { ReplyInfo } from "@/lib/social/quote-server";
 
@@ -19,11 +22,17 @@ type Conversation = { id: string; kind: string; title: string | null };
  *  - the agent only reads what everyone in the chat can already see (no
  *    private messages, nobody's private data), and treats it as data;
  *  - anything sent to others (a plan, a poll, a reply) still needs the
- *    owner's explicit approval.
+ *    owner's explicit approval;
+ *  - "@agent" inside a message ("I'm fine thanks. @agent: what's the weather
+ *    in Falkirk?") keeps the owner's own words exactly and adds what the agent
+ *    found, as a private draft the owner edits and sends themselves;
+ *  - research only ever gets a standalone question: never the chat.
  */
 export async function handleAgentCommand(opts: { userId: string; agent: AgentRow; conversation: Conversation; text: string; reply?: ReplyInfo | null }) {
   const { userId, agent, conversation, text } = opts;
-  const command = parseAgentCommand(text);
+  const inline = splitInline(text);
+  const own = inline?.own ?? "";
+  const command = parseAgentCommand(inline ? `@agent ${inline.instruction}` : text);
   const db = adminClient();
 
   // The command itself is private to the owner (with the message it's about, if one was quoted).
@@ -75,27 +84,63 @@ export async function handleAgentCommand(opts: { userId: string; agent: AgentRow
     }
   };
 
+  /** The owner's own words, then what the agent adds. */
+  const withOwn = (addition: string) => [own, addition].filter(Boolean).join(" ");
+  const draftCard = (draft: string, intro = "", metadata: Record<string, unknown> = {}) =>
+    reply(`${intro ? `${intro}\n\n` : ""}✍️ Draft (only you can see this). Edit it, then send it as your own message:\n${draft}`, { ...metadata, kind: "draft", draft });
+  /** Nothing to add: the owner's own words aren't lost (they can still send them). */
+  const keepOwn = (content: string) => (own ? reply(`${content}\n\nYour own words are below; nothing has been sent.`, { kind: "draft", draft: own }) : reply(content));
+
+  /** A question about public facts: looked up on the web (only the question is sent), offered as a draft. */
+  const research = async (request: string): Promise<boolean> => {
+    const route = await routeRequest(request);
+    if (route.kind !== "research" || !route.question.trim()) return false;
+    const limit = await hit("researchPerUser", userId);
+    if (!limit.allowed) {
+      await keepOwn(`You've looked up a lot in the last hour. Try again in ${describeRetry(limit.retryAfterSeconds)}.`);
+      return true;
+    }
+    const answer = await researchWeb({ question: route.question, time: route.time, place: route.place });
+    const addition = answerForDraft(answer);
+    if (!addition) await keepOwn(answerMessage(answer));
+    else await draftCard(withOwn(addition), `🔎 ${answerMessage(answer)}`, { sources: answer.sources.slice(0, 3), research: answer.status });
+    return true;
+  };
+
   switch (command.mode) {
     case "summarise": {
       const summary = await assist("summarise", `${chatBlock}${about}`, {});
-      return reply(`📝 Summary
-${summary}`);
+      return keepOwn(`📝 Summary\n${summary}`);
     }
     case "translate": {
       const lastFromOthers = [...messages].reverse().find((m) => m.sender_user_id !== userId && (m.sender_user_id || m.sender_agent_id));
-      const source = command.text || opts.reply?.text || lastFromOthers?.content || "";
+      const source = command.text || own || opts.reply?.text || lastFromOthers?.content || "";
       if (!source) return reply("There's nothing to translate yet.");
       const translation = await assist("translate", `Translate into ${command.language}:\n${wrapUntrusted("text", source)}`, {
         language: command.language,
         text: source,
       });
+      // Inline: your words (translated, or followed by the translation) become a draft you send yourself.
+      if (inline) return draftCard(command.text ? withOwn(translation) : translation, `🌐 ${command.language}`);
       return reply(`🌐 ${command.language}: ${translation}`);
     }
     case "draft": {
       const draft = await assist("draft", `${chatBlock}${about}\n\nThe owner's instruction: ${command.instruction}`, { instruction: command.instruction });
+      if (inline) return draftCard(withOwn(draft));
       return reply(`✍️ Draft reply (only you can see this):\n${draft}`, { kind: "draft", draft });
     }
     case "plan": {
+      // A question about public facts (weather, news, a score): looked up, never guessed.
+      if (await research(command.request)) return;
+      // Inline and not a look-up: the agent writes what follows your own words, as a draft.
+      if (inline) {
+        const draft = await assist(
+          "draft",
+          `${chatBlock}${about}\n\nThe owner has already written: ${wrapUntrusted("own_words", own)}\nWrite only what should follow it. The owner's instruction: ${command.request}`,
+          { instruction: command.request },
+        );
+        return draftCard(withOwn(draft));
+      }
       // Communities are full of strangers: the agent only helps privately there.
       if (conversation.kind === "channel") {
         return reply("In communities I can only help you privately (summarise, translate, draft). To organise something, ask me in My Agent or in a group with your contacts.");

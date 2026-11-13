@@ -32,6 +32,10 @@ export const LIMITS = {
   businessMentionsPerUser: { windowSeconds: 3600, max: 20 },
   /** Businesses a person can add ("Add a business"). */
   businessesPerPerson: { windowSeconds: 86400, max: 10 },
+  /** A business agent looking on its own website for a page it hasn't read (address index, then a site search). */
+  siteLookupsPerAgent: { windowSeconds: 86400, max: 200 },
+  /** Web research by your own agent (My Agent and inline "@agent"). */
+  researchPerUser: { windowSeconds: 3600, max: 30 },
   /** ↪ Forward: each forward goes to up to 5 chats. */
   forwardsPerUser: { windowSeconds: 3600, max: 60 },
   /** "Fill in from my website" at sign-up (one homepage fetch each). */

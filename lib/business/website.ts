@@ -11,6 +11,7 @@ import { safeFetch, type Fetched } from "./fetch";
 import { readWithAi } from "./sources";
 import { LearnedDraftSchema, clampLearned, learnedOf, type Learned, type PageText } from "./learn";
 import { groupQuestions } from "./gaps";
+import { indexSite } from "./site-index";
 import {
   MAX_PAGE_TEXT,
   MAX_SITE_PAGES,
@@ -228,6 +229,9 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
     enqueue(results.flatMap((r) => r.links));
     await report();
   }
+
+  // The address index: every page the site lists, so pages this scan didn't read can be found when asked about.
+  await indexSite(agentId, homeUrl, [...seen, ...queue]).catch(() => 0);
 
   // Pages no longer on the website go (a page that just failed to load this time stays).
   const gone = (rows ?? []).filter((r) => r.origin === "site" && !seen.has(r.url));

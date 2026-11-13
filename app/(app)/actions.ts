@@ -26,7 +26,7 @@ import { answerInboxItem, declineInboxItem } from "@/lib/plans/inbox";
 import { claimItem, closePollStep, respondRsvp, unclaimItem, votePoll } from "@/lib/plans/participation";
 import { changePlan, type ChangeInputT } from "@/lib/plans/change";
 import { withUsageContext } from "@/lib/usage/context";
-import { isAgentCommand } from "@/lib/agents/commands";
+import { summonsAgent } from "@/lib/agents/commands";
 import { handleAgentCommand } from "@/lib/agents/in-chat";
 import { sendContactRequest } from "@/lib/people/requests";
 import { tellOwner } from "@/lib/requests/notify";
@@ -77,8 +77,9 @@ export async function sendMessage(
   const reply = await resolveReply(conversationId, options.replyTo);
   const replyContext = reply ? quoteContext(reply.author, reply.text) : undefined;
 
-  // "@agent ..." in a group, DM or community chat summons the sender's own agent (privately).
-  const summoned = (conv.kind === "group" || conv.kind === "dm" || conv.kind === "channel") && isAgentCommand(content);
+  // "@agent ..." in a group, DM or community chat summons the sender's own agent (privately). Also inside a
+  // message ("I'm fine thanks. @agent: what's the weather?"): nothing is posted until they send the draft.
+  const summoned = (conv.kind === "group" || conv.kind === "dm" || conv.kind === "channel") && summonsAgent(content);
   // Private @agent help is always fine; posting for everyone follows the chat's rules.
   if (!summoned) {
     const allowed = await canPost(conv as unknown as ConvRow, user.id);
@@ -173,21 +174,61 @@ export async function markThreadReadAction(threadId: string) {
 
 /**
  * "Send as me": the owner sends (possibly edited) text that their agent drafted.
- * It is posted as the owner's own message: the owner reviewed and chose to send it.
+ * It is posted as the owner's own message, under the same rules as any message
+ * they type (closed chats, community checks), and exactly once.
  */
 export async function sendDraftAction(conversationId: string, draftMessageId: string, text: string): Promise<{ error?: string }> {
-  const { user } = await requireAgent();
+  const { user, agent } = await requireAgent();
   const content = text.trim().slice(0, 4000);
   if (!content || !Id.safeParse(conversationId).success || !Id.safeParse(draftMessageId).success) return { error: "Nothing to send." };
   if (!(await isMember(conversationId, user.id))) return { error: "Not found." };
+  const conv = await getConversation(conversationId);
+  if (!conv) return { error: "Not found." };
+  if (conv.kind === "dm") {
+    const { state } = await dmState(conversationId, user.id, agent.id);
+    if (state !== "open") return { error: DM_CLOSED[state] };
+  }
+  const allowed = await canPost(conv as unknown as ConvRow, user.id);
+  if (!allowed.ok) return { error: allowed.error };
   const db = adminClient();
   // Only the owner's own, unused private draft in this chat.
   const { data: draft } = await db.from("messages").select("id, metadata").eq("id", draftMessageId).eq("conversation_id", conversationId).eq("visible_to", user.id).maybeSingle();
   const meta = (draft?.metadata ?? {}) as Record<string, unknown>;
   if (!draft || meta.kind !== "draft") return { error: "Not found." };
   if (meta.sent) return { error: "Already sent." };
-  await postMessage({ conversationId, from: "human", userId: user.id, content });
-  await db.from("messages").update({ metadata: asJson({ ...meta, sent: true }) }).eq("id", draftMessageId);
+
+  // Communities: the same checks as a typed message (spam checks, then the community's rules).
+  let flags: string[] = [];
+  if (conv.kind === "channel" && conv.community_id) {
+    const communityId = conv.community_id;
+    const guard = await guardCommunityPost(communityId, user.id, content, { resend: false });
+    if (!guard.ok) return { error: guard.error };
+    const auto = await withUsageContext({ userId: user.id, agentId: agent.id }, () =>
+      autopilot({ communityId, conversationId, userId: user.id, text: content, level: guard.level, confirmed: false }),
+    );
+    if (auto.action === "refuse") return { error: auto.message };
+    if (auto.action === "nudge") return { error: `${auto.message} Edit the draft and try again.` };
+    flags = [...new Set([...guard.flags, ...auto.flags])];
+  }
+
+  // Claim the draft first, so two taps (or two tabs) can't send it twice.
+  const { data: claimed } = await db
+    .from("messages")
+    .update({ metadata: asJson({ ...meta, sent: true }) })
+    .eq("id", draftMessageId)
+    .is("metadata->>sent", null)
+    .select("id");
+  if (!claimed?.length) return { error: "Already sent." };
+  try {
+    await postMessage({ conversationId, from: "human", userId: user.id, content, ...(flags.length ? { metadata: { flags } } : {}) });
+  } catch {
+    await db.from("messages").update({ metadata: asJson(meta) }).eq("id", draftMessageId);
+    return { error: "Couldn't send it. Please try again." };
+  }
+  // Businesses placed in this group or community answer when @mentioned, as for a typed message.
+  if (conv.kind === "group" || conv.kind === "channel") {
+    after(() => withUsageContext({ userId: user.id, agentId: agent.id }, () => answerMentions({ conversation: conv, userId: user.id, agent, text: content })));
+  }
   revalidatePath(`/chats/${conversationId}`);
   return {};
 }

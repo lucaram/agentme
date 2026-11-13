@@ -16,7 +16,9 @@ export type LLMPurpose =
   | "business_ingest" // read a business's PDF or photo (e.g. a menu) into text
   | "business_learn" // learn a business's whole website: basics, facts, questions & answers
   | "business_changes" // say what changed on a business's website since the last read
-  | "moderation"; // check a community message against the community's rules
+  | "moderation" // check a community message against the community's rules
+  | "route" // is this a request to research public facts, or ordinary chat?
+  | "research"; // look something up on the public web, with sources
 
 export type LLMTier = "smart" | "fast";
 
@@ -41,8 +43,34 @@ export interface LLMObjectRequest<T> extends LLMRequest {
   schema: z.ZodType<T>;
 }
 
+/** Public web research: only the question goes out (never chat history or profile data). */
+export interface LLMResearchRequest {
+  system: string;
+  question: string;
+  /** Only these sites (a business's own domain); otherwise the whole web. */
+  allowedDomains?: string[];
+  /** Pages that may hold the answer (e.g. from a business's address index). */
+  seedUrls?: string[];
+  maxSearches?: number;
+  maxFetches?: number;
+  /** A place named in the question, to localise results. */
+  place?: string;
+  /** Current information (weather, today): don't use cached copies of pages. */
+  fresh?: boolean;
+}
+
+export interface LLMResearchResult {
+  /** The final text, after the last search or fetch. */
+  text: string;
+  sources: { url: string; title: string; quote?: string; retrievedAt?: string; pageAge?: string }[];
+  /** Text that was actually read (quotes and fetched pages), to check facts against. */
+  evidence: string[];
+  errors: string[];
+}
+
 export interface LLMProvider {
   readonly name: string;
+  research(req: LLMResearchRequest): Promise<LLMResearchResult>;
   generateText(req: LLMRequest): Promise<string>;
   generateObject<T>(req: LLMObjectRequest<T>): Promise<T>;
 }
