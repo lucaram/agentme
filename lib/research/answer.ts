@@ -49,6 +49,10 @@ export function mockRoute(text: string): Route {
   };
 }
 
+export const WordsSchema = z.object({
+  words: z.string().describe("3 to 8 words that the title or address of the page answering the question would contain, in the website's language. Names (people, products, titles) stay exactly as written. No filler words, no punctuation."),
+});
+
 export const PickSchema = z.object({
   pages: z.array(z.number().int()).max(4).describe("The numbers of the pages most likely to contain the answer, best first (at most 2). Empty if none look relevant."),
 });

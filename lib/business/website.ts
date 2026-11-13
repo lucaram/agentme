@@ -12,6 +12,7 @@ import { readWithAi } from "./sources";
 import { LearnedDraftSchema, clampLearned, learnedOf, type Learned, type PageText } from "./learn";
 import { groupQuestions } from "./gaps";
 import { indexSite } from "./site-index";
+import { detectSearch, pageLang } from "./site-search";
 import {
   MAX_PAGE_TEXT,
   MAX_SITE_PAGES,
@@ -116,6 +117,7 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
   base.search = "";
   const scope = scopeOf(base);
   const homeUrl = base.toString();
+  const homeHtml = /html/.test(mediaType(home)) ? home.body.toString("utf8") : "";
   if (!robotsAllows(rules, base.pathname)) {
     throw new Error("Your website's robots.txt asks bots not to read it, so your agent respects that. You can still add pages under Links.");
   }
@@ -259,6 +261,9 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
     .from("business_sites")
     .update({
       status: "ready",
+      // The site's own search box and language, for finding pages this scan didn't read.
+      search_template: homeHtml ? detectSearch(homeHtml, base) : null,
+      lang: homeHtml ? pageLang(homeHtml) : null,
       pages_read: pages.length,
       pages_found: pages.length,
       progress: asJson(progress.slice(-40)),

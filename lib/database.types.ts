@@ -237,14 +237,14 @@ isOneToOne: false
                   ]
                 },"business_sites": {
                   Row: {
-                    "agent_id": string,"created_at": string,"domain": string,"error": string | null,"hidden": (string)[],"last_read_at": string | null,"learned": NonNullable<Json>,"live_at": string | null,"pages_found": number,"pages_read": number,"progress": NonNullable<Json>,"reading_started_at": string | null,"status": string,"url": string,"verify_token": string,"warning": string | null
+                    "agent_id": string,"created_at": string,"domain": string,"error": string | null,"hidden": (string)[],"lang": string | null,"last_read_at": string | null,"learned": NonNullable<Json>,"live_at": string | null,"pages_found": number,"pages_read": number,"progress": NonNullable<Json>,"reading_started_at": string | null,"search_template": string | null,"status": string,"url": string,"verify_token": string,"warning": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "agent_id": string,"created_at"?: string,"domain": string,"error"?: string | null,"hidden"?: (string)[],"last_read_at"?: string | null,"learned"?: NonNullable<Json>,"live_at"?: string | null,"pages_found"?: number,"pages_read"?: number,"progress"?: NonNullable<Json>,"reading_started_at"?: string | null,"status"?: string,"url": string,"verify_token"?: string,"warning"?: string | null
+                    "agent_id": string,"created_at"?: string,"domain": string,"error"?: string | null,"hidden"?: (string)[],"lang"?: string | null,"last_read_at"?: string | null,"learned"?: NonNullable<Json>,"live_at"?: string | null,"pages_found"?: number,"pages_read"?: number,"progress"?: NonNullable<Json>,"reading_started_at"?: string | null,"search_template"?: string | null,"status"?: string,"url": string,"verify_token"?: string,"warning"?: string | null
                   }
                   Update: {
-                    "agent_id"?: string,"created_at"?: string,"domain"?: string,"error"?: string | null,"hidden"?: (string)[],"last_read_at"?: string | null,"learned"?: NonNullable<Json>,"live_at"?: string | null,"pages_found"?: number,"pages_read"?: number,"progress"?: NonNullable<Json>,"reading_started_at"?: string | null,"status"?: string,"url"?: string,"verify_token"?: string,"warning"?: string | null
+                    "agent_id"?: string,"created_at"?: string,"domain"?: string,"error"?: string | null,"hidden"?: (string)[],"lang"?: string | null,"last_read_at"?: string | null,"learned"?: NonNullable<Json>,"live_at"?: string | null,"pages_found"?: number,"pages_read"?: number,"progress"?: NonNullable<Json>,"reading_started_at"?: string | null,"search_template"?: string | null,"status"?: string,"url"?: string,"verify_token"?: string,"warning"?: string | null
                   }
                   Relationships: [
                     {
