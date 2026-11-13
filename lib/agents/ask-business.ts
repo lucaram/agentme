@@ -4,6 +4,10 @@ import { sendAgentMessage } from "@/lib/a2a/client";
 import { getAgentById, type AgentRow } from "@/lib/data/agents";
 import { postMessage } from "@/lib/data/chat";
 import { looksLikeQuestion, matchBusinessName, nameCandidates } from "./business-mention";
+import { researchWeb } from "@/lib/research";
+import { answerMessage } from "@/lib/research/answer";
+import { hit } from "@/lib/limits";
+import { isPublicDomain } from "@/lib/business/site";
 
 /**
  * Your agent asks a business's agent for you (over A2A, exactly like asking it
@@ -19,6 +23,24 @@ type Business = Pick<AgentRow, "id" | "handle" | "display_name">;
 export async function askBusinessFor(opts: { agent: AgentRow; conversationId: string; business: Business; question: string; threadId?: string | null }) {
   const { agent, business } = opts;
   const result = await sendAgentMessage({ fromAgentId: agent.id, toHandle: business.handle, text: opts.question.trim().slice(0, 1000) });
+  // Its agent can't be reached: look on the business's own website instead, and say that's where it's from.
+  if (!result.ok) {
+    const { data: site } = await adminClient().from("business_sites").select("domain, live_at").eq("agent_id", business.id).maybeSingle();
+    if (site?.live_at && isPublicDomain(site.domain) && (await hit("researchPerUser", agent.owner_id)).allowed) {
+      const found = await researchWeb({ question: opts.question.trim().slice(0, 500), allowedDomains: [site.domain] });
+      if (found.status === "answered" || found.status === "partial") {
+        await postMessage({
+          conversationId: opts.conversationId,
+          threadId: opts.threadId ?? undefined,
+          from: "agent",
+          agentId: agent.id,
+          content: `I couldn't reach @${business.handle}'s agent just now, so I looked on its website instead (this is from the web, not from its agent):\n\n${answerMessage(found)}`,
+          metadata: { kind: "research_answer", research: found.status, sources: found.sources.slice(0, 3), business_id: business.id, handle: business.handle },
+        });
+        return;
+      }
+    }
+  }
   await postMessage({
     conversationId: opts.conversationId,
     threadId: opts.threadId ?? undefined,

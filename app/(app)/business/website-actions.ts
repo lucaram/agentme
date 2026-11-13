@@ -176,6 +176,15 @@ export async function goLiveAction(): Promise<Out> {
   return {};
 }
 
+/** "Look things up on my website when unsure": on by default; off = only what was read and reviewed, then the team. */
+export async function setSiteLookupAction(on: boolean): Promise<Out> {
+  const { agent } = await requireBusiness();
+  const info = (agent.business_info ?? {}) as Info;
+  await adminClient().from("agents").update({ business_info: asJson({ ...info, lookup: Boolean(on) }) }).eq("id", agent.id);
+  revalidatePath("/business");
+  return {};
+}
+
 /** "Try it as a customer": the answer a visitor would get, website included (even before going live). */
 export async function previewAnswerAction(question: string): Promise<Out & { answer?: string; needsTeam?: boolean; source?: string | null }> {
   const { user, agent } = await requireBusiness();

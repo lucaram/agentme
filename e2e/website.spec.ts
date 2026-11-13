@@ -76,6 +76,15 @@ test("paste your website: sign-up fills itself in, the agent learns the site, th
   const luca = await as(browser, "luca");
   await luca.page.goto(`/discover?q=${handle}`);
   await luca.page.getByRole("button", { name: "Ask agent" }).click();
+
+  // 5. A page the scan never read (only the sitemap lists it): the agent finds it by its address,
+  //    reads it there and then, and answers from it with the page it came from. No team needed.
+  await luca.page.getByLabel("Message", { exact: true }).fill("Do you have a pumpkin spice latte?");
+  await luca.page.getByRole("button", { name: "Send" }).click();
+  const latte = luca.page.getByRole("listitem").filter({ hasText: "pumpkin spice latte is back for autumn at £3.80" });
+  await expect(latte).toBeVisible({ timeout: 15_000 });
+  await expect(latte).toContainText("📄 From localhost/demo/site/archive/autumn-menu-2024-pumpkin-spice-latte.html · checked today");
+
   await luca.page.getByLabel("Message", { exact: true }).fill("Is there parking nearby?");
   await luca.page.getByRole("button", { name: "Send" }).click();
   await expect(luca.page.getByText("I've asked the team")).toBeVisible();

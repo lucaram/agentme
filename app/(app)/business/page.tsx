@@ -189,6 +189,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
                       }
                     : null
                 }
+                lookup={(agent.business_info as { lookup?: boolean } | null)?.lookup !== false}
                 verified={Boolean(site && agent.verified_domain === site.domain)}
                 canVerifyByEmail={Boolean(site && email.confirmed && verifiesByEmail(email.address, site.domain))}
               />

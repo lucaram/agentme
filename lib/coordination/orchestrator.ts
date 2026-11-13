@@ -25,6 +25,8 @@ import { asksToPassOn, claimsAction, honestReply, passOnReply } from "@/lib/agen
 import { quoteContext, withReplyContext } from "@/lib/social/quote";
 import type { ReplyInfo } from "@/lib/social/quote-server";
 import { waysOf, waysText, type Way } from "@/lib/business/booking";
+import { routeRequest, researchWeb } from "@/lib/research";
+import { answerMessage } from "@/lib/research/answer";
 import type { Proposal } from "./schemas";
 
 export type { TaskParsed } from "@/lib/plans/types";
@@ -73,7 +75,8 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
 
   const mentions = extractMentions(text).filter((h) => h !== agent.handle);
   if (mentions.length === 0) {
-    await replyToOwner(agent, userId, conversationId, text, replyCtx);
+    // Public facts (weather, news, a score, a review) are looked up, with sources; everything else is a chat.
+    if (!(await answerFromWeb(agent, userId, conversationId, text))) await replyToOwner(agent, userId, conversationId, text, replyCtx);
     // A business named without its @ in a question: offer to ask its agent (only if you tap).
     return offerToAskBusiness(agent, conversationId, text);
   }
@@ -303,6 +306,33 @@ export async function updateDraft(taskId: string, userId: string, draft: PlanDra
     .eq("metadata->>task_id", taskId)
     .eq("metadata->>kind", "task_card");
   return { ok: true };
+}
+
+/**
+ * A question about public facts in My Agent: looked up on the web and answered
+ * with its sources (never from memory). Only a standalone question is sent out:
+ * nothing from the owner's profile, plans or chats. False when it isn't one.
+ */
+async function answerFromWeb(agent: AgentRow, userId: string, conversationId: string, text: string): Promise<boolean> {
+  const db = adminClient();
+  const say = (content: string, metadata: Record<string, unknown> = {}) => postMessage({ conversationId, from: "agent", agentId: agent.id, content, metadata });
+  // "Which Castlevania do you mean?" → "Nocturne": the answer completes the question asked before.
+  const thread = threadFor(conversationId);
+  const lastQuery = db.from("messages").select("metadata").eq("conversation_id", conversationId).not("sender_agent_id", "is", null);
+  const { data: last } = await (thread ? lastQuery.eq("thread_id", thread) : lastQuery).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const before = (last?.metadata ?? {}) as { kind?: string; research?: string; question?: string };
+  const pending = before.kind === "research_answer" && before.research === "needs_clarification" && before.question ? before.question : null;
+
+  const route = pending ? { kind: "research" as const, question: `${pending} (${text.trim().slice(0, 200)})`, time: "none" as const, place: "" } : await routeRequest(text);
+  if (route.kind !== "research" || !route.question.trim()) return false;
+  const limit = await hit("researchPerUser", userId);
+  if (!limit.allowed) {
+    await say(`You've looked up a lot in the last hour. Try again in ${describeRetry(limit.retryAfterSeconds)}.`);
+    return true;
+  }
+  const answer = await researchWeb({ question: route.question, time: route.time, place: route.place });
+  await say(answerMessage(answer), { kind: "research_answer", research: answer.status, question: route.question.slice(0, 500), sources: answer.sources.slice(0, 3) });
+  return true;
 }
 
 /** Direct reply from the owner's own agent, with Recall of the plans the owner can see. */

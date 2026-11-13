@@ -30,3 +30,25 @@ export function parseAgentCommand(text: string): AgentCommand {
   if (draft) return { mode: "draft", instruction: draft[1].trim() || "a friendly reply to the latest message" };
   return { mode: "plan", request: rest };
 }
+
+/**
+ * "@agent" inside a message: "I'm fine thanks. @agent: what's the weather in
+ * Falkirk?". What comes before is the person's own words (kept exactly); what
+ * comes after is for their agent. Only when it's clearly addressed to the agent
+ * ("@agent:" / "@agent,", or after the end of a sentence), so "ask @agent
+ * later" stays an ordinary message.
+ */
+export function splitInline(text: string): { own: string; instruction: string } | null {
+  if (isAgentCommand(text)) return null;
+  const m = text.match(/^([\s\S]*?\S)\s+@agent\b([\s,:]*)([\s\S]*)$/i);
+  if (!m) return null;
+  const own = m[1].trim();
+  const instruction = m[3].trim();
+  const addressed = /[:,]/.test(m[2]) || /[.!?…]$/.test(own);
+  return addressed && instruction ? { own, instruction } : null;
+}
+
+/** Does this message summon the sender's agent (at the start, or inline)? */
+export function summonsAgent(text: string): boolean {
+  return isAgentCommand(text) || splitInline(text) !== null;
+}

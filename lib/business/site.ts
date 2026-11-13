@@ -261,3 +261,63 @@ export function shortUrl(raw: string): string {
     return raw;
   }
 }
+
+// ------------------------------------------------------------- address index (pages found, not yet read)
+
+/** Up to this many addresses are indexed per business; pages are read only when someone asks. */
+/** A domain a web search can reach (not localhost, an IP address or a port). */
+export const isPublicDomain = (domain: string) => /^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/i.test(domain);
+
+export const MAX_INDEX_URLS = 20_000;
+export const MAX_INDEX_SITEMAPS = 40;
+
+export type SitemapEntry = { loc: string; lastmod: string | null; title: string | null };
+
+/** Each <url> (or nested <sitemap>) of a sitemap: address, last change, and a title when it's a news sitemap. */
+export function sitemapEntries(xml: string): SitemapEntry[] {
+  const out: SitemapEntry[] = [];
+  for (const m of xml.matchAll(/<(url|sitemap)\b[^>]*>([\s\S]*?)<\/\1>/gi)) {
+    const body = m[2];
+    const loc = body.match(/<loc>\s*([^<\s]+)\s*<\/loc>/i)?.[1];
+    if (!loc) continue;
+    const lastmod = body.match(/<lastmod>\s*([^<\s]+)\s*<\/lastmod>/i)?.[1] ?? null;
+    const title = body.match(/<news:title>\s*(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?\s*<\/news:title>/i)?.[1]?.trim() ?? null;
+    out.push({ loc: decodeEntities(loc), lastmod: lastmod && !Number.isNaN(Date.parse(lastmod)) ? new Date(lastmod).toISOString() : null, title: title ? decodeEntities(title) : null });
+  }
+  return out;
+}
+
+/** The words an address can be found by: its path split into words ("/recensioni/castlevania-nocturne.html" → "recensioni castlevania nocturne"), plus a title. */
+export function indexWords(url: string, title?: string | null): string {
+  let path = url;
+  try {
+    path = decodeURIComponent(new URL(url).pathname);
+  } catch {
+    // keep the raw address
+  }
+  const words = `${path.replace(/\.(html?|php|aspx?)$/i, "")} ${title ?? ""}`
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .match(/[a-z0-9]{2,}/g);
+  return [...new Set(words ?? [])].join(" ").slice(0, 600);
+}
+
+/**
+ * The addresses that best match a question: by how many of its words they
+ * contain (a word matches when the address has a word starting with it), at
+ * least half of them, newest first among equals. At most `limit`.
+ */
+export function rankIndexHits<T extends { url: string; words: string; lastmod: string | null }>(terms: readonly string[], rows: T[], limit = 3): T[] {
+  if (!terms.length) return [];
+  const need = Math.max(1, Math.ceil(terms.length / 2));
+  return rows
+    .map((row) => {
+      const words = row.words.split(" ");
+      return { row, score: terms.filter((t) => words.some((w) => w.startsWith(t))).length };
+    })
+    .filter((x) => x.score >= need)
+    .sort((a, b) => b.score - a.score || (b.row.lastmod ?? "").localeCompare(a.row.lastmod ?? ""))
+    .slice(0, limit)
+    .map((x) => x.row);
+}
