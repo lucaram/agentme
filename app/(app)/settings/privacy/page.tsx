@@ -63,6 +63,21 @@ export default async function PrivacySettingsPage({ searchParams }: PageProps<"/
           </section>
         )}
 
+        {agent.type === "personal" && (
+          <section className="card space-y-3">
+            <h2 className="font-semibold">Look-ups</h2>
+            <Choice
+              type="checkbox"
+              name="lookup_place"
+              value="on"
+              checked={agent.lookup_place}
+              title="Use my town for look-ups"
+              hint="When you ask about the weather or something “near me” without naming a place, your agent uses the town from “Where you usually are”. Only the town goes out with the search, never your street or anything else about you."
+            />
+            <input type="hidden" name="lookup_form" value="1" />
+          </section>
+        )}
+
         <div className="flex justify-end">
           <button className="btn-primary px-6">Save</button>
         </div>

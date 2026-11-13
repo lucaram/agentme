@@ -38,6 +38,34 @@ test("My Agent looks up a public fact and answers with its source; what it can't
   await paul.close();
 });
 
+test("no place named: your agent uses the town where you usually are, and asks when it doesn't know it", async ({ browser }) => {
+  // Marco's profile says "Lives in Islington" (private): only the town goes with the look-up.
+  const marco = await as(browser, "marco");
+  await marco.page.goto("/chats");
+  await marco.page.getByRole("link", { name: /My Agent/ }).click();
+  await send(marco.page, "What's the weather?");
+  await expect(marco.page.getByText("📍 For Islington, where you usually are.")).toBeVisible({ timeout: 15_000 });
+  await expect(marco.page.getByText("In Islington it's 12°C with light rain right now.")).toBeVisible();
+
+  // He can turn it off: then his agent asks which place.
+  await marco.page.goto("/settings/privacy");
+  await marco.page.getByLabel("Use my town for look-ups").uncheck();
+  await marco.page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(marco.page).toHaveURL(/saved=1/);
+  await marco.page.goto("/settings/privacy");
+  await expect(marco.page.getByLabel("Use my town for look-ups")).not.toBeChecked();
+  await marco.page.goto("/chats");
+  await marco.page.getByRole("link", { name: /My Agent/ }).click();
+  await send(marco.page, "What's the weather?");
+  await expect(marco.page.getByText(/Which place do you mean\?/)).toBeVisible({ timeout: 15_000 });
+  // Back on for the other tests.
+  await marco.page.goto("/settings/privacy");
+  await marco.page.getByLabel("Use my town for look-ups").check();
+  await marco.page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(marco.page).toHaveURL(/saved=1/);
+  await marco.close();
+});
+
 test("@agent inside a message: your own words plus what it found, as a private draft you send once", async ({ browser }) => {
   const luca = await as(browser, "luca");
   await luca.page.getByRole("link", { name: /^👥 Dinner — Italian/ }).click();
