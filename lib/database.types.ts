@@ -949,14 +949,14 @@ isOneToOne: false
                   ]
                 },"tasks": {
                   Row: {
-                    "attempts": number,"conversation_id": string,"created_at": string,"error": string | null,"goal": string,"group_conversation_id": string | null,"id": string,"initiator_agent": string,"lease_token": string | null,"lease_until": string | null,"owner_id": string,"parsed": NonNullable<Json>,"status": Database["public"]['Enums']["task_status"],"updated_at": string,"wake_requested": boolean
+                    "attempts": number,"interrupted_runs": number,"conversation_id": string,"created_at": string,"error": string | null,"goal": string,"group_conversation_id": string | null,"id": string,"initiator_agent": string,"lease_token": string | null,"lease_until": string | null,"owner_id": string,"parsed": NonNullable<Json>,"status": Database["public"]['Enums']["task_status"],"updated_at": string,"wake_requested": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "attempts"?: number,"conversation_id": string,"created_at"?: string,"error"?: string | null,"goal": string,"group_conversation_id"?: string | null,"id"?: string,"initiator_agent": string,"lease_token"?: string | null,"lease_until"?: string | null,"owner_id": string,"parsed"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["task_status"],"updated_at"?: string,"wake_requested"?: boolean
+                    "attempts"?: number,"interrupted_runs"?: number,"conversation_id": string,"created_at"?: string,"error"?: string | null,"goal": string,"group_conversation_id"?: string | null,"id"?: string,"initiator_agent": string,"lease_token"?: string | null,"lease_until"?: string | null,"owner_id": string,"parsed"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["task_status"],"updated_at"?: string,"wake_requested"?: boolean
                   }
                   Update: {
-                    "attempts"?: number,"conversation_id"?: string,"created_at"?: string,"error"?: string | null,"goal"?: string,"group_conversation_id"?: string | null,"id"?: string,"initiator_agent"?: string,"lease_token"?: string | null,"lease_until"?: string | null,"owner_id"?: string,"parsed"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["task_status"],"updated_at"?: string,"wake_requested"?: boolean
+                    "attempts"?: number,"interrupted_runs"?: number,"conversation_id"?: string,"created_at"?: string,"error"?: string | null,"goal"?: string,"group_conversation_id"?: string | null,"id"?: string,"initiator_agent"?: string,"lease_token"?: string | null,"lease_until"?: string | null,"owner_id"?: string,"parsed"?: NonNullable<Json>,"status"?: Database["public"]['Enums']["task_status"],"updated_at"?: string,"wake_requested"?: boolean
                   }
                   Relationships: [
                     {
@@ -998,7 +998,7 @@ isOneToOne: false
                            },
 "claim_task":
 { Args: { "p_lease_seconds": number,"p_task": string }; Returns: {
-              "attempts": number,
+              "attempts": number,"interrupted_runs": number,
 "conversation_id": string,
 "created_at": string,
 "error": string | null,

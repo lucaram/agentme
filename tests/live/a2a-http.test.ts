@@ -89,6 +89,37 @@ describe.skipIf(!reachable || !SECRET)("A2A endpoint security (live)", () => {
     expect(body).not.toContain("knee surgery"); // notes are private
   });
 
+  it("nobody can read back or list what an agent told someone else: only SendMessage is served", async () => {
+    // Marco's agent answers Luca's (a contact): the answer holds what Marco shares with contacts.
+    const token = await signAgentToken({ sub: ids.luca, recipient: "marco" }, SECRET);
+    const { json: answered } = await rpc("marco", coordination(), token);
+    const taskId = (answered.result?.task as { id?: string } | undefined)?.id;
+    expect(taskId).toBeTruthy();
+    expect(JSON.stringify(answered)).toMatch(/Saturdays? after 7/i);
+
+    // An anonymous caller, and a signed-in stranger, try to fetch that task or list all tasks,
+    // from Marco's endpoint and from a business's (which accepts anonymous callers).
+    const ip = { "x-forwarded-for": `198.51.100.${Math.floor(Math.random() * 250) + 1}` };
+    const strangerToken = await signAgentToken({ sub: stranger!.agentId, recipient: "marco" }, SECRET);
+    const attempts = [
+      { handle: "marco", method: "GetTask", params: { id: taskId }, token: undefined },
+      { handle: "marco", method: "ListTasks", params: {}, token: undefined },
+      { handle: "trattoria", method: "GetTask", params: { id: taskId }, token: undefined },
+      { handle: "trattoria", method: "ListTasks", params: {}, token: undefined },
+      { handle: "marco", method: "GetTask", params: { id: taskId }, token: strangerToken },
+      { handle: "marco", method: "ListTasks", params: {}, token: strangerToken },
+      { handle: "marco", method: "CancelTask", params: { id: taskId }, token: undefined },
+      { handle: "marco", method: "SubscribeToTask", params: { id: taskId }, token: undefined },
+    ];
+    for (const a of attempts) {
+      const { json } = await rpc(a.handle, { jsonrpc: "2.0", id: 1, method: a.method, params: a.params }, a.token, ip);
+      const body = JSON.stringify(json);
+      expect(json.error?.message, `${a.method} on @${a.handle}`).toMatch(/only accepts SendMessage/);
+      expect(body).not.toMatch(/Saturdays? after 7/i);
+      expect(body).not.toContain(taskId!);
+    }
+  });
+
   it("rate-limits anonymous callers with HTTP 429 and Retry-After", async () => {
     // A unique test IP so this doesn't throttle other suites.
     const ip = { "x-forwarded-for": `198.51.100.${Math.floor(Math.random() * 250) + 1}` };

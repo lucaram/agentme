@@ -111,13 +111,30 @@ describe.skipIf(!serverUp)("durable coordination (live)", () => {
   });
 
   it("fails visibly after too many interruptions instead of hanging", async () => {
-    const taskId = await makeTask({ attempts: 3, lease_until: past() });
+    const taskId = await makeTask({ interrupted_runs: 3, lease_until: past() });
     await recoverAndSettle(taskId);
     const { data: task } = await admin().from("tasks").select("status, error").eq("id", taskId).single();
     expect(task!.status).toBe("failed");
     expect(task!.error).toMatch(/interrupted several times/);
     const { data: msgs } = await admin().from("messages").select("content").eq("metadata->>task_id", taskId);
     expect(msgs!.map((m) => m.content)).toEqual([expect.stringMatching(/^I couldn't finish/)]);
+  });
+
+  it("being picked up many times is not being interrupted: people answering one by one never ends a plan", async () => {
+    // A plan woken nine times before (each person's answer wakes it), every run ending in order.
+    const taskId = await makeTask({ attempts: 9, interrupted_runs: 0, lease_until: past() });
+    await recoverAndSettle(taskId);
+    const { data: task } = await admin().from("tasks").select("status, error, attempts, interrupted_runs").eq("id", taskId).single();
+    // It ran again and finished its step; the run ended in order, so the count of interruptions is back to zero.
+    expect(task).toEqual({ status: "proposal_ready", error: null, attempts: 10, interrupted_runs: 0 });
+  });
+
+  it("an interrupted run counts once, and a run that then ends in order clears it", async () => {
+    // Two runs in a row were interrupted; the third is picked up (3 of 3 allowed) and completes.
+    const taskId = await makeTask({ attempts: 2, interrupted_runs: 2, lease_until: past() });
+    await recoverAndSettle(taskId);
+    const { data: task } = await admin().from("tasks").select("status, attempts, interrupted_runs").eq("id", taskId).single();
+    expect(task).toEqual({ status: "proposal_ready", attempts: 3, interrupted_runs: 0 });
   });
 
   it("with concurrent workers, exactly one runs: one proposal, one message", async () => {
