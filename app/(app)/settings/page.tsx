@@ -31,8 +31,8 @@ export default async function SettingsPage() {
       testId: "profile-link",
       highlight: agent.guest,
     },
-    personal
-      ? {
+    ...(personal
+      ? [{
           href: "/settings/about",
           icon: "🧠",
           title: "What your agent knows about you",
@@ -40,13 +40,8 @@ export default async function SettingsPage() {
             ? `${facts.length} ${facts.length === 1 ? "topic" : "topics"} · ${shared} shared with contacts' agents when asked`
             : "When you're free, food & drink, hobbies, where you are, and more",
           testId: "about-you-link",
-        }
-      : {
-          href: "/business",
-          icon: "🏪",
-          title: "Business information",
-          summary: "What your agent knows is managed in My Business",
-        },
+        }]
+      : []),
     {
       href: "/settings/personalise",
       icon: "🎨",
