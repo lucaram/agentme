@@ -3,15 +3,15 @@
 import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LocalTime } from "@/components/LocalTime";
-import { addSourceAction, removeSourceAction, rereadSourceAction, saveBusinessInfoAction, setSourceVisibilityAction, tryQuestionAction } from "./actions";
+import { addSourceAction, createSourceButtonAction, removeSourceAction, rereadSourceAction, saveBusinessInfoAction, saveBusinessDetailsAction, setSourceVisibilityAction, tryQuestionAction } from "./actions";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
 /** "About your business" (public) and "For customers only", in your own words. */
-export function BusinessInfoForm({ about, customers }: { about: string; customers: string }) {
+export function BusinessInfoForm({ about = "", customers = "", mode = "about" }: { about?: string; customers?: string; mode?: "about" | "customers" }) {
   const [state, action, pending] = useActionState(saveBusinessInfoAction, undefined);
   return (
-    <form action={action} className="space-y-4">
-      <div>
+    <form action={action} className="space-y-4" aria-label={mode === "about" ? "Business description" : "Customer-only information"}>
+      {mode === "about" && <div>
         <label className="label" htmlFor="about">About your business <span className="font-normal text-muted">· public</span></label>
         <AutoGrowTextarea
           id="about"
@@ -21,40 +21,54 @@ export function BusinessInfoForm({ about, customers }: { about: string; customer
           maxRows={16}
           maxLength={8000}
           defaultValue={about}
-          placeholder={"Family-run Italian restaurant in Camden.\nOpen Tue–Sun 12–15 and 18–23, closed Mondays.\nDogs welcome. Gluten-free pasta on request. Step-free entrance."}
+          placeholder={"Family-run Italian restaurant in Camden.\nSeasonal dishes, handmade pasta and a warm welcome for friends and families."}
         />
         <p className="hint mt-1">
-          Write it like you&apos;d tell a new staff member: hours, address, what you offer, prices, policies. Anyone&apos;s agent can get this. Web
-          addresses you write here (e.g. your menu) are also read by your agent (see Links below), so customers can get the address and
-          what&apos;s on the page.
+          Introduce your business to customers: what you offer and what makes it special. This description appears on your public page and helps your agent answer questions. Manage hours and contact options in Business information.
         </p>
-      </div>
-      <div>
+      </div>}
+      {mode === "customers" && <div>
         <label className="label" htmlFor="customers">For customers only <span className="font-normal text-muted">· your contacts</span></label>
         <AutoGrowTextarea id="customers" name="customers" className="input" minRows={2} maxRows={8} maxLength={4000} defaultValue={customers} placeholder="e.g. Private events: £35 per person, minimum 20 people." />
         <p className="hint mt-1">
           Only for people in your Contacts, when they ask your agent directly. Never shown in groups or communities, where others can read the
           answer.
         </p>
-      </div>
+      </div>}
       {state?.error && <p className="text-sm text-danger" role="alert">{state.error}</p>}
       {state?.saved && (
         <p className="text-sm text-accent" role="status">
           Saved. Your agent uses this straight away.
-          {state.addedLinks ? ` I also added ${state.addedLinks} ${state.addedLinks === 1 ? "link" : "links"} from your text to “Links your agent reads”; your agent is reading ${state.addedLinks === 1 ? "it" : "them"} now.` : ""}
+          {state.addedLinks ? ` ${state.addedLinks} linked ${state.addedLinks === 1 ? "page was" : "pages were"} added to Website & documents with the same visibility.` : ""}
         </p>
       )}
-      <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : "Save your words"}</button>
+      <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : mode === "about" ? "Save description" : "Save customer information"}</button>
     </form>
   );
 }
 
-type Source = { fromText: string | null; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; last_read_at: string | null; words: number; preview: string };
+export function BusinessDetailsForm({ hours, address, fromWebsite }: { hours: string; address: string; fromWebsite: boolean }) {
+  const [state, action, pending] = useActionState(saveBusinessDetailsAction, undefined);
+  return <form action={action} className="space-y-3" aria-label="Business details">
+    {fromWebsite && <p className="hint">Available details from your published website are filled in. Save your changes to override them.</p>}
+    <div><label className="label" htmlFor="hours">Opening hours</label><AutoGrowTextarea id="hours" name="hours" className="input" minRows={2} maxRows={5} maxLength={500} defaultValue={hours} /></div>
+    <div><label className="label" htmlFor="address">Business address</label><AutoGrowTextarea id="address" name="address" className="input" minRows={2} maxRows={5} maxLength={500} defaultValue={address} /></div>
+    {state?.error && <p role="alert" className="text-sm text-danger">{state.error}</p>}
+    {state?.saved && <p role="status" className="text-sm text-accent">Saved. Your page and agent use these details.</p>}
+    <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : "Save business details"}</button>
+  </form>;
+}
+
+type Source = { fromText: string | null; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; last_read_at: string | null; words: number; preview: string; buttonLabel?: string };
 
 const KIND: Record<string, string> = { page: "web page", pdf: "PDF", image: "photo", text: "text" };
 
 /** Links your agent reads: website, PDF menu, menu photos. */
 export function SourcesManager({ sources }: { sources: Source[] }) {
+  const [buttonFor, setButtonFor] = useState<string | null>(null);
+  const [buttonLabel, setButtonLabel] = useState("View document");
+  const [includeButton, setIncludeButton] = useState(false);
+  const [newButtonLabel, setNewButtonLabel] = useState("View menu");
   const router = useRouter();
   const [url, setUrl] = useState("");
   const [visibility, setVisibility] = useState("public");
@@ -91,7 +105,7 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
               <p className="text-xs" data-testid="source-status">
                 {s.status === "ok" ? (
                   <span className="text-accent">
-                    ✓ Read <LocalTime iso={s.last_read_at ?? new Date(0).toISOString()} /> · {KIND[s.kind ?? "page"] ?? "page"} · {s.words.toLocaleString("en-GB")} words
+                    ✓ Read <LocalTime iso={s.last_read_at ?? new Date(0).toISOString()} /> · {KIND[s.kind ?? "page"] ?? "page"}
                   </span>
                 ) : s.status === "error" ? (
                   <span className="text-danger">⚠️ Couldn&apos;t read it: {s.error}</span>
@@ -111,6 +125,7 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
                 </details>
               )}
               <div className="flex gap-3 text-xs">
+                {s.visibility === "public" && !s.buttonLabel && <button type="button" className="text-accent underline" onClick={() => { setButtonFor(s.id); setButtonLabel("View document"); }}>Create customer button</button>}
                 <button type="button" className="text-accent underline" disabled={pending} onClick={() => act(() => rereadSourceAction(s.id))}>
                   Re-read now
                 </button>
@@ -118,6 +133,8 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
                   Remove
                 </button>
               </div>
+              {s.buttonLabel && <p className="hint">Customer button: {s.buttonLabel}. Edit it in Business information.</p>}
+              {buttonFor === s.id && <div className="flex gap-2"><input className="input" maxLength={60} aria-label="Document button label" value={buttonLabel} onChange={(e) => setButtonLabel(e.target.value)} /><button type="button" className="btn-primary" disabled={pending || !buttonLabel.trim()} onClick={() => act(async () => { const result = await createSourceButtonAction(s.id, buttonLabel); if (!result.error) setButtonFor(null); return result; })}>Add customer button</button></div>}
             </li>
           ))}
         </ul>
@@ -138,10 +155,10 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
         <button
           type="button"
           className="btn-primary"
-          disabled={pending || !url.trim()}
+          disabled={pending || !url.trim() || (visibility === "public" && includeButton && !newButtonLabel.trim())}
           onClick={() =>
             act(async () => {
-              const result = await addSourceAction(url, visibility);
+              const result = await addSourceAction(url, visibility, visibility === "public" && includeButton ? { buttonLabel: newButtonLabel } : undefined);
               if (!result.error) setUrl("");
               return result;
             })
@@ -150,8 +167,9 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
           Add link
         </button>
       </div>
+      {visibility === "public" && <div className="space-y-2"><label className="flex items-center gap-2 text-xs text-muted"><input type="checkbox" checked={includeButton} onChange={(e) => setIncludeButton(e.target.checked)} />Also show customers a button for this document</label>{includeButton && <input className="input" aria-label="New document button label" maxLength={60} value={newButtonLabel} onChange={(e) => setNewButtonLabel(e.target.value)} />}</div>}
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
-      <p className="hint">Your agent reads these and refreshes them every day. Text on websites is treated as information, never as instructions to your agent.</p>
+      <p className="hint">Add a web page, PDF or photo by its URL. Customers-only sources are used only in private replies to your contacts; changing a source to customers-only also removes its public customer buttons. Sources are checked approximately daily while AGENTME is running.</p>
     </div>
   );
 }
@@ -190,7 +208,7 @@ export function TryIt() {
         <div className="rounded-xl border border-agent-border bg-agent px-3 py-2 text-sm" data-testid="try-answer">
           <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">Your agent would answer</span>
           {result.answer}
-          {result.needsTeam && <p className="mt-1 text-xs text-muted">A real visitor would be told you&apos;ve been asked, and it would appear in your Needs your answer.</p>}
+          {result.needsTeam && <p className="mt-1 text-xs text-muted">For a relevant unanswered question, a real visitor can choose Ask the team. This preview sends no request.</p>}
         </div>
       )}
     </div>

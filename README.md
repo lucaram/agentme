@@ -177,21 +177,30 @@ SMS: no provider is wired up yet. With `SMS_PROVIDER=dev` (the default outside p
 
 ## My Business (business accounts)
 
-A **My Business** tab, shown to business accounts, holds everything the business agent knows.
-- **In your own words:** *About your business* (public) and *For customers only* (the business's contacts), in plain language.
-- **Links your agent reads:** website pages, PDF menus and photos of menus (the latter two are read by the AI). Each link shows its status and word count and what was read. Links refresh daily (sweeper) or on *Re-read now*, and each has a visibility: public or customers only.
+A **My Business** tab, shown to business accounts, separates public presentation, customer actions and the information the agent uses. Its sections appear in this order:
+1. **About your business:** the full public description, shown on the business page and supplied to its agent. Saving it preserves practical details, customer-only information, FAQs and customer actions.
+2. **Business information:** opening hours, address and customer actions. Owner-entered details take priority over reviewed website information.
+3. **Website & documents:** the website connected during signup, review and connection status, last successful check, optional daily updates, and additional pages, PDF menus or photos. Website checks run approximately every 24 hours while the sweeper is running; failures retain the previous information and successful-check timestamp. Each additional document has public or customers-only visibility. A public document can also become a customer button without creating a duplicate source. Customer-only text is edited separately here.
+4. **Questions & answers:** approved reusable FAQs.
+5. **Customer activity:** incoming requests, automatic answers, staff answers and other unanswered requests over the last 30 days, plus all open staff requests. Counts come from exchanges and inbox items; previews are excluded. Staff requests can be answered here or in My Agent.
+6. **Share your business:** the public page, QR code and printable poster. **Groups and communities** appears afterward when the business has placements or invitations.
+
+The website supplied at signup is stored with the business before connecting. If connecting fails, **Website & documents** keeps that address prefilled on later visits with **Retry connection**. Connecting a replacement updates the saved address; explicitly removing the connection clears it.
+
+**Test your agent** is available in the page header as a preview dialog, with separate visitor and customer modes.
+
+- **Website and document safety:**
   - **Safe fetching** (`lib/business/fetch.ts`): http(s) only, standard ports, the resolved address must be public (checked at connect time and for raw IPs), at most 3 redirects, 5 MB and 10 s. Development can allow local pages with `ALLOW_LOCAL_FETCH=1`, which the e2e tests use with `/demo/trattoria-menu.html`.
   - **Website text is untrusted data** (`<website_content>`), never instructions.
-- **What your agent knows + Try it:** ask a test question as a visitor or as a customer.
 - **Answers:** the agent answers from its business information and website. For a relevant unanswered question, signed-in askers can click **Ask the team**; no staff request is created before that click. Matching open questions from the same asker are reused. The database enforces 10 requests per asker/business/day and 50 total per business/day. The answer returns privately to the original conversation. Public FAQ publication is unchecked by default, offered only for general business questions, and reviewed for private details before saving. Customer-specific answers cannot become FAQs.
 - **Personal plans:** questions about an existing agreement or attendance use the asker's authorised saved plans, including venue, time and latest RSVPs. A venue's `@handle` does not contact the business. Similar matching plans prompt a clarification; the user can reply with a numbered choice. Venue recall states that AGENTME has made no reservation, then offers published booking/contact methods with clickable buttons. The business's own current details take priority over its reviewed, live website information; private, hidden and unpublished contacts are excluded. No plan details are sent out to find these options.
 - **Never:** bookings, orders or payments. Instead, the agent sends people to the business's own ways (next item).
-- **How customers book or order** (`lib/business/booking.ts`):
-  - **What the business adds:** up to 4 ways, each one 📅 Book, 🛍️ Order, 📞 Call, 💬 WhatsApp, ✉️ Email or 🔗 Website.
+- **Customer actions** (`lib/business/booking.ts`):
+  - **What the business adds:** Book, Order, Call, WhatsApp, Email, Website or Custom. There is no four-entry limit, and multiple entries of the same kind are supported. Custom buttons have a label, URL and purpose (booking, ordering, contact or information); the purpose determines when an agent offers them. Businesses can reorder and feature buttons.
   - **Known services:** OpenTable, Fresha, Treatwell, Calendly, Deliveroo, Uber Eats and others are recognised from the link, so the button reads e.g. *"📅 Book on OpenTable"*.
-  - **Safe links:** only `https`, `tel`, `wa.me` and `mailto` links are ever produced, and stored ways are re-checked whenever they're read.
+  - **Safe links:** only validated HTTP(S), telephone, WhatsApp and email links are produced, and stored actions are re-checked whenever they're read.
   - **Where they appear:**
-    - as buttons on the business page (`/u/handle`), with no account needed;
+    - as buttons on the business page (`/u/handle`), with no account needed; the first four appear initially, with the rest under **More options**;
     - in the agent's answers. Code makes sure a booking or ordering question gets these ways and never goes to the team.
   - **In plans:** a business @mentioned in a plan request (*"Organise pizza at @trattoria on Friday at 8pm with @marco"*) becomes the plan's **place**, not a participant. The plan card shows *📍 At Trattoria Sole* with its booking buttons. Mentioning only a business makes the agent reply with that business's ways to book.
 

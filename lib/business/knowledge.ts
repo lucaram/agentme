@@ -4,7 +4,7 @@ import type { Correction } from "./learn";
 
 /** What a business agent knows: pure (no server code), shared by the answering code and My Business. */
 
-type BusinessInfo = { about?: string; customers?: string; description?: string; hours?: string; faqs?: { q: string; a: string }[]; corrections?: Correction[] };
+type BusinessInfo = { about?: string; customers?: string; description?: string; hours?: string; address?: string; faqs?: { q: string; a: string }[]; corrections?: Correction[] };
 /**
  * Text the agent may answer from: a link the business added ("link"), a page
  * of its website ("site"), or the website summary the owner reviewed ("learned").
@@ -32,13 +32,15 @@ export function businessKnowledge(
   focus: readonly string[] = [],
 ): { info: string; websites: string } {
   const info = (agent.business_info ?? {}) as BusinessInfo;
-  const about = info.about?.trim() || [info.description, info.hours && `Opening hours: ${info.hours}`].filter(Boolean).join("\n");
+  const about = info.about?.trim() || info.description?.trim() || "";
   const ways = waysOf(agent.business_info);
   const corrections = (info.corrections ?? []).filter((c) => c.label && c.value);
   const own = [
     `Business: ${agent.display_name} (@${agent.handle})`,
     about,
-    ways.length ? `How customers book or order (you can't do it yourself; give them these):
+    info.hours ? `Current opening hours (set by the business): ${info.hours}` : "",
+    info.address ? `Current address (set by the business): ${info.address}` : "",
+    ways.length ? `Published customer actions (booking, ordering, contact and information; customers complete these themselves):
 ${waysText(ways)}` : "",
     corrections.length ? `Corrections by the owner (right even where the website says otherwise):\n${corrections.map((c) => `- ${c.label}: ${c.value}`).join("\n")}` : "",
     ...(info.faqs ?? []).map((f) => `Q: ${f.q}\nA: ${f.a}`),

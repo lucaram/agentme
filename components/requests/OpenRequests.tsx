@@ -16,11 +16,13 @@ type Kind = "info_request" | "question" | "introduction" | "group_invite";
  * a group invite. Shown pinned at the top of My Agent ("Needs your answer"),
  * and the relevant ones in Contacts and Groups. Renders nothing when empty.
  */
-export async function OpenRequests({ title, kinds, hint }: { title: string; kinds?: Kind[]; hint?: string }) {
+export async function OpenRequests({ title, kinds, hint, excludeIds = [] }: { title: string; kinds?: Kind[]; hint?: string; excludeIds?: string[] }) {
   const supabase = await createClient();
   // RLS: only this user's own requests and own facts.
   let query = supabase.from("inbox_items").select("*").eq("status", "open").order("created_at", { ascending: true }).limit(30);
   if (kinds) query = query.in("kind", kinds);
+  const excluded = excludeIds.filter((id) => /^[0-9a-f-]{36}$/i.test(id));
+  if (excluded.length) query = query.not("id", "in", `(${excluded.join(",")})`);
   const [{ data: items }, { data: agents }, { data: facts }] = await Promise.all([
     query,
     supabase.from("agents").select("id, handle, display_name, avatar"),

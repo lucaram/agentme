@@ -1,6 +1,6 @@
 import "server-only";
 import { adminClient } from "@/lib/supabase/admin";
-import { asJson } from "@/lib/data/json";
+import { patchBusinessInfo } from "./profile";
 import { getAgentById } from "@/lib/data/agents";
 import { createConversation, findConversation, postMessage } from "@/lib/data/chat";
 import { relayToMyAgent } from "@/lib/agents/ask-business";
@@ -54,6 +54,6 @@ export async function addToBusinessInfo(agentId: string, question: string, answe
   const { data: agent } = await db.from("agents").select("business_info").eq("id", agentId).single();
   const info = (agent?.business_info ?? {}) as { faqs?: { q: string; a: string }[] } & Record<string, unknown>;
   const faqs = [...(info.faqs ?? []), { q: question.slice(0, 300), a: answer.slice(0, 1000) }].slice(-50);
-  await db.from("agents").update({ business_info: asJson({ ...info, faqs }) }).eq("id", agentId);
+  await patchBusinessInfo(agentId, { faqs });
   return true;
 }

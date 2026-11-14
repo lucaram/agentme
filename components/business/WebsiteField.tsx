@@ -33,7 +33,7 @@ export function WebsiteField({ onFilled }: { onFilled: (fill: WebsiteFill) => vo
         <label className="label" htmlFor="website">
           🌐 Have a website? <span className="font-normal text-muted">· optional</span>
         </label>
-        <p className="hint">Paste it and your agent learns all of it: menu, prices, hours, policies. It fills in this form for you too.</p>
+        <p className="hint">Connect your website once. We can fill in this form from it, then your agent reads key pages for you to review.</p>
       </div>
       <div className="flex gap-2">
         <input
@@ -65,7 +65,7 @@ export function WebsiteField({ onFilled }: { onFilled: (fill: WebsiteFill) => vo
       </div>
       {result?.ok && (
         <p className="text-xs text-accent" role="status" data-testid="website-filled">
-          ✓ Filled in from {result.domain}. Check it below: your agent reads the whole website once you create it.
+          ✓ Filled in from {result.domain}. Check it below: your agent scans key pages once you create it, then you review and publish the information.
         </p>
       )}
       {result && !result.ok && (

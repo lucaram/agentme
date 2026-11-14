@@ -38,6 +38,7 @@ export async function addBusinessAction(_prev: AddBusinessState, form: FormData)
     handle: String(form.get("handle") ?? ""),
     avatar: String(form.get("avatar") ?? ""),
     about: String(form.get("about") ?? ""),
+    website,
   });
   if (!created.ok) return { error: created.error };
   // The website is read in the background; the person reviews it as the business.
@@ -48,5 +49,5 @@ export async function addBusinessAction(_prev: AddBusinessState, form: FormData)
   }
   const switched = await switchTo(user, agent, created.agentId);
   if (!switched.ok) redirect("/chats");
-  redirect(reading ? "/business/setup" : "/business?welcome=1");
+  redirect(reading ? "/business/setup" : website ? `/business?welcome=1&website=${encodeURIComponent(website)}&website_error=1` : "/business?welcome=1");
 }

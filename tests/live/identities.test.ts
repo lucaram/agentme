@@ -44,13 +44,14 @@ describe.skipIf(!dbUp)("business identities (live)", () => {
 
   it("adds a business as a separate identity the person owns", async () => {
     const { createBusinessFor, isManagedLogin } = await lib();
-    const made = await createBusinessFor(people.p.userId, { name: "Pasta Place", handle: `tb${run}`, avatar: "🍝", about: "Fresh pasta in Camden.\nOpen daily." });
+    const made = await createBusinessFor(people.p.userId, { name: "Pasta Place", handle: `tb${run}`, avatar: "🍝", about: "Fresh pasta in Camden.\nOpen daily.", website: "pasta.example/menu/" });
     expect(made.ok).toBe(true);
     const db = admin();
     const { data: agent } = await db.from("agents").select("*").eq("id", (made as { agentId: string }).agentId).single();
     biz = { agentId: agent!.id, ownerId: agent!.owner_id };
     extraUsers.push(agent!.owner_id);
     expect(agent).toMatchObject({ type: "business", contact_policy: "anyone", display_name: "Pasta Place", avatar: "🍝", bio: "Fresh pasta in Camden." });
+    expect(agent!.business_info).toMatchObject({ website: "https://pasta.example/menu/" });
     // Its own login, never the person's.
     expect(agent!.owner_id).not.toBe(people.p.userId);
     const { data: login } = await db.auth.admin.getUserById(agent!.owner_id);

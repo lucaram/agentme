@@ -5,7 +5,6 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAgent } from "@/lib/auth";
 import { adminClient } from "@/lib/supabase/admin";
-import { asJson } from "@/lib/data/json";
 import { checkUrl, linksIn } from "@/lib/business/extract";
 import { businessSources, readSource } from "@/lib/business/sources";
 import { lookUpOnSite } from "@/lib/business/lookup";
@@ -13,7 +12,8 @@ import { allowLocal } from "@/lib/business/fetch";
 import { draftBusinessAnswer } from "@/lib/agents/respond";
 import { withUsageContext } from "@/lib/usage/context";
 import { describeRetry, hit } from "@/lib/limits";
-import { MAX_WAYS, normaliseWay, type Way } from "@/lib/business/booking";
+import { normaliseWay, waysOf, type Way } from "@/lib/business/booking";
+import { patchBusinessInfo } from "@/lib/business/profile";
 
 type Out = { error?: string };
 const MAX_LINKS = 20;
@@ -30,18 +30,17 @@ type Info = { about?: string; customers?: string; description?: string; hours?: 
 
 export async function saveBusinessInfoAction(_prev: Out | undefined, form: FormData): Promise<Out & { saved?: boolean; addedLinks?: number }> {
   const { agent } = await requireBusiness();
-  const about = String(form.get("about") ?? "").trim().slice(0, 8000);
-  const customers = String(form.get("customers") ?? "").trim().slice(0, 4000);
-  if (!about) return { error: "Tell your agent a little about your business." };
-  const info = (agent.business_info ?? {}) as Info;
+  const hasAbout = form.has("about");
+  const hasCustomers = form.has("customers");
+  const about = hasAbout ? String(form.get("about") ?? "").trim().slice(0, 8000) : "";
+  const customers = hasCustomers ? String(form.get("customers") ?? "").trim().slice(0, 4000) : "";
+  if (!hasAbout && !hasCustomers) return { error: "No changes to save." };
+  if (hasAbout && !about) return { error: "Tell your agent a little about your business." };
   const db = adminClient();
-  await db
-    .from("agents")
-    .update({ bio: about.split("\n")[0].slice(0, 280), business_info: asJson({ ...info, about, customers, description: about.slice(0, 500) }) })
-    .eq("id", agent.id);
+  await patchBusinessInfo(agent.id, { ...(hasAbout ? { about, description: about.slice(0, 500) } : {}), ...(hasCustomers ? { customers } : {}) }, hasAbout ? about.split("\n")[0].slice(0, 280) : undefined);
 
-  // Links written in the text are added to "Links your agent reads" (with the visibility of the box they're in).
-  const { count } = await db.from("business_sources").select("*", { count: "exact", head: true }).eq("agent_id", agent.id);
+  // Links written in either description become documents with the same visibility.
+  const { count } = await db.from("business_sources").select("*", { count: "exact", head: true }).eq("agent_id", agent.id).eq("origin", "link");
   let room = MAX_LINKS - (count ?? 0);
   let addedLinks = 0;
   for (const [text, visibility] of [[about, "public"], [customers, "customers"]] as const) {
@@ -67,33 +66,63 @@ export async function removeFaqAction(index: number): Promise<Out> {
   const { agent } = await requireBusiness();
   const info = (agent.business_info ?? {}) as Info;
   const faqs = (info.faqs ?? []).filter((_, i) => i !== index);
-  await adminClient().from("agents").update({ business_info: asJson({ ...info, faqs }) }).eq("id", agent.id);
+  await patchBusinessInfo(agent.id, { faqs });
   revalidatePath("/business");
   return {};
 }
 
 /** A link your agent reads: your website, a PDF menu, a photo of your menu. Read in the background. */
-export async function addSourceAction(url: string, visibility: string): Promise<Out> {
+export async function addSourceAction(url: string, visibility: string, options?: { buttonLabel?: string }): Promise<Out> {
   const { agent } = await requireBusiness();
   const check = checkUrl(String(url ?? ""), { allowLocal: allowLocal() });
   if (!check.ok) return { error: check.error };
+  if (options?.buttonLabel) {
+    if (visibility !== "public") return { error: "Customer buttons can only link to public documents." };
+    const button = normaliseWay("custom", check.url.toString(), { label: options.buttonLabel, purpose: "information" });
+    if (!button.ok) return { error: button.error };
+  }
   const db = adminClient();
-  const { count } = await db.from("business_sources").select("*", { count: "exact", head: true }).eq("agent_id", agent.id);
+  const { count } = await db.from("business_sources").select("*", { count: "exact", head: true }).eq("agent_id", agent.id).eq("origin", "link");
   if ((count ?? 0) >= MAX_LINKS) return { error: `You can add up to ${MAX_LINKS} links.` };
   const { data, error } = await db
     .from("business_sources")
     .insert({ agent_id: agent.id, url: check.url.toString(), visibility: visibility === "customers" ? "customers" : "public" })
     .select("id")
     .single();
-  if (error || !data) return { error: error?.code === "23505" ? "That link is already there." : "Couldn't add that link." };
+  if (error || !data) {
+    if (error?.code === "23505" && options?.buttonLabel) {
+      const { data: existing } = await db.from("business_sources").select("id").eq("agent_id", agent.id).eq("url", check.url.toString()).maybeSingle();
+      if (existing) return createSourceButtonAction(existing.id, options.buttonLabel);
+    }
+    return { error: error?.code === "23505" ? "That link is already there." : "Couldn't add that link." };
+  }
+  if (options?.buttonLabel) {
+    const result = await createSourceButtonAction(data.id, options.buttonLabel);
+    if (result.error) return result;
+  }
   after(() => readSource(data.id));
   revalidatePath("/business");
   return {};
 }
 
+/** Reuse a public source URL as a customer button without adding another source. */
+export async function createSourceButtonAction(sourceId: string, label: string): Promise<Out> {
+  const { agent } = await requireBusiness();
+  const { data: source } = await adminClient().from("business_sources").select("url, visibility").eq("id", String(sourceId)).eq("agent_id", agent.id).maybeSingle();
+  if (!source) return { error: "Document not found." };
+  if (source.visibility !== "public") return { error: "Customer buttons can only link to public documents." };
+  const button = normaliseWay("custom", source.url, { label: String(label), purpose: "information" });
+  if (!button.ok) return { error: button.error };
+  const ways = waysOf(agent.business_info);
+  if (!ways.some((way) => way.value === button.way.value && way.label === button.way.label)) await patchBusinessInfo(agent.id, { ways: [...ways, button.way] });
+  revalidatePath("/business");
+  revalidatePath(`/u/${agent.handle}`);
+  return {};
+}
+
 async function ownSource(id: string, agentId: string) {
   if (!z.uuid().safeParse(id).success) return null;
-  const { data } = await adminClient().from("business_sources").select("id").eq("id", id).eq("agent_id", agentId).maybeSingle();
+  const { data } = await adminClient().from("business_sources").select("id, url").eq("id", id).eq("agent_id", agentId).maybeSingle();
   return data;
 }
 
@@ -117,7 +146,9 @@ export async function removeSourceAction(id: string): Promise<Out> {
 
 export async function setSourceVisibilityAction(id: string, visibility: string): Promise<Out> {
   const { agent } = await requireBusiness();
-  if (!(await ownSource(id, agent.id))) return { error: "Not found." };
+  const source = await ownSource(id, agent.id);
+  if (!source) return { error: "Not found." };
+  if (visibility === "customers") await patchBusinessInfo(agent.id, { ways: waysOf(agent.business_info).filter((way) => way.value !== source.url) });
   await adminClient().from("business_sources").update({ visibility: visibility === "customers" ? "customers" : "public" }).eq("id", id);
   revalidatePath("/business");
   return {};
@@ -149,7 +180,7 @@ export async function addFaqAction(question: string, answer: string): Promise<Ou
   const info = (agent.business_info ?? {}) as Info;
   const faqs = info.faqs ?? [];
   if (faqs.length >= MAX_FAQS) return { error: `You can keep up to ${MAX_FAQS} questions.` };
-  await adminClient().from("agents").update({ business_info: asJson({ ...info, faqs: [...faqs, { q, a }] }) }).eq("id", agent.id);
+  await patchBusinessInfo(agent.id, { faqs: [...faqs, { q, a }] });
   revalidatePath("/business");
   return {};
 }
@@ -163,24 +194,31 @@ export async function updateFaqAction(index: number, question: string, answer: s
   const faqs = [...(info.faqs ?? [])];
   if (!Number.isInteger(index) || !faqs[index]) return { error: "Not found." };
   faqs[index] = { q, a };
-  await adminClient().from("agents").update({ business_info: asJson({ ...info, faqs }) }).eq("id", agent.id);
+  await patchBusinessInfo(agent.id, { faqs });
   revalidatePath("/business");
   return {};
 }
 
 /** "How customers book or order": the business's own ways (AGENTME never books or takes orders). */
-export async function saveWaysAction(input: { kind: string; value: string }[]): Promise<Out & { saved?: boolean }> {
+export async function saveWaysAction(input: { kind: string; value: string; label?: string; purpose?: string; primary?: boolean }[]): Promise<Out & { saved?: boolean }> {
   const { agent } = await requireBusiness();
   const rows = (Array.isArray(input) ? input : []).filter((w) => String(w?.value ?? "").trim());
-  if (rows.length > MAX_WAYS) return { error: `Add up to ${MAX_WAYS} ways.` };
   const ways: Way[] = [];
   for (const row of rows) {
-    const checked = normaliseWay(String(row.kind), String(row.value));
+    const checked = normaliseWay(String(row.kind), String(row.value), row);
     if (!checked.ok) return { error: checked.error };
     ways.push(checked.way);
   }
-  const info = (agent.business_info ?? {}) as Info;
-  await adminClient().from("agents").update({ business_info: asJson({ ...info, ways }) }).eq("id", agent.id);
+  await patchBusinessInfo(agent.id, { ways });
   revalidatePath("/business");
+  return { saved: true };
+}
+
+export async function saveBusinessDetailsAction(_prev: Out | undefined, form: FormData): Promise<Out & { saved?: boolean }> {
+  const { agent } = await requireBusiness();
+  const corrections = ((agent.business_info as { corrections?: { label: string; value: string }[] } | null)?.corrections ?? []).filter((correction) => !/^(opening hours|hours|address|business address)$/i.test(correction.label.trim()));
+  await patchBusinessInfo(agent.id, { hours: String(form.get("hours") ?? "").trim().slice(0, 500), address: String(form.get("address") ?? "").trim().slice(0, 500), corrections });
+  revalidatePath("/business");
+  revalidatePath(`/u/${agent.handle}`);
   return { saved: true };
 }

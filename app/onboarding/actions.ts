@@ -83,9 +83,11 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
   if (detailsError) return { error: detailsError };
   // "Have a website?": checked before anything is created; read once the agent exists.
   const website = isBusiness ? optional(form.get("website")) : null;
+  let websiteUrl: string | null = null;
   if (website) {
     const site = normaliseSite(website, { allowLocal: allowLocal() });
     if (!site.ok) return { error: `Website: ${site.error}` };
+    websiteUrl = site.url.toString();
   }
   const faqs = isBusiness
     ? [1, 2, 3]
@@ -106,7 +108,7 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
       contact_policy: isBusiness ? "anyone" : "contacts_only",
       bio: isBusiness ? optional(form.get("description"))?.slice(0, 280) ?? null : null,
       business_info: isBusiness
-        ? asJson({ description: optional(form.get("description")), hours: optional(form.get("hours")), faqs })
+        ? asJson({ description: optional(form.get("description")), hours: optional(form.get("hours")), faqs, ...(websiteUrl ? { website: websiteUrl } : {}) })
         : asJson({}),
     })
     .select("id")
@@ -142,7 +144,11 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
       : `Hi ${parsed.data.display_name}! I'm @${handle.handle}, your agent. Connect with friends, then ask me something like "Arrange dinner with @marco on Saturday evening".`,
   });
   // A website: read it all now, then review what the agent learned (step by step) before going live.
-  if (website && (await attachWebsite(agent.id, website, user)).ok) redirect("/business/setup");
+  if (website) {
+    const attached = await attachWebsite(agent.id, website, user);
+    if (attached.ok) redirect("/business/setup");
+    redirect(`/business?website=${encodeURIComponent(website)}&website_error=1`);
+  }
   // Came from an invite or personal link: go back there to finish joining/connecting.
   redirect(next || `/chats/${conv.id}`);
 }
