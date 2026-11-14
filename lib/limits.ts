@@ -30,6 +30,8 @@ export const LIMITS = {
   communityPostsNew: { windowSeconds: 60, max: 3 },
   communityPostsMember: { windowSeconds: 60, max: 8 },
   communityPostsTrusted: { windowSeconds: 60, max: 15 },
+  /** AI checks of one person's messages in one community (each post by a new or regular member may run one). */
+  moderationChecksPerUser: { windowSeconds: 600, max: 40 },
   /** Questions to businesses by @mention in groups and communities. */
   businessMentionsPerUser: { windowSeconds: 3600, max: 20 },
   /** Businesses a person can add ("Add a business"). */

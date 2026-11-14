@@ -72,4 +72,27 @@ describe.skipIf(!dbUp)("community spam guard (live)", () => {
     for (const n of [1, 2, 3]) expect(await guard.guardCommunityPost(communityId, people.fresh.userId, `Message ${n}`)).toMatchObject({ ok: true });
     expect(await guard.guardCommunityPost(communityId, people.fresh.userId, "Message 4")).toMatchObject({ ok: false, error: expect.stringContaining("Slow mode") });
   });
+
+  it("“Post anyway” after a nudge is for that exact message, once: it can't be reused to get around slow mode", async () => {
+    const { guard } = await lib();
+    const db = admin();
+    const userId = people.fresh.userId; // slow mode is used up by the test above
+    const nudged = `${"Same beginning, more than five hundred characters long. ".repeat(12)}THE NUDGED ENDING`;
+    expect(nudged.length).toBeGreaterThan(500);
+    const nudge = () =>
+      db.from("moderation_events").insert({ community_id: communityId, conversation_id: general, user_id: userId, action: "nudged", verdict: "rude", confidence: 0.6, reason: "test", excerpt: nudged.slice(0, 500), text_hash: guard.nudgeHash(nudged) });
+    expect((await nudge()).error).toBeNull();
+
+    // A different message with the same first 500 characters is not the message that was nudged: slow mode applies.
+    const other = `${nudged.slice(0, 500)} A DIFFERENT ENDING`;
+    expect(await guard.guardCommunityPost(communityId, userId, other, { resend: true })).toMatchObject({ ok: false, error: expect.stringContaining("Slow mode") });
+    // Claiming a re-send without any nudge doesn't help either.
+    expect(await guard.guardCommunityPost(communityId, userId, "Never nudged", { resend: true })).toMatchObject({ ok: false, error: expect.stringContaining("Slow mode") });
+
+    // The nudged message itself goes through, once.
+    expect(await guard.guardCommunityPost(communityId, userId, nudged, { resend: true })).toMatchObject({ ok: true });
+    expect(await guard.guardCommunityPost(communityId, userId, nudged, { resend: true })).toMatchObject({ ok: false, error: expect.stringContaining("Slow mode") });
+    const { data: used } = await db.from("moderation_events").select("used_at").eq("community_id", communityId).eq("user_id", userId).eq("action", "nudged");
+    expect(used!.every((e) => e.used_at !== null)).toBe(true);
+  });
 });

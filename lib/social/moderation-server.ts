@@ -4,6 +4,7 @@ import { llm } from "@/lib/llm";
 import { MODERATION_SYSTEM, wrapUntrusted } from "@/lib/agents/prompts";
 import { agreesWithReports, decide, ModerationSchema, THRESHOLDS, type Decision, type Moderation } from "./moderation";
 import type { TrustLevel } from "./guard";
+import { nudgeHash } from "./guard-server";
 import { houseRuleLabel } from "./rules";
 
 type Event = {
@@ -27,6 +28,8 @@ async function logEvent(e: Event): Promise<string | null> {
     confidence: e.m.confidence,
     reason: e.m.reason.slice(0, 200),
     excerpt: e.text.slice(0, 500),
+    // A nudge can be answered with "Post anyway" for this exact message, once (see guardCommunityPost).
+    text_hash: e.action === "nudged" ? nudgeHash(e.text) : null,
     // Kept so a successful appeal can post or restore it.
     original_text: e.action === "refused" || e.action === "hidden_after_reports" ? e.text.slice(0, 4000) : null,
   }).select("id").single();

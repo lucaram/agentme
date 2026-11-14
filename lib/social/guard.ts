@@ -43,6 +43,13 @@ export const sameMessage = (a: string, b: string) => {
   return norm(a) === norm(b) && norm(a).length > 0;
 };
 
+/**
+ * What a "Post anyway" approval is tied to: the whole message, exactly (its SHA-256 as hex is stored with
+ * the nudge). The stored excerpt is only its first 500 characters, so comparing excerpts let a different
+ * message with the same beginning ride on the approval.
+ */
+export const nudgeKey = (text: string) => text.trim();
+
 export type GuardResult = { ok: true; flags: string[] } | { ok: false; error: string };
 
 /** Checks one message. `recent`: the sender's own messages in this community in the last few minutes. */

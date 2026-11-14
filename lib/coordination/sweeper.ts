@@ -23,31 +23,55 @@ declare global {
  * Safe with several instances: task claims are atomic in Postgres.
  * (On serverless hosting, call the same functions from a scheduled cron route instead.)
  */
+const MAINTENANCE: readonly (readonly [string, () => Promise<unknown>])[] = [
+  ["rate limits", pruneRateLimits],
+  ["contact lists", pruneContactLists],
+  ["business links", () => refreshDueSources()],
+  // Business websites: the daily re-read (tells the owner what changed), and the weekly "customers asked about…".
+  ["business websites", () => refreshDueSites()],
+  ["business gaps", nudgeBusinessGaps],
+  ["research cache", pruneResearchCache],
+  ["answer log", pruneAnswerLog],
+  // Communities: appeals nobody answered in 3 days, the daily digest, quiet moderators.
+  ["appeals", () => autoResolveAppeals()],
+  ["digests", () => sendDigests()],
+  ["quiet moderators", () => nudgeInactiveModerators()],
+];
+
 export function startSweeper() {
   if (globalThis.__agentmeSweeper) return;
   let lastPrune = 0;
   let running = false;
+  let maintaining = false;
+  /**
+   * Housekeeping, on its own: it reads other people's websites, which can be slow, and must never hold up
+   * the recovery of interrupted plans. Each job is separate too: one that fails doesn't stop the rest.
+   */
+  const maintain = async () => {
+    if (maintaining) return;
+    maintaining = true;
+    try {
+      for (const [name, job] of MAINTENANCE) {
+        try {
+          await job();
+        } catch (error) {
+          console.error(`[agentme] maintenance (${name}) failed`, error instanceof Error ? error.message : error);
+        }
+      }
+    } finally {
+      maintaining = false;
+    }
+  };
   const tick = async () => {
+    if (Date.now() - lastPrune > PRUNE_EVERY_MS) {
+      lastPrune = Date.now();
+      void maintain();
+    }
     if (running) return;
     running = true;
     try {
       const resumed = await recoverStuckTasks();
       if (resumed) console.log(`[agentme] resumed ${resumed} interrupted task(s)`);
-      if (Date.now() - lastPrune > PRUNE_EVERY_MS) {
-        lastPrune = Date.now();
-        await pruneRateLimits();
-        await pruneContactLists();
-        await refreshDueSources();
-        // Business websites: the daily re-read (tells the owner what changed), and the weekly "customers asked about…".
-        await refreshDueSites();
-        await nudgeBusinessGaps();
-        await pruneResearchCache();
-        await pruneAnswerLog();
-        // Communities: appeals nobody answered in 3 days, the daily digest, quiet moderators.
-        await autoResolveAppeals();
-        await sendDigests();
-        await nudgeInactiveModerators();
-      }
     } catch (error) {
       console.error("[agentme] sweeper error", error instanceof Error ? error.message : error);
     } finally {

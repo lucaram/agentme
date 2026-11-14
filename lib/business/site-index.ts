@@ -14,6 +14,8 @@ import { MAX_INDEX_SITEMAPS, MAX_INDEX_URLS, candidateUrl, indexWords, newestFir
 
 type Found = { url: string; lastmod: string | null; title: string | null };
 
+const INDEX_DEADLINE_MS = 4 * 60_000;
+
 const text = async (url: string) => {
   try {
     const f = await safeFetch(url);
@@ -33,7 +35,9 @@ export async function indexSite(agentId: string, siteUrl: string, extra: string[
   const tried = new Set<string>();
   const seen = new Set<string>(extra);
   let found: Found[] = [];
-  while (queue.length && tried.size < MAX_INDEX_SITEMAPS) {
+  // A site with many slow sitemaps: stop after a few minutes and keep what was found.
+  const stopAt = Date.now() + INDEX_DEADLINE_MS;
+  while (queue.length && tried.size < MAX_INDEX_SITEMAPS && Date.now() < stopAt) {
     const url = queue.shift()!;
     let own = false;
     try {

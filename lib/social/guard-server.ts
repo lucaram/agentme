@@ -1,7 +1,11 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { adminClient } from "@/lib/supabase/admin";
 import { describeRetry, hit, type LimitName } from "@/lib/limits";
-import { checkCommunityMessage, trustLevel, type GuardResult, type TrustLevel } from "./guard";
+import { checkCommunityMessage, nudgeKey, trustLevel, type GuardResult, type TrustLevel } from "./guard";
+
+/** The fingerprint of a whole message, kept with its nudge. */
+export const nudgeHash = (text: string) => createHash("sha256").update(nudgeKey(text)).digest("hex");
 
 const SLOW_MODE_LIMIT: Record<Exclude<TrustLevel, "moderator">, LimitName> = {
   new: "communityPostsNew",
@@ -38,22 +42,30 @@ export async function guardCommunityPost(
   opts: { resend?: boolean } = {},
 ): Promise<GuardResult & { level: TrustLevel }> {
   const level = await communityTrust(communityId, userId);
-  // A re-send only skips slow mode if this exact message really was nudged moments ago (the flag comes from the browser).
+  // A re-send only skips slow mode if this exact, whole message really was nudged moments ago (the flag comes
+  // from the browser), and only once: the nudge is marked as used here, in the same statement that finds it.
   const resend =
     opts.resend &&
     Boolean(
       (
         await adminClient()
           .from("moderation_events")
-          .select("id")
+          .update({ used_at: new Date().toISOString() })
           .eq("community_id", communityId)
           .eq("user_id", userId)
           .eq("action", "nudged")
-          .eq("excerpt", text.slice(0, 500))
+          .eq("text_hash", nudgeHash(text))
+          .is("used_at", null)
           .gt("created_at", new Date(Date.now() - 10 * 60_000).toISOString())
-          .limit(1)
+          .select("id")
       ).data?.length,
     );
+  // Each pass may cost an AI check of the message (new and regular members): capped on its own, whatever
+  // slow mode allowed, so nothing can be used to run checks without limit.
+  if (level === "new" || level === "member") {
+    const checks = await hit("moderationChecksPerUser", `${communityId}:${userId}`);
+    if (!checks.allowed) return { ok: false, error: `You're posting a lot here. Please wait ${describeRetry(checks.retryAfterSeconds)} before posting again.`, level };
+  }
   if (level !== "moderator" && !resend) {
     const limit = await hit(SLOW_MODE_LIMIT[level], `${communityId}:${userId}`);
     if (!limit.allowed) return { ok: false, error: `Slow mode: please wait ${describeRetry(limit.retryAfterSeconds)} before posting again.`, level };
