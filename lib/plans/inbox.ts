@@ -58,7 +58,7 @@ export async function answerInboxItem(itemId: string, ownerId: string, raw: Reco
     // Business: the team's answer goes back to the asker; optionally it becomes part of the business info.
     if (payload.business) {
       await relayTeamAnswer(item, parsed.data.answer);
-      if (remember) await addToBusinessInfo(item.agent_id, payload.question, parsed.data.answer);
+      if (remember && payload.faq_eligible === true) await addToBusinessInfo(item.agent_id, payload.question, parsed.data.answer, true);
     }
     // Ask around: optionally keep the answer as a tip the agent may share by itself next time.
     if (remember && payload.ask_around) {

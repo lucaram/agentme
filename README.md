@@ -183,7 +183,8 @@ A **My Business** tab, shown to business accounts, holds everything the business
   - **Safe fetching** (`lib/business/fetch.ts`): http(s) only, standard ports, the resolved address must be public (checked at connect time and for raw IPs), at most 3 redirects, 5 MB and 10 s. Development can allow local pages with `ALLOW_LOCAL_FETCH=1`, which the e2e tests use with `/demo/trattoria-menu.html`.
   - **Website text is untrusted data** (`<website_content>`), never instructions.
 - **What your agent knows + Try it:** ask a test question as a visitor or as a customer.
-- **Answers:** the agent answers only from this information. If the answer isn't there, it says *"I've asked the team"*: the question lands in the business's *Needs your answer* (signed-in askers only, 10 a day per asker), and the team's answer goes back to the asker's chat. One tick adds it to *Questions & answers*, so the agent answers it by itself next time.
+- **Answers:** the agent answers from its business information and website. For a relevant unanswered question, signed-in askers can click **Ask the team**; no staff request is created before that click. Matching open questions from the same asker are reused. The database enforces 10 requests per asker/business/day and 50 total per business/day. The answer returns privately to the original conversation. Public FAQ publication is unchecked by default, offered only for general business questions, and reviewed for private details before saving. Customer-specific answers cannot become FAQs.
+- **Personal plans:** questions about an existing agreement or attendance use the asker's authorised saved plans, including venue, time and latest RSVPs. A venue's `@handle` does not contact the business. Similar matching plans prompt a clarification; the user can reply with a numbered choice. Venue recall states that AGENTME has made no reservation, then offers published booking/contact methods with clickable buttons. The business's own current details take priority over its reviewed, live website information; private, hidden and unpublished contacts are excluded. No plan details are sent out to find these options.
 - **Never:** bookings, orders or payments. Instead, the agent sends people to the business's own ways (next item).
 - **How customers book or order** (`lib/business/booking.ts`):
   - **What the business adds:** up to 4 ways, each one 📅 Book, 🛍️ Order, 📞 Call, 💬 WhatsApp, ✉️ Email or 🔗 Website.
@@ -217,7 +218,7 @@ A business is never a member of a group or community. It is *placed* there (`bus
 - It only sees the messages that @mention it. The server sends it just that message over A2A, as the sender's agent.
 - It answers from its **public** information only, even when the person asking is one of its customers, because everyone in the chat reads the answer.
 - It never posts on its own.
-- A question it can't answer goes to its team. The team's answer reaches the asker in a private chat with the business.
+- A relevant question it can't answer offers **Ask the team** to the original asker. The team's answer reaches the asker privately after they choose to send the request.
 
 How it works in each place:
 - **Groups:**
@@ -380,6 +381,7 @@ My Agent opens on a list of your requests, one line each, like a list of recent 
 ```bash
 npm test             # unit + security suites; DB suites run when Supabase is up
 npm run test:e2e     # Playwright: onboarding <60s, dinner scenario + live RSVPs, contacts/DM, cancel, business FAQ
+npm run test:e2e:case7 # isolated mock server on :3001, temporary accounts, no demo reseed
 npm run test:interop # external A2A client → @trattoria
 
 # Live suites (A2A security, rate limits, crash recovery) need a MOCK-mode server, so they

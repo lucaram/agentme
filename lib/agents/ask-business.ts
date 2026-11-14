@@ -8,6 +8,7 @@ import { researchWeb } from "@/lib/research";
 import { answerMessage } from "@/lib/research/answer";
 import { hit } from "@/lib/limits";
 import { isPublicDomain } from "@/lib/business/site";
+import { handoffMetadata } from "@/lib/business/question-scope";
 
 /**
  * Your agent asks a business's agent for you (over A2A, exactly like asking it
@@ -50,7 +51,7 @@ export async function askBusinessFor(opts: { agent: AgentRow; conversationId: st
       ? `🏪 I asked @${business.handle}:\n\n${result.text.trim() || "(no answer)"}`
       : `I couldn't reach @${business.handle} just now (${result.error}). You can ask it directly from its page.`,
     // The A2A task links a later answer from the business's team back to this thread.
-    metadata: { kind: "business_answer", business_id: business.id, handle: business.handle, ...(result.ok && result.taskId ? { a2a_task: result.taskId } : {}) },
+    metadata: { kind: "business_answer", business_id: business.id, handle: business.handle, ...(result.ok && result.taskId ? { a2a_task: result.taskId, ...handoffMetadata(result.data, result.taskId) } : {}) },
   });
 }
 

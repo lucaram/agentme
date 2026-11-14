@@ -108,12 +108,10 @@ export async function handleA2ARequest(request: Request, handle: string): Promis
     // Business agents: text read from the business's own links. A question they can't
     // answer may go to the business's team, for signed-in agents only and rate-limited.
     const sources = recipient.type === "business" ? await businessSources(recipient.id) : [];
-    const requestHandoff = async () =>
-      Boolean(caller.agent) && (await hit("businessHandoffsPerCaller", `${caller.agent!.id}:${recipient.id}`)).allowed;
     // AI cost of this reply is attributed to the recipient's owner and, when the
     // platform-signed token names one, to the coordination task it serves.
     return withUsageContext({ taskId: caller.taskId ?? null, agentId: recipient.id, userId: recipient.owner_id }, () =>
-      respondAsAgent(recipient, { callerHandle: caller.agent?.handle ?? null, relationship, text, data }, facts, tips, { sources, requestHandoff, lookup: (q, audience) => lookUpOnSite(recipient, q, audience), record: (step) => logAnswer(recipient.id, step) }),
+      respondAsAgent(recipient, { callerHandle: caller.agent?.handle ?? null, relationship, text, data }, facts, tips, { sources, lookup: (q, audience) => lookUpOnSite(recipient, q, audience), record: (step) => logAnswer(recipient.id, step) }),
     );
   }, (response, a2aTaskId, requestData) => recordExchange(recipient, caller, response, a2aTaskId, requestData));
 

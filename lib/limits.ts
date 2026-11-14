@@ -24,8 +24,8 @@ export const LIMITS = {
   phoneCodesPerAgent: { windowSeconds: 3600, max: 5 },
   /** "Re-read now" on a business link. */
   businessRereadsPerAgent: { windowSeconds: 3600, max: 20 },
-  /** Questions a business agent hands to its team, per asking agent and business. */
-  businessHandoffsPerCaller: { windowSeconds: 86400, max: 10 },
+  // Staff handoffs use the atomic request_business_handoff RPC: 10 per
+  // caller/business/day, 50 total per business/day, after pending deduplication.
   /** Community slow mode: messages per minute, by trust level (lib/social/guard.ts). */
   communityPostsNew: { windowSeconds: 60, max: 3 },
   communityPostsMember: { windowSeconds: 60, max: 8 },
@@ -82,6 +82,10 @@ export function describeRetry(seconds: number): string {
 
 /** Deletes expired windows (called by the background sweeper). */
 export async function pruneRateLimits() {
-  const cutoff = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+  // Fixed windows start at the beginning of the period, not at the last hit.
+  // Keep a full day for staff-handoff counters enforced inside the database,
+  // and at least the longest configured window for every other limiter.
+  const retentionSeconds = Math.max(86400, ...Object.values(LIMITS).map((limit) => limit.windowSeconds));
+  const cutoff = new Date(Date.now() - retentionSeconds * 1000).toISOString();
   await adminClient().from("rate_limits").delete().lt("window_start", cutoff);
 }

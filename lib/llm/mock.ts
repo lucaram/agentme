@@ -12,6 +12,8 @@ import { mockChanges, mockLearn, type PageText } from "@/lib/business/learn";
 import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest, type LLMFindRequest, type LLMFindResult, type LLMResearchRequest, type LLMResearchResult } from "./types";
 import { mockResearch } from "@/lib/research/mock";
 import { mockRoute, overlapPick } from "@/lib/research/answer";
+import { mockRecallRoute } from "@/lib/agents/recall-route";
+import { mockBusinessScope, mockPublication } from "@/lib/business/question-scope";
 
 type Faq = { q: string; a: string };
 type BusinessInfo = { description?: string; hours?: string; faqs?: Faq[] };
@@ -46,7 +48,7 @@ export class MockProvider implements LLMProvider {
         const asksAboutPlans = /\b(what time|when|who|replied|answer|agree|poll|vote|result|plan|coming)\b/i.test(String(ctx.text ?? ""));
         text =
           asksAboutPlans && recall.length
-            ? describeRecall(String(ctx.text ?? ""), recall)
+            ? describeRecall(String(ctx.text ?? ""), recall, typeof ctx.viewerHandle === "string" ? ctx.viewerHandle : undefined)
             : "I can coordinate plans with your contacts' agents, run polls and ask them questions. Try: \"Arrange dinner with @marco and @paul on Saturday evening.\"";
         break;
       }
@@ -103,6 +105,15 @@ export class MockProvider implements LLMProvider {
     const ctx = (req.mockContext ?? {}) as Record<string, unknown>;
     let value: unknown;
     switch (req.purpose) {
+      case "recall_route":
+        value = mockRecallRoute(String(ctx.text ?? ""), (ctx.plans ?? []) as RecallPlan[]);
+        break;
+      case "business_scope":
+        value = { scope: mockBusinessScope(String(ctx.question ?? "")) };
+        break;
+      case "business_publication":
+        value = { reusable: mockPublication(String(ctx.question ?? ""), String(ctx.answer ?? "")) };
+        break;
       case "compose":
         value = heuristicCompose(withQuoted(String(ctx.text ?? ""), String(ctx.quoted ?? "")), (ctx.chatMembers ?? []) as string[]);
         break;

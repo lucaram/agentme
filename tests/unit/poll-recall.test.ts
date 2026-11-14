@@ -48,12 +48,28 @@ describe("recall", () => {
 
   it("answers from the owner's own plans", () => {
     expect(describeRecall("What time did we agree for dinner?", plans)).toBe(
-      "Dinner — Italian: Saturday at 7:30 PM. In: @luca, @marco. Can't make it: nobody. Waiting: @paul.",
+      "Dinner — Italian is on Saturday at 7:30 PM. @luca and @marco are in. We're still waiting for @paul to reply.",
     );
   });
 
   it("says so when there's nothing to recall", () => {
     expect(describeRecall("anything?", [])).toBe("You don't have any plans yet.");
+  });
+
+  it("uses the viewer's identity and real names, without empty attendance categories", () => {
+    const plan: RecallPlan = { ...plans[0], event: "dinner", venue: { agent_id: "venue", handle: "trattoria", name: "Trattoria Sole" }, reservationWays: [{ kind: "call", value: "020 7946 0000" }], names: { luca: "Luca", marco: "Marco", paul: "Paul" }, rsvp: { in: ["luca", "marco", "paul"], out: [], waiting: [] } };
+    expect(describeRecall("Who's coming?", [plan], "luca")).toBe("Your dinner at Trattoria Sole is on Saturday at 7:30 PM. You, Marco and Paul are all in.\n\nAGENTME hasn't made a reservation. To arrange one, use the options below.");
+    expect(describeRecall("Who's coming?", [plan], "marco")).toContain("You, Luca and Paul are all in.");
+    expect(describeRecall("Has everyone replied?", [plan], "luca")).toContain("Everyone has replied.");
+  });
+
+  it("mentions real declines, pending replies and waitlists with correct grammar", () => {
+    const plan: RecallPlan = { ...plans[0], names: { luca: "Luca", marco: "Marco", paul: "Paul" }, rsvp: { in: ["marco"], out: ["paul"], waiting: ["luca"] } };
+    expect(describeRecall("Who's coming?", [plan], "luca")).toBe("Dinner — Italian is on Saturday at 7:30 PM. Marco is in. Paul can't make it. We're still waiting for you to reply.");
+    const waitlisted = { ...plan, rsvp: { in: [], out: ["paul"], waiting: [], waitlist: ["luca"] } };
+    const answer = describeRecall("Who's coming?", [waitlisted], "luca");
+    expect(answer).toContain("No one has confirmed yet. Paul can't make it. You are on the waitlist.");
+    expect(answer).not.toContain("all in");
   });
 });
 
@@ -65,8 +81,8 @@ describe("recall through My Agent (mock model)", () => {
     ];
     const ask = (text: string) =>
       new MockProvider().generateText({ purpose: "owner_chat", system: "", messages: [{ role: "user", content: text }], mockContext: { text, recall: plans } });
-    expect(await ask("What time did we agree for dinner?")).toMatch(/^Dinner — Italian: Saturday at 7:30 PM\./);
-    expect(await ask("Who hasn't replied?")).toMatch(/Waiting: nobody/);
+    expect(await ask("What time did we agree for dinner?")).toMatch(/^Dinner — Italian is on Saturday at 7:30 PM\./);
+    expect(await ask("Who hasn't replied?")).toContain("Everyone has replied.");
     expect(await ask("Hello there")).toMatch(/^I can coordinate plans/);
   });
 });

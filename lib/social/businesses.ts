@@ -1,4 +1,5 @@
 import "server-only";
+import { handoffMetadata } from "@/lib/business/question-scope";
 import { adminClient } from "@/lib/supabase/admin";
 import { getAgentByHandle, getAgentById, type AgentRow } from "@/lib/data/agents";
 import { postMessage } from "@/lib/data/chat";
@@ -211,7 +212,7 @@ export async function answerMentions(opts: {
         from: "agent",
         agentId: business.id,
         content: result.text || "(no answer)",
-        metadata: { kind: "business_reply", asked_by: userId },
+        metadata: { kind: "business_reply", asked_by: userId, ...handoffMetadata(result.data, result.taskId) },
       });
     }),
   );

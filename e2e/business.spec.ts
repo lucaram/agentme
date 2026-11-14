@@ -59,18 +59,21 @@ Our menu: ${baseURL}/demo/trattoria-menu.html`);
   await shop.page.getByRole("button", { name: "See the answer" }).click();
   await expect(shop.page.getByTestId("try-answer")).toContainText("small pasta and pizzas");
 
-  // A visitor asks something that isn't there: the agent says it asked the team.
+  // An unknown answer offers an explicit staff request.
   const luca = await as(browser, "luca");
   await luca.page.goto("/discover?q=tratt");
   await luca.page.getByRole("button", { name: "Ask agent" }).click();
   await send(luca.page, "Is there parking nearby?");
-  await expect(luca.page.getByText("I've asked the team")).toBeVisible();
+  await luca.page.getByRole("button", { name: "Ask the team", exact: true }).click();
+  await expect(luca.page.getByRole("status").filter({ hasText: "Sent to the team" })).toBeVisible();
 
   // The business answers under Needs your answer; it goes back to Luca and into the business info.
   await shop.page.goto("/chats");
   await shop.page.getByTestId("my-agent-card").click();
   const item = shop.page.getByTestId("inbox-item").filter({ hasText: "asked your business" });
   await item.getByLabel(/Your answer/).fill("Yes, a public car park two minutes away on Pratt Street.");
+  await expect(item.getByRole("checkbox", { name: /Publish this as a public FAQ/ })).not.toBeChecked();
+  await item.getByRole("checkbox", { name: /Publish this as a public FAQ/ }).check();
   await item.getByRole("button", { name: "Send answer" }).click();
   await expect(luca.page.getByText("The team at Trattoria Sole: Yes, a public car park two minutes away")).toBeVisible({ timeout: 15_000 });
   await shop.page.goto("/business");
@@ -139,7 +142,7 @@ test("add a business from a personal account and switch between the two", async 
   await luca.page.goto(`/u/gina_bakery_${id}`);
   await luca.page.getByRole("button", { name: /Ask us anything/ }).click();
   await send(luca.page, "Do you make birthday cakes?");
-  await expect(luca.page.getByText("I've asked the team")).toBeVisible();
+  await luca.page.getByRole("button", { name: "Ask the team", exact: true }).click();
 
   // Back to the personal account: separate chats, and a badge for what's waiting in the business.
   await switcher.click();
