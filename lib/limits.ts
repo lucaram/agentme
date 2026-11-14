@@ -8,8 +8,10 @@ import { adminClient } from "@/lib/supabase/admin";
 export const LIMITS = {
   /** A2A requests one calling agent may make to one recipient agent. */
   a2aPerCaller: { windowSeconds: 60, max: 30 },
-  /** A2A requests from anonymous/external callers, per IP. */
+  /** A2A requests from anonymous/external callers, per trusted address (or all together when no address can be trusted). */
   a2aAnonymousPerIp: { windowSeconds: 60, max: 10 },
+  /** All anonymous A2A requests to one agent, whatever address they come from (each may cost its owner an AI answer). */
+  a2aAnonymousPerAgent: { windowSeconds: 3600, max: 300 },
   /** Messages a user sends to their own agent or to another agent (each costs AI). */
   agentMessagesPerUser: { windowSeconds: 60, max: 20 },
   /** Coordination tasks a user may start. */

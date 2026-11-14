@@ -3,6 +3,7 @@ import { adminClient } from "@/lib/supabase/admin";
 import { displayClock } from "@/lib/coordination/heuristics";
 import type { RecallPlan } from "./recall-format";
 import { evaluate, type ThresholdConfig } from "@/lib/plans/threshold";
+import { hasPrivateResult, withPrivateResults } from "@/lib/plans/steps";
 
 export type { RecallPlan } from "./recall-format";
 
@@ -25,11 +26,14 @@ export async function buildRecall(userId: string): Promise<RecallPlan[]> {
   if (!tasks.length) return [];
 
   const taskIds = tasks.map((t) => t.id);
-  const [{ data: agents }, { data: proposals }, { data: steps }] = await Promise.all([
+  const [{ data: agents }, { data: proposals }, { data: sharedSteps }] = await Promise.all([
     db.from("agents").select("id, handle"),
     db.from("proposals").select("task_id, content, status").in("task_id", taskIds),
     db.from("plan_steps").select("id, task_id, type, config, result, status").in("task_id", taskIds),
   ]);
+  // What people told the organiser (personal answers) is for the organiser: only in recall of plans this owner organised.
+  const ownedIds = new Set(owned.map((t) => t.id));
+  const steps = await withPrivateResults((sharedSteps ?? []).filter((s) => ownedIds.has(s.task_id) || !hasPrivateResult(s.type)));
   const stepIds = (steps ?? []).filter((s) => s.type === "rsvp" || s.type === "poll").map((s) => s.id);
   const assignIds = (steps ?? []).filter((s) => s.type === "assign").map((s) => s.id);
   const [{ data: responses }, { data: claims }] = await Promise.all([

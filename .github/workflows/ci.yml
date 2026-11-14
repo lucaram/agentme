@@ -14,6 +14,8 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
       APP_URL: http://localhost:3000
       A2A_SIGNING_SECRET: ci-only-signing-secret-ci-only-signing-secret
+      # Tests stand in for one trusted proxy: they set X-Forwarded-For themselves, so each has its own allowance.
+      TRUSTED_PROXY_HOPS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
