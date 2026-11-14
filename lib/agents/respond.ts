@@ -277,6 +277,7 @@ async function answerBusinessQuestion(recipient: RecipientAgent, question: strin
   const scope = isPersonalPlanQuestion(trimmed) ? "personal_plan" : classified.scope;
   if (scope === "personal_plan" || scope === "unrelated" || scope === "unclear") return {
     status: "completed", skill: "business.faq", disclosed: [],
+    data: { type: "agentme.business.redirect", scope },
     text: scope === "personal_plan" ? "Your personal agent can check your group's saved plans and attendance. I can't see those private arrangements, and I haven't asked the team." : scope === "unclear" ? "What would you like to know about this business? I haven't asked the team." : "I can help with questions about this business. Your personal agent can help with that question. I haven't asked the team.",
   };
   // Customers-only information is for the business's contacts, asking directly.
@@ -307,5 +308,5 @@ async function answerBusinessQuestion(recipient: RecipientAgent, question: strin
     };
   }
   await business.record?.(reply.needs_team ? "none" : step).catch(() => undefined);
-  return { status: "completed", skill: "business.faq", text: reply.answer, disclosed: ["business_info"] };
+  return { status: "completed", skill: "business.faq", text: reply.answer, disclosed: reply.needs_team ? [] : ["business_info"] };
 }

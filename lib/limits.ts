@@ -6,6 +6,8 @@ import { adminClient } from "@/lib/supabase/admin";
  * and multiple app instances). Tuned for an invite-only beta; adjust freely.
  */
 export const LIMITS = {
+  businessActionClicksPerIp: { windowSeconds: 60, max: 60 },
+  businessActionClicksPerAgent: { windowSeconds: 3600, max: 600 },
   /** A2A requests one calling agent may make to one recipient agent. */
   a2aPerCaller: { windowSeconds: 60, max: 30 },
   /** A2A requests from anonymous/external callers, per trusted address (or all together when no address can be trusted). */

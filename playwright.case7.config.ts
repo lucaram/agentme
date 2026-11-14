@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 /** Isolated regression: uses throwaway accounts and never runs the demo seed. */
 export default defineConfig({
-  testDir: "./e2e", testMatch: ["recall-handoffs.spec.ts", "business-workspace.spec.ts"], workers: 1,
+  testDir: "./e2e", testMatch: ["recall-handoffs.spec.ts", "business-workspace.spec.ts", "sections.spec.ts"], workers: 1,
   timeout: 120_000, expect: { timeout: 30_000 }, reporter: "list",
   use: { baseURL: "http://localhost:3001", trace: "retain-on-failure" },
   projects: [{ name: "desktop", use: { ...devices["Desktop Chrome"] } }],

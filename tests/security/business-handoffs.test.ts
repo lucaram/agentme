@@ -13,7 +13,7 @@ it.each(["What time did we agree for dinner at @Trattoria on 21 November, and wh
   const result = await ask(text);
   expect(result).toMatchObject({ status: "completed", disclosed: [] });
   expect(result).not.toHaveProperty("inbox");
-  expect(result).not.toHaveProperty("data");
+  expect(result).toHaveProperty("data", { type: "agentme.business.redirect", scope: "personal_plan" });
 });
 it("offers a real pre-booking question without invoking staff, and gives anonymous callers no offer", async () => {
   setLLMProviderForTesting(new MockProvider());

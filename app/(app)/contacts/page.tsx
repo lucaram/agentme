@@ -72,7 +72,6 @@ export default async function ContactsPage() {
       <div className="space-y-3">
         <Fold
           name="contacts-sections"
-          open
           icon="👥"
           title="Contacts"
           testId="fold-contacts"

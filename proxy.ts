@@ -33,7 +33,7 @@ export async function proxy(request: NextRequest) {
   const signedIn = Boolean(data?.claims);
   const path = request.nextUrl.pathname;
   // Invite links and personal links open without an account (they offer to sign in or join as a guest).
-  const isPublic = path === "/" || path.startsWith("/login") || path.startsWith("/signup") || path.startsWith("/join/") || path.startsWith("/u/");
+  const isPublic = path === "/" || path.startsWith("/login") || path.startsWith("/signup") || path.startsWith("/join/") || path.startsWith("/u/") || path === "/api/business/actions/click";
 
   if (!signedIn && !isPublic) {
     const url = request.nextUrl.clone();

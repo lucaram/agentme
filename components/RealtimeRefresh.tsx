@@ -6,7 +6,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { browserClient } from "@/lib/supabase/client";
 import { scheduleRefresh } from "@/lib/refresh";
 
-type Table = "messages" | "tasks" | "task_exchanges" | "proposals" | "proposal_responses" | "inbox_items" | "plan_steps" | "step_responses" | "item_claims" | "plan_changes" | "business_sources" | "business_sites";
+type Table = "messages" | "tasks" | "task_exchanges" | "proposals" | "proposal_responses" | "inbox_items" | "plan_steps" | "step_responses" | "item_claims" | "plan_changes" | "business_sources" | "business_sites" | "business_action_events";
 
 /** A page rendered this recently is already up to date when its socket connects. */
 const FRESH_MS = 2000;

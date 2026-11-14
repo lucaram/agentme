@@ -46,7 +46,7 @@ export default async function PersonalLinkPage({ params, searchParams }: PagePro
           {details.address && <p className="mt-2 text-sm"><b>Address:</b> {details.address}</p>}
         </div>
         {/* The business's own ways to book or order: open to anyone, no account needed. */}
-        <BusinessWays ways={ways} block primary={false} />
+        <BusinessWays ways={ways} block primary={false} agentId={other.id} source="public_page" />
         {!me ? (
           <div className="flex w-full flex-col gap-2">
             <Link href={`/signup?next=${encodeURIComponent(here)}`} className="btn-primary">💬 Ask us anything</Link>

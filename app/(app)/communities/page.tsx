@@ -80,14 +80,13 @@ export default async function CommunitiesPage() {
       )}
       <CreateCommunityForm avatars={COMMUNITY_AVATARS} />
 
-      {/* Tap-to-open sections, one at a time: yours first, then popular ones to discover. */}
+      {/* Tap-to-open sections, one at a time, initially collapsed. */}
       <div className="space-y-3">
         <Fold
           name="community-lists"
           icon="🏟️"
           title="Your communities"
           testId="fold-your-communities"
-          open={Boolean(mine?.length)}
           summary={
             mine?.length
               ? [
@@ -112,7 +111,6 @@ export default async function CommunitiesPage() {
           icon="🔥"
           title="Popular public communities"
           testId="fold-popular-communities"
-          open={!mine?.length}
           summary={discover.length ? `${Math.min(discover.length, 20)} to discover · for something specific, use the search bar` : "No other public communities yet"}
         >
           <div aria-label="Discover communities">

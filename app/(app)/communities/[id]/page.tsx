@@ -91,7 +91,7 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
         </div>
       )}
       {/* Before joining, people see exactly what they accept: the core rules and the house rules. */}
-      <details open={!me}>
+      <details>
         <summary className="cursor-pointer text-sm font-semibold">Rules</summary>
         <ul className="mt-1 space-y-1 rounded-lg bg-accent-soft px-3 py-2 text-sm" data-testid="community-rules">
           {rulesList(community.house_rules ?? [], community.language).map((r) => (
@@ -199,7 +199,6 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
             icon="🤖"
             title="Autopilot"
             testId="autopilot"
-            open={appealsWaiting.length > 0}
             summary={[
               `${autopilotWeek.refused} kept out this week`,
               appealsWaiting.length ? `${appealsWaiting.length} ${appealsWaiting.length === 1 ? "appeal waits" : "appeals wait"} for you` : "nothing waiting",
@@ -276,7 +275,6 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
             icon="🛡️"
             title="Moderation"
             testId="fold-moderation"
-            open={Boolean(requests?.length || reports?.length)}
             summary={[
               requests?.length ? `${requests.length} asking to join` : "Invite link",
               reports?.length ? `${reports.length} reported` : "nothing reported",

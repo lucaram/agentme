@@ -25,7 +25,6 @@ export function GapsSection({ gaps, name }: { gaps: GapView[]; name: string }) {
       icon="❓"
       title="Common questions awaiting answers"
       testId="gaps"
-      open
       badge={{ count: people, tone: "new" }}
       summary={open.length ? `${open[0].title}${open.length > 1 ? ` · and ${open.length - 1} more` : ""}` : "All answered"}
     >
