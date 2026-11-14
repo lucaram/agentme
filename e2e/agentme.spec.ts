@@ -117,7 +117,7 @@ test("three agents coordinate a dinner and humans approve it", async ({ browser 
   // Recall: Luca's own agent answers from his plans.
   await openMyAgent(luca.page);
   await send(luca.page, "What time did we agree for dinner?");
-  await expect(luca.page.getByText(/Dinner — Italian: Saturday at 7:30 PM\. In: @luca, @marco, @paul/)).toBeVisible();
+  await expect(luca.page.getByText(/Dinner — Italian is on Saturday at 7:30 PM\. You, Marco and Paul are all in\./)).toBeVisible();
 
   // Luca can see what the coordination cost in AI calls (all agents' calls count).
   await luca.page.goto("/history");

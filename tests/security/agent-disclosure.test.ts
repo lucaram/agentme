@@ -304,24 +304,24 @@ describe("businesses in groups and communities: public information only", () => 
 
   it("a customer asking directly gets customers-only information", async () => {
     const r = useRecorder();
-    await respondAsAgent(shop, { callerHandle: "luca", relationship: "accepted", text: "Do you do private events?", data: null }, [], [], { sources, requestHandoff: async () => false });
+    await respondAsAgent(shop, { callerHandle: "luca", relationship: "accepted", text: "Do you do private events?", data: null }, [], [], { sources });
     expect(shown(r)).toContain(CUSTOMERS_ONLY);
   });
 
   it.each([{ context: "group" }, { audience: "public" }])("the same customer asking in a group (%o) never does", async (data) => {
     const r = useRecorder();
-    await respondAsAgent(shop, { callerHandle: "luca", relationship: "accepted", text: "@trattoria do you do private events?", data }, [], [], { sources, requestHandoff: async () => false });
+    await respondAsAgent(shop, { callerHandle: "luca", relationship: "accepted", text: "@trattoria do you do private events?", data }, [], [], { sources });
     expect(shown(r)).not.toContain(CUSTOMERS_ONLY);
     expect(shown(r)).not.toContain(CUSTOMERS_PAGE);
   });
 
-  it("an unanswered group question says the team replies privately", async () => {
+  it("an unanswered group question offers a private team reply without opening an inbox item", async () => {
     useRecorder();
     const res = await respondAsAgent(shop, { callerHandle: "luca", relationship: "none", text: "Is there a cloakroom?", data: { context: "group" } }, [], [], {
       sources: [],
-      requestHandoff: async () => true,
     });
-    expect(res).toMatchObject({ status: "needs_human", text: expect.stringContaining("reply to @luca in a private chat") });
+    expect(res).toMatchObject({ status: "completed", text: expect.stringContaining("reply to @luca privately"), data: { type: "agentme.business.handoff_offer", faq_eligible: true } });
+    expect(res).not.toHaveProperty("inbox");
   });
 });
 
@@ -339,7 +339,6 @@ describe("business agents: booking and ordering", () => {
     useRecorder();
     const res = await respondAsAgent(shop, { callerHandle: "luca", relationship: "none", text: "Can I book a table for 4 on Friday?", data: null }, [], [], {
       sources: [],
-      requestHandoff: async () => true,
     });
     expect(res).toMatchObject({ status: "completed", text: expect.stringContaining("https://sole.example/book") });
     // A bad stored link never reaches the model or the answer.

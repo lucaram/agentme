@@ -449,14 +449,14 @@ isOneToOne: false
                   ]
                 },"inbox_items": {
                   Row: {
-                    "agent_id": string,"answer": Json | null,"answered_at": string | null,"created_at": string,"exchange_id": string | null,"from_agent": string | null,"id": string,"kind": string,"owner_id": string,"payload": NonNullable<Json>,"status": string,"task_id": string | null
+                    "agent_id": string,"answer": Json | null,"answered_at": string | null,"created_at": string,"exchange_id": string | null,"handoff_key": string | null,"from_agent": string | null,"id": string,"kind": string,"owner_id": string,"payload": NonNullable<Json>,"status": string,"task_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "agent_id": string,"answer"?: Json | null,"answered_at"?: string | null,"created_at"?: string,"exchange_id"?: string | null,"from_agent"?: string | null,"id"?: string,"kind"?: string,"owner_id": string,"payload": NonNullable<Json>,"status"?: string,"task_id"?: string | null
+                    "agent_id": string,"answer"?: Json | null,"answered_at"?: string | null,"created_at"?: string,"exchange_id"?: string | null,"handoff_key"?: string | null,"from_agent"?: string | null,"id"?: string,"kind"?: string,"owner_id": string,"payload": NonNullable<Json>,"status"?: string,"task_id"?: string | null
                   }
                   Update: {
-                    "agent_id"?: string,"answer"?: Json | null,"answered_at"?: string | null,"created_at"?: string,"exchange_id"?: string | null,"from_agent"?: string | null,"id"?: string,"kind"?: string,"owner_id"?: string,"payload"?: NonNullable<Json>,"status"?: string,"task_id"?: string | null
+                    "agent_id"?: string,"answer"?: Json | null,"answered_at"?: string | null,"created_at"?: string,"exchange_id"?: string | null,"handoff_key"?: string | null,"from_agent"?: string | null,"id"?: string,"kind"?: string,"owner_id"?: string,"payload"?: NonNullable<Json>,"status"?: string,"task_id"?: string | null
                   }
                   Relationships: [
                     {
@@ -1098,6 +1098,11 @@ isOneToOne: false
 "rate_limit_hit":
 { Args: { "p_key": string,"p_max": number,"p_window_seconds": number }; Returns: {
               "allowed": boolean,"retry_after_seconds": number
+            }[]
+                           },
+"request_business_handoff":
+{ Args: { "p_exchange": string,"p_caller": string }; Returns: {
+              "item_id": string | null,"created": boolean,"outcome": string
             }[]
                            },
 "renew_task_lease":

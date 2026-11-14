@@ -358,8 +358,8 @@ export async function openBusinessQuestions(agentId: string, sinceDays = 30) {
     .order("created_at", { ascending: false })
     .limit(300);
   const asked = (data ?? []).flatMap((i) => {
-    const p = (i.payload ?? {}) as { business?: boolean; question?: string };
-    return p.business && p.question ? [{ id: i.id, question: p.question, created_at: i.created_at }] : [];
+    const p = (i.payload ?? {}) as { business?: boolean; question?: string; faq_eligible?: boolean };
+    return p.business && p.faq_eligible === true && p.question ? [{ id: i.id, question: p.question, created_at: i.created_at }] : [];
   });
   return groupQuestions(asked);
 }

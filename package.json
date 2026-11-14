@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:case7": "playwright test --config playwright.case7.config.ts",
     "seed": "node --env-file=.env.local scripts/seed.mjs",
     "db:reset": "supabase db reset && npm run seed",
     "test:interop": "node tests/interop/a2a-smoke.mjs",

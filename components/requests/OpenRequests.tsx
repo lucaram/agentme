@@ -88,7 +88,7 @@ export async function OpenRequests({ title, kinds, hint }: { title: string; kind
                     {when} · Your agent didn&apos;t find this in your business info. Your answer goes back to them, from the team.
                   </p>
                 </div>
-                <QuestionForm itemId={item.id} variant="business" />
+                <QuestionForm itemId={item.id} variant="business" faqEligible={payload.faq_eligible === true} />
               </li>
             );
           }

@@ -20,6 +20,8 @@ import { OpenRequests } from "@/components/requests/OpenRequests";
 import { MyAgentHome } from "./MyAgentHome";
 import { FactSuggestion } from "./FactSuggestion";
 import { BusinessSuggestion } from "./BusinessSuggestion";
+import { BusinessWays } from "@/components/BusinessWays";
+import { AskTeam } from "./AskTeam";
 import { ActionButton } from "@/components/ActionButton";
 import { canForward as canForwardMessage, forwardLabel, type Forwarded } from "@/lib/social/forward";
 import { ForwardButton } from "./Forward";
@@ -283,7 +285,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
       )}
       <ol className="flex flex-1 flex-col gap-3" aria-label="Messages">
         {(messages ?? []).map((m) => {
-          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string; flags?: string[]; auto_hidden?: boolean; appeal?: string; business_id?: string; handle?: string; forwarded?: Forwarded; sources?: { url?: string; title?: string }[] };
+          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string; flags?: string[]; auto_hidden?: boolean; appeal?: string; business_id?: string; handle?: string; handoff_offer?: boolean; handoff_sent?: boolean; asked_by?: string; booking_ways?: unknown; forwarded?: Forwarded; sources?: { url?: string; title?: string }[] };
           // Where a looked-up answer came from: links to the pages themselves (web addresses only).
           const sources = (Array.isArray(meta.sources) ? meta.sources : []).filter((s) => typeof s?.url === "string" && /^https?:\/\//i.test(s.url)).slice(0, 3);
           const isPrivate = Boolean(m.visible_to);
@@ -408,6 +410,8 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
               {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}
               {meta.kind === "fact_suggestion" && isMyAgent && <FactSuggestion messageId={m.id} decided={meta.decided} />}
               {meta.kind === "business_suggestion" && isMyAgent && <BusinessSuggestion messageId={m.id} handle={meta.handle ?? ""} decided={meta.decided} />}
+              {isMyAgent && !m.removed_at && m.is_ai_generated && Array.isArray(meta.booking_ways) && <BusinessWays ways={waysOf({ ways: meta.booking_ways }).filter((way) => way.kind !== "order")} primary={false} />}
+              {meta.handoff_offer && !m.removed_at && (isMyAgent || conv.kind === "agent_chat" || meta.asked_by === user.id) && <AskTeam messageId={m.id} sent={Boolean(meta.handoff_sent)} />}
               {meta.kind === "business_answer" && isMyAgent && meta.business_id && (
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   <span data-testid="continue-with-business">

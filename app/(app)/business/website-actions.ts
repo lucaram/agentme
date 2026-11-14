@@ -1,4 +1,5 @@
 "use server";
+import { addToBusinessInfo, mayPublishBusinessAnswer } from "@/lib/business/handoff";
 
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
@@ -255,14 +256,19 @@ export async function answerGapAction(ids: string[], question: string, answer: s
   const a = String(answer ?? "").trim().slice(0, 1000);
   if (!items.success || !q) return { error: "Not found." };
   if (!a) return { error: "Write your answer first." };
+  // Bulk replies are reusable FAQs. Customer-specific and legacy/unclassified
+  // requests must be answered individually and may never enter this path.
+  const { data: eligible } = await adminClient().from("inbox_items").select("id, payload").eq("owner_id", user.id).eq("agent_id", agent.id).eq("status", "open").in("id", items.data);
+  if (!eligible?.length || eligible.some((item) => {
+    const payload = item.payload as { kind?: string; business?: boolean; faq_eligible?: boolean };
+    return payload.kind !== "question" || !payload.business || payload.faq_eligible !== true;
+  }) || !(await mayPublishBusinessAnswer(q, a))) return { error: "This answer may contain private information. Reply to each request privately in My Agent instead." };
   let sent = 0;
   await withUsageContext({ userId: user.id, agentId: agent.id }, async () => {
     for (const id of items.data) if ((await answerInboxItem(id, user.id, { answer: a }, false)).ok) sent++;
   });
   if (!sent) return { error: "These questions were already answered." };
-  const info = (agent.business_info ?? {}) as Info;
-  const faqs = (info.faqs ?? []).filter((f) => f.q.trim().toLowerCase() !== q.toLowerCase());
-  if (faqs.length < MAX_FAQS) await adminClient().from("agents").update({ business_info: asJson({ ...info, faqs: [...faqs, { q, a }] }) }).eq("id", agent.id);
+  await addToBusinessInfo(agent.id, q, a, true);
   await settleGapNotices(user.id, agent.id);
   revalidatePath("/business");
   revalidatePath("/chats", "layout");

@@ -4,6 +4,7 @@ import { displayClock } from "@/lib/coordination/heuristics";
 import type { RecallPlan } from "./recall-format";
 import { evaluate, type ThresholdConfig } from "@/lib/plans/threshold";
 import { hasPrivateResult, withPrivateResults } from "@/lib/plans/steps";
+import { reservationWays } from "@/lib/business/reservations";
 
 export type { RecallPlan } from "./recall-format";
 
@@ -22,12 +23,12 @@ export async function buildRecall(userId: string): Promise<RecallPlan[]> {
   const shared = groupIds.length
     ? (await db.from("tasks").select("*").in("group_conversation_id", groupIds).neq("owner_id", userId).order("created_at", { ascending: false }).limit(10)).data ?? []
     : [];
-  const tasks = [...owned, ...shared].filter((t) => !["cancelled", "awaiting_approval"].includes(t.status));
+  const tasks = [...owned, ...shared].filter((t) => !["cancelled", "rejected", "failed", "awaiting_approval"].includes(t.status));
   if (!tasks.length) return [];
 
   const taskIds = tasks.map((t) => t.id);
   const [{ data: agents }, { data: proposals }, { data: sharedSteps }] = await Promise.all([
-    db.from("agents").select("id, handle"),
+    db.from("agents").select("id, handle, display_name"),
     db.from("proposals").select("task_id, content, status").in("task_id", taskIds),
     db.from("plan_steps").select("id, task_id, type, config, result, status").in("task_id", taskIds),
   ]);
@@ -41,23 +42,42 @@ export async function buildRecall(userId: string): Promise<RecallPlan[]> {
     assignIds.length ? db.from("item_claims").select("step_id, item, agent_id").in("step_id", assignIds) : Promise.resolve({ data: [] }),
   ]);
   const handleOf = new Map((agents ?? []).map((a) => [a.id, a.handle]));
+  const nameOf = new Map((agents ?? []).map((a) => [a.handle, a.display_name]));
+
+  const venues = new Map(tasks.map((task) => {
+    const proposal = (proposals ?? []).find((p) => p.task_id === task.id);
+    const proposed = (proposal?.content as { venue?: RecallPlan["venue"] } | undefined)?.venue;
+    const saved = (task.parsed as { venue?: RecallPlan["venue"] }).venue;
+    return [task.id, proposed ?? saved] as const;
+  }));
+  const venueIds = [...new Set([...venues.values()].flatMap((venue) => venue?.agent_id ? [venue.agent_id] : []))];
+  const [{ data: businesses }, { data: sites }] = venueIds.length ? await Promise.all([
+    db.from("agents").select("id, business_info").eq("type", "business").in("id", venueIds),
+    db.from("business_sites").select("agent_id, url, live_at, learned, hidden").in("agent_id", venueIds).not("live_at", "is", null),
+  ]) : [{ data: [] }, { data: [] }];
+  const bookingWays = new Map((businesses ?? []).map((business) => [business.id, reservationWays(business.business_info, sites?.find((site) => site.agent_id === business.id))]));
 
   return tasks.map((t): RecallPlan => {
-    const parsed = t.parsed as { kind?: string; event?: string; window?: string; participants?: string[]; question?: string };
+    const parsed = t.parsed as { kind?: string; event?: string; window?: string; participants?: string[]; question?: string; venue?: RecallPlan["venue"] };
     const organiser = handleOf.get(t.initiator_agent) ?? "someone";
     const everyone = [organiser, ...(parsed.participants ?? [])];
     const plan: RecallPlan = {
+      id: t.id,
       kind: parsed.kind ?? "coordinate",
       title: parsed.question ?? parsed.event ?? t.goal,
+      event: parsed.event,
       organiser,
       status: t.status,
       createdAt: t.created_at,
+      venue: parsed.venue,
+      reservationWays: bookingWays.get(venues.get(t.id)?.agent_id ?? "") ?? [],
     };
     const proposal = (proposals ?? []).find((p) => p.task_id === t.id);
     if (proposal) {
-      const c = proposal.content as { title: string; day: string; time: string; participants: string[] };
+      const c = proposal.content as { title: string; day: string; time: string; participants: string[]; venue?: RecallPlan["venue"] };
       plan.title = c.title;
       plan.when = `${c.day} at ${displayClock(c.time)}`;
+      plan.venue = c.venue ?? parsed.venue;
     }
     for (const step of (steps ?? []).filter((s) => s.task_id === t.id)) {
       const answers = (responses ?? []).filter((r) => r.step_id === step.id);
@@ -75,6 +95,8 @@ export async function buildRecall(userId: string): Promise<RecallPlan[]> {
           waitlist: state.waitlist,
           min: cfg.min ?? null,
         };
+        const attendees = [...state.going, ...state.out, ...plan.rsvp.waiting, ...state.waitlist];
+        plan.names = Object.fromEntries(attendees.map((h) => [h, nameOf.get(h) || `@${h}`]));
       }
       if (step.type === "assign") {
         const config = step.config as { title: string; items: string[] };

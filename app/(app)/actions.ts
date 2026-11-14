@@ -1,4 +1,5 @@
 "use server";
+import { askTeam } from "@/lib/business/ask-team";
 
 import { after } from "next/server";
 import { redirect } from "next/navigation";
@@ -155,6 +156,14 @@ export async function answerBusinessSuggestionAction(messageId: string, ask: boo
   const result = await withUsageContext({ userId: user.id, agentId: agent.id }, () => answerBusinessSuggestion(user.id, agent, messageId, Boolean(ask)));
   revalidatePath("/chats", "layout");
   return result.ok ? {} : { error: result.error };
+}
+
+export async function askTeamAction(messageId: string): Promise<{ error?: string; notice?: string }> {
+  const { user, agent } = await requireAgent();
+  if (!Id.safeParse(messageId).success) return { error: "Not found." };
+  const result = await askTeam(user.id, agent, messageId);
+  revalidatePath("/chats", "layout");
+  return result;
 }
 
 /** Rename a My Agent thread. */

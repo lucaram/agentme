@@ -19,15 +19,16 @@ const TEXT: Record<Variant, { label: string; send: string; decline: string; reme
     label: "Your answer (sent as the team)",
     send: "Send answer",
     decline: "We don't know",
-    remember: "Also add this to my business info, so my agent can answer it next time",
+    remember: "Publish this as a public FAQ, so my agent can answer it next time",
   },
 };
 
 /** A contact's question, a friend asking around, or a visitor's question your business agent couldn't answer. */
-export function QuestionForm({ itemId, variant = "question" }: { itemId: string; variant?: Variant }) {
+export function QuestionForm({ itemId, variant = "question", faqEligible = false }: { itemId: string; variant?: Variant; faqEligible?: boolean }) {
   const t = TEXT[variant];
   const [answer, setAnswer] = useState("");
-  const [remember, setRemember] = useState(true);
+  const [remember, setRemember] = useState(variant !== "business");
+  const canRemember = Boolean(t.remember) && (variant !== "business" || faqEligible);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const run = (fn: () => Promise<{ error?: string }>) =>
@@ -42,7 +43,7 @@ export function QuestionForm({ itemId, variant = "question" }: { itemId: string;
       className="space-y-2"
       onSubmit={(e) => {
         e.preventDefault();
-        run(() => answerInboxAction(itemId, { answer }, Boolean(t.remember) && remember));
+        run(() => answerInboxAction(itemId, { answer }, canRemember && remember));
       }}
     >
       <label className="label" htmlFor={`${itemId}-answer`}>{t.label}</label>
@@ -57,12 +58,13 @@ export function QuestionForm({ itemId, variant = "question" }: { itemId: string;
         value={answer}
         onChange={(e) => setAnswer(e.target.value)}
       />
-      {t.remember && (
+      {canRemember && (
         <label className="flex items-center gap-2 text-xs text-muted">
           <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
           {t.remember}
         </label>
       )}
+      {variant === "business" && !faqEligible && <p className="hint">This answer stays private to this request and cannot be added to public business information.</p>}
       {error && <p role="alert" className="text-xs text-danger">{error}</p>}
       <div className="flex gap-2">
         <button className="btn-primary" disabled={pending}>{pending ? "Sending…" : t.send}</button>
