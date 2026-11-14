@@ -9,6 +9,8 @@ import { connectNowAction } from "@/app/(app)/people-actions";
 import { openAgentChat, requestContact } from "@/app/(app)/actions";
 import { BusinessWays } from "@/components/BusinessWays";
 import { waysOf } from "@/lib/business/booking";
+import { businessDescription, publicBusinessDetails } from "@/lib/business/details";
+import { adminClient } from "@/lib/supabase/admin";
 
 /**
  * Someone's personal AGENTME link (agentme.app/u/luca), also behind their QR
@@ -28,7 +30,9 @@ export default async function PersonalLinkPage({ params, searchParams }: PagePro
 
   // A business's page (what its permanent QR code opens): ask its agent first, become a customer second.
   if (other.type === "business") {
-    const bio = other.bio ?? (other.business_info as { description?: string } | null)?.description ?? null;
+    const bio = businessDescription(other.business_info) || other.bio;
+    const { data: site } = await adminClient().from("business_sites").select("live_at, learned, hidden").eq("agent_id", other.id).not("live_at", "is", null).maybeSingle();
+    const details = publicBusinessDetails(other.business_info, site);
     const ways = waysOf(other.business_info);
     return (
       <main className="mx-auto flex w-full max-w-sm flex-1 flex-col items-center justify-center gap-5 px-6 py-16 text-center">
@@ -37,7 +41,9 @@ export default async function PersonalLinkPage({ params, searchParams }: PagePro
           <h1 className="text-2xl font-semibold">{other.display_name}</h1>
           <p className="text-sm text-muted">@{other.handle} · Business</p>
           <VerifiedBadge domain={other.verified_domain} className="mt-1" />
-          {bio && <p className="mt-2 text-sm">{bio}</p>}
+          {bio && <p className="mt-2 whitespace-pre-line text-sm">{bio}</p>}
+          {details.hours && <p className="mt-2 text-sm"><b>Opening hours:</b> {details.hours}</p>}
+          {details.address && <p className="mt-2 text-sm"><b>Address:</b> {details.address}</p>}
         </div>
         {/* The business's own ways to book or order: open to anyone, no account needed. */}
         <BusinessWays ways={ways} block primary={false} />

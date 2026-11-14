@@ -1,5 +1,6 @@
 "use server";
 import { addToBusinessInfo, mayPublishBusinessAnswer } from "@/lib/business/handoff";
+import { patchBusinessInfo } from "@/lib/business/profile";
 
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
@@ -53,8 +54,8 @@ export async function startWebsiteAction(raw: string): Promise<Out> {
   const limit = await hit("siteReadsPerAgent", agent.id);
   if (!limit.allowed) return { error: `Please wait ${describeRetry(limit.retryAfterSeconds)} before reading a website again.` };
   const result = await attachWebsite(agent.id, String(raw ?? ""), await ownerEmail(user, agent));
-  if (!result.ok) return { error: result.error };
   revalidatePath("/business");
+  if (!result.ok) return { error: result.error };
   return {};
 }
 
@@ -95,9 +96,22 @@ export async function rereadWebsiteAction(): Promise<Out> {
 export async function removeWebsiteAction(): Promise<Out> {
   const { agent } = await requireBusiness();
   const db = adminClient();
+  try {
+    await patchBusinessInfo(agent.id, { website: null });
+  } catch {
+    return { error: "Couldn't disconnect your website. Please try again." };
+  }
   await db.from("business_sources").delete().eq("agent_id", agent.id).eq("origin", "site");
   await db.from("business_sites").delete().eq("agent_id", agent.id);
   await db.from("agents").update({ verified_domain: null }).eq("id", agent.id);
+  revalidatePath("/business");
+  return {};
+}
+
+export async function setAutomaticRefreshAction(enabled: boolean): Promise<Out> {
+  const { agent } = await requireBusiness();
+  const { error } = await adminClient().from("business_sites").update({ auto_refresh: Boolean(enabled) }).eq("agent_id", agent.id);
+  if (error) return { error: "Couldn't change automatic updates. Try again." };
   revalidatePath("/business");
   return {};
 }
@@ -138,12 +152,12 @@ export async function fixLearnedAction(input: unknown): Promise<Out> {
   if (fix.kind === "faq") {
     const faqs = (info.faqs ?? []).filter((f) => f.q.trim().toLowerCase() !== fix.q.toLowerCase());
     if (faqs.length >= MAX_FAQS) return { error: `You can keep up to ${MAX_FAQS} questions.` };
-    await db.from("agents").update({ business_info: asJson({ ...info, faqs: [...faqs, { q: fix.q, a: fix.a }] }) }).eq("id", agent.id);
+    await patchBusinessInfo(agent.id, { faqs: [...faqs, { q: fix.q, a: fix.a }] });
     hideKey = itemKey.faq(fix.original);
   } else {
     const label = fix.kind === "basic" ? BASICS.find((b) => b.key === fix.key)!.label : fix.label;
     const corrections = [...(info.corrections ?? []).filter((c) => c.label.toLowerCase() !== label.toLowerCase()), { label, value: fix.value }].slice(-MAX_CORRECTIONS);
-    await db.from("agents").update({ business_info: asJson({ ...info, corrections }) }).eq("id", agent.id);
+    await patchBusinessInfo(agent.id, { corrections });
     hideKey = fix.kind === "basic" ? itemKey.basic(fix.key) : itemKey.fact(fix.label);
   }
   const { data: site } = await db.from("business_sites").select("hidden").eq("agent_id", agent.id).maybeSingle();
@@ -158,7 +172,7 @@ export async function removeCorrectionAction(label: string): Promise<Out> {
   const { agent } = await requireBusiness();
   const info = (agent.business_info ?? {}) as Info;
   const corrections = (info.corrections ?? []).filter((c) => c.label !== String(label ?? ""));
-  await adminClient().from("agents").update({ business_info: asJson({ ...info, corrections }) }).eq("id", agent.id);
+  await patchBusinessInfo(agent.id, { corrections });
   revalidatePath("/business/setup");
   revalidatePath("/business");
   return {};
@@ -181,8 +195,7 @@ export async function goLiveAction(): Promise<Out> {
 /** "Look things up on my website when unsure": on by default; off = only what was read and reviewed, then the team. */
 export async function setSiteLookupAction(on: boolean): Promise<Out> {
   const { agent } = await requireBusiness();
-  const info = (agent.business_info ?? {}) as Info;
-  await adminClient().from("agents").update({ business_info: asJson({ ...info, lookup: Boolean(on) }) }).eq("id", agent.id);
+  await patchBusinessInfo(agent.id, { lookup: Boolean(on) });
   revalidatePath("/business");
   return {};
 }

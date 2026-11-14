@@ -1,4 +1,4 @@
-import { MAX_WAYS, normaliseWay, waysOf, type Way, type WayKind } from "./booking";
+import { isReservationWay, normaliseWay, waysOf, type Way, type WayKind } from "./booking";
 import { itemKey, learnedOf } from "./learn";
 
 type PublishedSite = { url: string; live_at: string | null; learned: unknown; hidden: readonly string[] };
@@ -9,12 +9,15 @@ const bookingTopic = /\b(book(?:ing|ings)?|reserv(?:e|ation|ations)|contact|phon
 export function reservationWays(businessInfo: unknown, site?: PublishedSite | null): Way[] {
   const info = (businessInfo ?? {}) as Record<string, unknown>;
   const found: Way[] = [];
+  const explicit = waysOf(info).filter(isReservationWay);
+  const explicitKinds = new Set(explicit.map((way) => way.kind));
   const add = (kind: WayKind, value: string) => {
+    if (explicitKinds.has(kind)) return;
     const checked = normaliseWay(kind, value);
     if (checked.ok && !found.some((way) => way.kind === kind)) found.push(checked.way);
   };
   // Delivery/order links are not reservation methods.
-  for (const way of waysOf(info).filter((way) => way.kind !== "order")) add(way.kind, way.value);
+  found.push(...explicit);
   const readLinks = (raw: string) => {
     if (bookingTopic.test(raw)) {
       for (const match of raw.matchAll(/https?:\/\/[^\s<>"']+/gi)) {
@@ -58,8 +61,7 @@ export function reservationWays(businessInfo: unknown, site?: PublishedSite | nu
     }
     if (!found.some((way) => way.kind === "book")) add("website", site.url);
   }
-  const priority: WayKind[] = ["book", "call", "email", "whatsapp", "website"];
-  return found.sort((a, b) => priority.indexOf(a.kind) - priority.indexOf(b.kind)).slice(0, MAX_WAYS);
+  return found;
 }
 
 /** Contact details are shown in the booking buttons, rather than repeated in prose. */

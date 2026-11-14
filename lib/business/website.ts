@@ -61,7 +61,7 @@ const quietly = async (url: string): Promise<Fetched | null> => {
 const mediaType = (f: Fetched) => f.contentType.split(";")[0].trim();
 
 export const THIN_SITE_WARNING =
-  "Your website builds its pages in the browser, so there's very little text for your agent to read. Add a PDF or a photo of your menu or price list under Links instead.";
+  "Your website builds its pages in the browser, so there's very little text for your agent to read. Add a PDF or a photo of your menu or price list in Website & documents instead.";
 
 /** Reads (or re-reads) a business's website. Safe to call in the background. */
 export async function readWebsite(agentId: string, reason: Reason): Promise<void> {
@@ -119,7 +119,7 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
   const homeUrl = base.toString();
   const homeHtml = /html/.test(mediaType(home)) ? home.body.toString("utf8") : "";
   if (!robotsAllows(rules, base.pathname)) {
-    throw new Error("Your website's robots.txt asks bots not to read it, so your agent respects that. You can still add pages under Links.");
+    throw new Error("Your website's robots.txt asks bots not to read it, so your agent respects that. You can still add your own documents in Website & documents.");
   }
 
   // Candidates: the sitemap(s), then links found on the pages read.
@@ -271,6 +271,7 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
       warning: warning ?? learnWarning,
       error: null,
       last_read_at: new Date().toISOString(),
+      last_success_at: new Date().toISOString(),
       reading_started_at: null,
     })
     .eq("agent_id", agentId);
@@ -338,6 +339,7 @@ export async function refreshDueSites(limit = 1) {
     .from("business_sites")
     .select("agent_id")
     .not("live_at", "is", null)
+    .eq("auto_refresh", true)
     .is("reading_started_at", null)
     .lt("last_read_at", cutoff)
     .order("last_read_at")

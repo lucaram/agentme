@@ -23,7 +23,7 @@ export function GapsSection({ gaps, name }: { gaps: GapView[]; name: string }) {
       name={name}
       id="gaps"
       icon="❓"
-      title="Questions your website doesn't answer"
+      title="Common questions awaiting answers"
       testId="gaps"
       open
       badge={{ count: people, tone: "new" }}

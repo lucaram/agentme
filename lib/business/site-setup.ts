@@ -6,6 +6,7 @@ import { allowLocal } from "./fetch";
 import { normaliseSite, verifiesByEmail } from "./site";
 import { readWebsite } from "./website";
 import { emailProofEnforced } from "./verify";
+import { patchBusinessInfo } from "./profile";
 
 /**
  * Connects a website to a business agent and starts reading it in the
@@ -16,12 +17,15 @@ export async function attachWebsite(agentId: string, raw: string, owner?: { emai
   const site = normaliseSite(raw, { allowLocal: allowLocal() });
   if (!site.ok) return site;
   const db = adminClient();
+  // Keep the owner's chosen address independently of the connection attempt.
+  // Signup also stores it with the agent, so even a failed first connection can be retried later.
+  try {
+    await patchBusinessInfo(agentId, { website: site.url.toString() });
+  } catch {
+    return { ok: false, error: "Couldn't save your website address. Please try again." };
+  }
   const { data: current } = await db.from("business_sites").select("domain").eq("agent_id", agentId).maybeSingle();
   const same = current?.domain === site.domain;
-  if (current && !same) {
-    await db.from("business_sources").delete().eq("agent_id", agentId).eq("origin", "site");
-    await db.from("agents").update({ verified_domain: null, verified_method: null }).eq("id", agentId);
-  }
   const { error } = await db.from("business_sites").upsert(
     {
       agent_id: agentId,
@@ -34,11 +38,16 @@ export async function attachWebsite(agentId: string, raw: string, owner?: { emai
       error: null,
       warning: null,
       reading_started_at: null,
-      ...(same ? {} : { learned: asJson({}), hidden: [], live_at: null }),
+      ...(same ? {} : { learned: asJson({}), hidden: [], live_at: null, last_success_at: null, last_read_at: null }),
     },
     { onConflict: "agent_id" },
   );
   if (error) return { ok: false, error: "Couldn't add your website. Please try again." };
+  // Preserve the previous connection and its sources if saving the new URL fails.
+  if (current && !same) {
+    await db.from("business_sources").delete().eq("agent_id", agentId).eq("origin", "site");
+    await db.from("agents").update({ verified_domain: null, verified_method: null }).eq("id", agentId);
+  }
   // ✓ Verified straight away when the owner's email is at the website's domain, and only where emails are
   // really confirmed (a link clicked in that mailbox): see emailProofEnforced.
   if (emailProofEnforced() && owner?.emailConfirmed && verifiesByEmail(owner.email, site.domain)) await markVerified(agentId, site.domain, "email");

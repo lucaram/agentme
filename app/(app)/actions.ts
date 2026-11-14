@@ -287,6 +287,7 @@ export async function answerInboxAction(itemId: string, answers: Record<string, 
   if (wake) after(() => runTask(wake));
   await tellOwner(user.id, agent.id, "✅ Done: I sent your answer, marked as answered by you personally.");
   revalidatePath("/chats", "layout");
+  if (agent.type === "business") revalidatePath("/business");
   return {};
 }
 
@@ -298,6 +299,7 @@ export async function declineInboxAction(itemId: string): Promise<{ error?: stri
   if (wake) after(() => runTask(wake));
   await tellOwner(user.id, agent.id, "🙅 OK: I didn't answer. Nothing was shared.");
   revalidatePath("/chats", "layout");
+  if (agent.type === "business") revalidatePath("/business");
   return {};
 }
 

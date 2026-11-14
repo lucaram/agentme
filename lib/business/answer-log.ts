@@ -11,6 +11,15 @@ export type AnswerStep = "knowledge" | "index" | "search" | "team" | "none";
 export const ANSWER_STEPS: readonly AnswerStep[] = ["knowledge", "index", "search", "team", "none"];
 const KEEP_DAYS = 90;
 
+export type CustomerActivity = { received: number; automatic: number; team_answered: number; unanswered: number; awaiting_team: number };
+
+/** Actual agent requests and staff outcomes; preview calls create no exchange. */
+export async function customerActivity(agentId: string): Promise<CustomerActivity | null> {
+  const { data, error } = await adminClient().rpc("business_activity", { p_agent: agentId, p_days: 30 });
+  if (error) { console.error("customer activity unavailable", error.message); return null; }
+  return data?.[0] ?? null;
+}
+
 export async function logAnswer(agentId: string, step: AnswerStep) {
   const { error } = await adminClient().from("business_answer_log").insert({ agent_id: agentId, step });
   if (error) console.error("answer log unavailable", error.message);

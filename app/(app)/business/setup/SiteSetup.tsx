@@ -129,7 +129,7 @@ function Reading({ site }: { site: Progress & { domain: string } }) {
           </li>
         ))}
       </ul>
-      <p className="hint">This takes under a minute. You can leave this page: your agent keeps reading.</p>
+      <p className="hint">Reading time depends on the website. You can leave this page while your agent reads its key pages.</p>
     </section>
   );
 }
@@ -412,7 +412,7 @@ function TryAsCustomer({ questions }: { questions: string[] }) {
               <div className={`w-fit max-w-[85%] whitespace-pre-wrap rounded-2xl border px-3 py-2 text-sm ${answers[q].failed ? "border-danger text-danger" : "border-agent-border bg-agent"}`}>
                 <span className="mr-1 rounded bg-agent-border px-1 text-[10px] font-semibold uppercase">AI</span>
                 {answers[q].answer}
-                {answers[q].needsTeam && <span className="mt-1 block text-xs text-muted">Not on your website: your agent would ask you, and you&apos;d see it in My Business.</span>}
+                {answers[q].needsTeam && <span className="mt-1 block text-xs text-muted">Your agent could not answer from the website. A customer can choose Ask the team; their request then appears in My Business.</span>}
               </div>
             ) : (
               <p className="text-xs text-muted" aria-live="polite">Your agent is answering…</p>

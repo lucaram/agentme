@@ -11,6 +11,8 @@ import { validateHandle } from "@/lib/policy/handles";
 import { sameHash } from "@/lib/people/crypto";
 import { MAX_BUSINESS_NAME, MIN_NAME } from "@/lib/social/limits";
 import { BUSINESS_AVATARS } from "@/lib/avatars";
+import { normaliseSite } from "@/lib/business/site";
+import { allowLocal } from "@/lib/business/fetch";
 
 /**
  * One person, several identities. A person signs in with their own account and
@@ -127,12 +129,14 @@ export { BUSINESS_AVATARS };
  * "Add a business": a separate identity the person manages (its own login is
  * internal: it's only ever opened through the switcher).
  */
-export async function createBusinessFor(personId: string, input: { name: string; handle: string; avatar: string; about: string }): Promise<{ ok: true; agentId: string } | { ok: false; error: string }> {
+export async function createBusinessFor(personId: string, input: { name: string; handle: string; avatar: string; about: string; website?: string }): Promise<{ ok: true; agentId: string } | { ok: false; error: string }> {
   const db = adminClient();
   const name = input.name.trim().slice(0, MAX_BUSINESS_NAME);
   if (name.length < MIN_NAME) return { ok: false, error: "Give your business a name." };
   const handle = validateHandle(input.handle);
   if (!handle.ok) return { ok: false, error: handle.reason };
+  const website = input.website?.trim() ? normaliseSite(input.website, { allowLocal: allowLocal() }) : null;
+  if (website && !website.ok) return { ok: false, error: `Website: ${website.error}` };
   const { data: taken } = await db.from("agents").select("id").eq("handle", handle.handle).maybeSingle();
   if (taken) return { ok: false, error: `@${handle.handle} is taken. Try another.` };
   const { count } = await db.from("business_managers").select("*", { count: "exact", head: true }).eq("user_id", personId);
@@ -155,7 +159,7 @@ export async function createBusinessFor(personId: string, input: { name: string;
       type: "business",
       contact_policy: "anyone",
       bio: about.split("\n")[0]?.slice(0, 280) || null,
-      business_info: asJson({ about, description: about.slice(0, 500) }),
+      business_info: asJson({ about, description: about.slice(0, 500), ...(website?.ok ? { website: website.url.toString() } : {}) }),
     })
     .select("id")
     .single();

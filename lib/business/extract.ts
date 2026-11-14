@@ -20,7 +20,7 @@ export function linkKey(raw: string): string | null {
 
 /**
  * Only plain http(s) links to a hostname, no credentials, standard ports.
- * allowLocal (development/tests only) also lets localhost use any port.
+ * allowLocal (development/tests only) also lets loopback hosts use any port.
  */
 export function checkUrl(raw: string, opts: { allowLocal?: boolean } = {}): { ok: true; url: URL } | { ok: false; error: string } {
   let url: URL;
@@ -31,7 +31,7 @@ export function checkUrl(raw: string, opts: { allowLocal?: boolean } = {}): { ok
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") return { ok: false, error: "Use a web address starting with https://" };
   if (url.username || url.password) return { ok: false, error: "Web addresses with a login can't be read." };
-  const local = opts.allowLocal && url.hostname === "localhost";
+  const local = opts.allowLocal && (url.hostname === "localhost" || url.hostname === "127.0.0.1");
   if (url.port && !["80", "443"].includes(url.port) && !local) return { ok: false, error: "Only standard web addresses can be read." };
   if (!url.hostname.includes(".") && url.hostname !== "localhost") return { ok: false, error: "That doesn't look like a public website." };
   return { ok: true, url };

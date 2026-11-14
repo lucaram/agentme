@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LocalTime } from "@/components/LocalTime";
 import { verifyTag } from "@/lib/business/site";
-import { removeWebsiteAction, rereadWebsiteAction, setSiteLookupAction, startWebsiteAction, verifyWebsiteAction } from "./website-actions";
+import { removeWebsiteAction, rereadWebsiteAction, setSiteLookupAction, setAutomaticRefreshAction, startWebsiteAction, verifyWebsiteAction } from "./website-actions";
 
 export type WebsiteSummary = {
   domain: string;
@@ -13,6 +13,8 @@ export type WebsiteSummary = {
   status: string;
   pagesRead: number;
   lastReadAt: string | null;
+  lastSuccessAt?: string | null;
+  autoRefresh?: boolean;
   live: boolean;
   warning: string | null;
   error: string | null;
@@ -20,11 +22,14 @@ export type WebsiteSummary = {
 };
 
 /** "Your website": the whole site your agent reads (and re-reads every day), with the ✓ Verified badge. */
-export function WebsiteCard({ site, verified, canVerifyByEmail, lookup = true }: { site: WebsiteSummary | null; verified: boolean; canVerifyByEmail: boolean; lookup?: boolean }) {
+export function WebsiteCard({ site, verified, canVerifyByEmail, lookup = true, initialValue = "", initialError }: { site: WebsiteSummary | null; verified: boolean; canVerifyByEmail: boolean; lookup?: boolean; initialValue?: string; initialError?: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(initialError ?? null);
+  const [value, setValue] = useState(initialValue);
+  const [changing, setChanging] = useState(false);
+  const [automatic, setAutomatic] = useOptimistic(site?.autoRefresh !== false);
+  const [lookups, setLookups] = useOptimistic(lookup);
   const run = (fn: () => Promise<{ error?: string }>, then?: () => void) =>
     start(async () => {
       setError(null);
@@ -33,11 +38,11 @@ export function WebsiteCard({ site, verified, canVerifyByEmail, lookup = true }:
       else (then ?? (() => router.refresh()))();
     });
 
-  if (!site) {
+  if (!site || changing) {
     return (
       <div className="space-y-2 rounded-xl border border-accent/50 bg-accent-soft/50 p-3" data-testid="website-card">
-        <h3 className="text-sm font-semibold">🌐 Have a website? Paste it and your agent learns all of it</h3>
-        <p className="text-xs text-muted">Menu, prices, hours, policies: read in under a minute, checked by you, then kept up to date every day.</p>
+        <h3 className="text-sm font-semibold">{changing ? "Change your website" : "Connect your website"}</h3>
+        <p className="text-xs text-muted">Connect once. Your agent reads key pages, then you review the information before publishing. It can look up additional pages when customers ask.</p>
         <form
           className="flex gap-2"
           onSubmit={(e) => {
@@ -56,8 +61,9 @@ export function WebsiteCard({ site, verified, canVerifyByEmail, lookup = true }:
             placeholder="e.g. trattoria-camden.co.uk"
             aria-label="Your website"
           />
-          <button className="btn-primary shrink-0" disabled={pending || !value.trim()}>{pending ? "Starting…" : "Read my website"}</button>
+          <button className="btn-primary shrink-0" disabled={pending || !value.trim()}>{pending ? "Starting…" : !changing && initialValue ? "Retry connection" : "Read my website"}</button>
         </form>
+        {changing && <button className="btn-ghost" onClick={() => setChanging(false)}>Cancel</button>}
         {error && <p className="text-xs text-danger" role="alert">{error}</p>}
       </div>
     );
@@ -88,15 +94,11 @@ export function WebsiteCard({ site, verified, canVerifyByEmail, lookup = true }:
         ) : (
           <>
             {site.pagesRead} {site.pagesRead === 1 ? "page" : "pages"} read
-            {site.lastReadAt && (
-              <>
-                {" "}· checked <LocalTime iso={site.lastReadAt} />
-              </>
-            )}{" "}
-            · re-read every day
           </>
         )}
       </p>
+      <p className="hint">Last successful check: {site.lastSuccessAt ? <LocalTime iso={site.lastSuccessAt} /> : "not recorded yet"}.</p>
+      {site.error && site.lastReadAt && <p className="hint">Last attempt: <LocalTime iso={site.lastReadAt} />.</p>}
       {site.status === "ready" && site.error && <p className="text-xs text-amber-600 dark:text-amber-400">Last check didn&apos;t work: {site.error} Your agent keeps using what it read before.</p>}
       {site.warning && <p className="text-xs text-amber-600 dark:text-amber-400">⚠️ {site.warning}</p>}
 
@@ -107,6 +109,7 @@ export function WebsiteCard({ site, verified, canVerifyByEmail, lookup = true }:
         <button type="button" className="btn-ghost" disabled={pending || site.status === "reading"} onClick={() => run(rereadWebsiteAction)}>
           ↻ Re-read now
         </button>
+        <button type="button" className="btn-ghost" disabled={pending || site.status === "reading"} onClick={() => { setValue(site.url); setChanging(true); }}>Change website</button>
         <button
           type="button"
           className="btn-ghost text-muted"
@@ -119,13 +122,17 @@ export function WebsiteCard({ site, verified, canVerifyByEmail, lookup = true }:
         </button>
       </div>
 
+      {site.live && <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" className="mt-1" checked={automatic} disabled={pending} onChange={(e) => { const enabled = e.target.checked; run(async () => { setAutomatic(enabled); return setAutomaticRefreshAction(enabled); }); }} />
+        <span>Automatic website updates<span className="block text-xs text-muted">Checks approximately every 24 hours while the AGENTME service is running. You can also re-read now.</span></span>
+      </label>}
       {site.live && (
         <label className="flex items-start gap-2 text-sm" data-testid="site-lookup">
-          <input type="checkbox" className="mt-1" checked={lookup} disabled={pending} onChange={(e) => run(() => setSiteLookupAction(e.target.checked))} />
+          <input type="checkbox" className="mt-1" checked={lookups} disabled={pending} onChange={(e) => { const enabled = e.target.checked; run(async () => { setLookups(enabled); return setSiteLookupAction(enabled); }); }} />
           <span>
             Look things up on my website when unsure
             <span className="block text-xs text-muted">
-              If a customer asks about a page your agent hasn&apos;t read yet, it finds that page on {site.domain}, reads it and answers from it (with the page it came from). Off: it asks your team instead.
+              Your agent can find additional pages on {site.domain} when answering a question. When it still cannot answer, the customer can choose Ask the team.
             </span>
           </span>
         </label>

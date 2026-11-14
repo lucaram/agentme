@@ -237,14 +237,14 @@ isOneToOne: false
                   ]
                 },"business_sites": {
                   Row: {
-                    "agent_id": string,"created_at": string,"domain": string,"error": string | null,"hidden": (string)[],"lang": string | null,"last_read_at": string | null,"learned": NonNullable<Json>,"live_at": string | null,"pages_found": number,"pages_read": number,"progress": NonNullable<Json>,"reading_started_at": string | null,"search_template": string | null,"status": string,"url": string,"verify_token": string,"warning": string | null
+                    "agent_id": string,"auto_refresh": boolean,"last_success_at": string | null,"created_at": string,"domain": string,"error": string | null,"hidden": (string)[],"lang": string | null,"last_read_at": string | null,"learned": NonNullable<Json>,"live_at": string | null,"pages_found": number,"pages_read": number,"progress": NonNullable<Json>,"reading_started_at": string | null,"search_template": string | null,"status": string,"url": string,"verify_token": string,"warning": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "agent_id": string,"created_at"?: string,"domain": string,"error"?: string | null,"hidden"?: (string)[],"lang"?: string | null,"last_read_at"?: string | null,"learned"?: NonNullable<Json>,"live_at"?: string | null,"pages_found"?: number,"pages_read"?: number,"progress"?: NonNullable<Json>,"reading_started_at"?: string | null,"search_template"?: string | null,"status"?: string,"url": string,"verify_token"?: string,"warning"?: string | null
+                    "agent_id": string,"auto_refresh"?: boolean,"last_success_at"?: string | null,"created_at"?: string,"domain": string,"error"?: string | null,"hidden"?: (string)[],"lang"?: string | null,"last_read_at"?: string | null,"learned"?: NonNullable<Json>,"live_at"?: string | null,"pages_found"?: number,"pages_read"?: number,"progress"?: NonNullable<Json>,"reading_started_at"?: string | null,"search_template"?: string | null,"status"?: string,"url": string,"verify_token"?: string,"warning"?: string | null
                   }
                   Update: {
-                    "agent_id"?: string,"created_at"?: string,"domain"?: string,"error"?: string | null,"hidden"?: (string)[],"lang"?: string | null,"last_read_at"?: string | null,"learned"?: NonNullable<Json>,"live_at"?: string | null,"pages_found"?: number,"pages_read"?: number,"progress"?: NonNullable<Json>,"reading_started_at"?: string | null,"search_template"?: string | null,"status"?: string,"url"?: string,"verify_token"?: string,"warning"?: string | null
+                    "agent_id"?: string,"auto_refresh"?: boolean,"last_success_at"?: string | null,"created_at"?: string,"domain"?: string,"error"?: string | null,"hidden"?: (string)[],"lang"?: string | null,"last_read_at"?: string | null,"learned"?: NonNullable<Json>,"live_at"?: string | null,"pages_found"?: number,"pages_read"?: number,"progress"?: NonNullable<Json>,"reading_started_at"?: string | null,"search_template"?: string | null,"status"?: string,"url"?: string,"verify_token"?: string,"warning"?: string | null
                   }
                   Relationships: [
                     {
@@ -1100,6 +1100,10 @@ isOneToOne: false
               "allowed": boolean,"retry_after_seconds": number
             }[]
                            },
+"patch_business_info":
+{ Args: { "p_agent": string,"p_patch": Json,"p_bio"?: string }; Returns: undefined },
+"business_activity":
+{ Args: { "p_agent": string,"p_days"?: number }; Returns: { "received": number,"automatic": number,"team_answered": number,"unanswered": number,"awaiting_team": number }[] },
 "request_business_handoff":
 { Args: { "p_exchange": string,"p_caller": string }; Returns: {
               "item_id": string | null,"created": boolean,"outcome": string
