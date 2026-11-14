@@ -2,10 +2,11 @@ import type { Database } from "@/lib/database.types";
 import { suggestVote, tally, type PollConfig } from "@/lib/plans/poll";
 import { ActionButton } from "@/components/ActionButton";
 import { closePollAction, voteAction } from "../../actions";
+import { ActionStamp, type ActionActor } from "@/components/ActionStamp";
 
 type StepRow = Database["public"]["Tables"]["plan_steps"]["Row"];
 type StepResponse = Database["public"]["Tables"]["step_responses"]["Row"];
-type AgentLite = { handle: string; avatar: string };
+type AgentLite = ActionActor;
 
 export function PollCard({
   step,
@@ -15,6 +16,7 @@ export function PollCard({
   myHandle,
   myFacts,
   isOrganiser,
+  embedded = false,
 }: {
   step: StepRow;
   votes: StepResponse[];
@@ -23,6 +25,7 @@ export function PollCard({
   myHandle: string;
   myFacts: { category: string; value: string }[];
   isOrganiser: boolean;
+  embedded?: boolean;
 }) {
   const config = step.config as unknown as PollConfig;
   const closed = step.status === "done" || Boolean((step.result as { closed?: boolean } | null)?.closed);
@@ -32,11 +35,11 @@ export function PollCard({
   const canVote = !closed && config.voters.includes(myHandle);
   // The viewer's own agent may SUGGEST a vote from the viewer's own preferences; the human decides.
   const suggestion = canVote && !mine ? suggestVote(config.options, myFacts) : null;
-  const votersFor = (option: string) => votes.filter((v) => optionOf(v) === option).map((v) => agents.get(v.agent_id)?.avatar ?? "•");
+  const votersFor = (option: string) => votes.filter((v) => optionOf(v) === option).sort((a, b) => a.updated_at.localeCompare(b.updated_at));
   const notVoted = config.voters.filter((h) => ![...agents.entries()].some(([id, a]) => a.handle === h && votes.some((v) => v.agent_id === id)));
 
   return (
-    <section className="mt-2 w-full max-w-[85%] rounded-2xl border-2 border-accent bg-surface p-4 text-sm" aria-label="Poll" data-testid="poll">
+    <section className={`mt-2 w-full ${embedded ? "rounded-xl border border-border" : "max-w-[85%] rounded-2xl border-2 border-accent"} bg-surface p-4 text-sm`} aria-label="Poll" data-testid="poll">
       <p className="text-xs uppercase tracking-wide text-muted">{closed ? "Poll closed" : "Poll"}</p>
       <h3 className="mt-1 text-base font-semibold">{config.question}</h3>
       {suggestion && (
@@ -50,7 +53,8 @@ export function PollCard({
           const isMine = mine && optionOf(mine) === option;
           const isWinner = closed && result.winners.includes(option);
           return (
-            <li key={option} className="flex items-center gap-2">
+            <li key={option}>
+              <div className="flex items-center gap-2">
               {canVote ? (
                 <ActionButton
                   action={voteAction.bind(null, step.id, option)}
@@ -64,8 +68,14 @@ export function PollCard({
                 </span>
               )}
               <span className="text-xs text-muted" data-testid={`poll-count-${option}`}>
-                {count} vote{count === 1 ? "" : "s"} {votersFor(option).join(" ")}
+                {count} vote{count === 1 ? "" : "s"}
               </span>
+              </div>
+              {count > 0 && <ul className="my-2 ml-1 space-y-2 border-l-2 border-accent/30 pl-3" aria-label={`Votes for ${option}`}>
+                {votersFor(option).map((vote) => <li key={vote.agent_id}>
+                  <ActionStamp actor={agents.get(vote.agent_id) ?? { handle: "participant", avatar: "" }} at={vote.updated_at} />
+                </li>)}
+              </ul>}
             </li>
           );
         })}

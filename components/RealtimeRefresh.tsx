@@ -6,7 +6,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { browserClient } from "@/lib/supabase/client";
 import { scheduleRefresh } from "@/lib/refresh";
 
-type Table = "messages" | "tasks" | "task_exchanges" | "proposals" | "proposal_responses" | "inbox_items" | "plan_steps" | "step_responses" | "item_claims" | "plan_changes" | "business_sources" | "business_sites" | "business_action_events";
+type Table = "messages" | "tasks" | "task_exchanges" | "proposals" | "proposal_responses" | "inbox_items" | "plan_steps" | "step_responses" | "item_claims" | "plan_changes" | "business_sources" | "business_sites" | "business_action_events" | "business_action_versions";
 
 /** A page rendered this recently is already up to date when its socket connects. */
 const FRESH_MS = 2000;
@@ -17,9 +17,10 @@ const FRESH_MS = 2000;
  * socket MUST carry the user's access token before joining: a channel joined
  * anonymously silently receives nothing.
  */
-export function RealtimeRefresh({ channel, tables, filter }: { channel: string; tables: Table[]; filter?: string }) {
+export function RealtimeRefresh({ channel, tables, filter, businessIds = [] }: { channel: string; tables: Table[]; filter?: string; businessIds?: string[] }) {
   const router = useRouter();
   const tableKey = tables.join(",");
+  const businessKey = [...new Set(businessIds)].sort().join(",");
   useEffect(() => {
     const supabase = browserClient();
     const mountedAt = Date.now();
@@ -38,6 +39,10 @@ export function RealtimeRefresh({ channel, tables, filter }: { channel: string; 
 
       sub = supabase.channel(channel);
       for (const table of tableKey.split(",") as Table[]) {
+        if (table === "business_action_versions") {
+          for (const id of businessKey.split(",").filter(Boolean)) sub = sub.on("postgres_changes", { event: "*", schema: "public", table, filter: `agent_id=eq.${id}` }, refresh);
+          continue;
+        }
         sub = sub.on(
           "postgres_changes",
           { event: "*", schema: "public", table, ...(filter && table === "messages" ? { filter } : {}) },
@@ -48,15 +53,20 @@ export function RealtimeRefresh({ channel, tables, filter }: { channel: string; 
         if (status !== "SUBSCRIBED") return;
         // Catch up on anything missed while connecting or offline, unless the
         // page was rendered a moment ago (then it is already current).
-        if (connectedBefore || Date.now() - mountedAt > FRESH_MS) refresh();
+        if (businessKey || connectedBefore || Date.now() - mountedAt > FRESH_MS) refresh();
         connectedBefore = true;
       });
     })();
 
+    const focus = () => { if (businessKey && document.visibilityState === "visible") refresh(); };
+    window.addEventListener("focus", focus);
+    document.addEventListener("visibilitychange", focus);
     return () => {
       cancelled = true;
       if (sub) supabase.removeChannel(sub);
+      window.removeEventListener("focus", focus);
+      document.removeEventListener("visibilitychange", focus);
     };
-  }, [channel, filter, router, tableKey]);
+  }, [channel, filter, router, tableKey, businessKey]);
   return null;
 }

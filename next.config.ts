@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
   // Isolated browser regressions can run alongside the developer's server.
   distDir: process.env.AGENTME_TEST_DIST_DIR ?? ".next",
   typescript: { tsconfigPath: process.env.AGENTME_TEST_DIST_DIR ? "tsconfig.case7.json" : "tsconfig.json" },
+  // Realtime screens must not replay stale database reads after a development hot reload.
+  experimental: { serverComponentsHmrCache: false },
   turbopack: {
     rules: {
       "*.css": {

@@ -211,6 +211,8 @@ export async function saveWaysAction(input: { kind: string; value: string; label
   }
   await patchBusinessInfo(agent.id, { ways });
   revalidatePath("/business");
+  revalidatePath("/chats", "layout");
+  revalidatePath(`/u/${agent.handle}`);
   return { saved: true };
 }
 

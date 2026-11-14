@@ -117,6 +117,13 @@ export function wayLabel(way: Way): string {
   return provider ? `${icon} ${name} on ${provider}` : `${icon} ${name} online`;
 }
 
+/** Compact chat buttons; full contact details remain in the destination and tooltip. */
+export function shortWayLabel(way: Way): string {
+  const { icon, name } = KIND_LABEL[way.kind];
+  const label = way.kind === "custom" ? way.label?.trim().split(/\s+/)[0] || "Custom" : way.kind === "whatsapp" ? "Whatsapp" : name;
+  return `${icon} ${label}`;
+}
+
 /** Plain text for the agent's answers: one line per way, with the address to use. */
 export function waysText(ways: Way[]): string {
   return ways.map((w) => `${wayLabel(w)}${w.label || (w.kind !== "call" && w.kind !== "email") ? `: ${w.value}` : ""}${w.kind === "custom" ? ` (${w.purpose})` : ""}`).join("\n");

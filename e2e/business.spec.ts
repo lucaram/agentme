@@ -204,7 +204,7 @@ test("how to book: the business adds its own ways; its page, its agent and frien
   await marco.page.getByRole("link", { name: /^👥 Get-together/ }).first().click();
   const venue = marco.page.getByTestId("proposal").last().getByTestId("plan-venue");
   await expect(venue).toContainText("At Trattoria");
-  await expect(venue.getByRole("link", { name: "📅 Book online" })).toHaveAttribute("href", "https://trattoria-sole.example/book");
+  await expect(venue.getByRole("link", { name: "📅 Book" })).toHaveAttribute("href", "https://trattoria-sole.example/book");
 
   await Promise.all([shop.close(), luca.close(), marco.close()]);
 });

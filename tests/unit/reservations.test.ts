@@ -5,7 +5,12 @@ const site = { url: "https://sole.example/", live_at: "2026-11-14", hidden: [] a
 describe("published reservation options", () => {
   it("prefers the business's explicit options over the website and drops ordering links", () => {
     const ways = reservationWays({ ways: [{ kind: "call", value: "020 7946 0000" }, { kind: "book", value: "https://sole.example/book" }, { kind: "order", value: "https://delivery.example/" }] }, site);
-    expect(ways).toEqual([{ kind: "call", value: "020 7946 0000" }, { kind: "book", value: "https://sole.example/book" }, { kind: "email", value: "site@sole.example" }]);
+    expect(ways).toEqual([{ kind: "call", value: "020 7946 0000" }, { kind: "book", value: "https://sole.example/book" }]);
+  });
+  it("does not restore removed actions from FAQs, profile details or the reviewed website", () => {
+    const old = { phone: "020 2222 2222", faqs: [{ q: "How do I book?", a: "Please call 020 3333 3333 or email old@sole.example." }] };
+    expect(reservationWays({ ...old, ways: [] }, site)).toEqual([]);
+    expect(reservationWays({ ...old, ways: [{ kind: "book", value: "https://sole.example/book" }] }, site)).toEqual([{ kind: "book", value: "https://sole.example/book" }]);
   });
   it("reads public booking FAQs such as the seeded business's phone instruction", () => {
     const ways = reservationWays({ faqs: [{ q: "Do you take group bookings?", a: "Up to 12. Please call 020 7946 0000 or email bookings@sole.example to book." }] });

@@ -7,6 +7,7 @@ import { RsvpControl } from "./RsvpControl";
 import { ChangePlanForm } from "./ChangePlanForm";
 import { BusinessWays } from "@/components/BusinessWays";
 import type { Way } from "@/lib/business/booking";
+import { ActionStamp, type ActionActor } from "@/components/ActionStamp";
 
 export type ProposalView = Database["public"]["Tables"]["proposals"]["Row"] & {
   content: {
@@ -22,7 +23,7 @@ export type ProposalView = Database["public"]["Tables"]["proposals"]["Row"] & {
   };
 };
 type StepResponse = Database["public"]["Tables"]["step_responses"]["Row"];
-type AgentLite = { handle: string; avatar: string };
+type AgentLite = ActionActor;
 
 export function ProposalCard({
   proposal,
@@ -51,7 +52,6 @@ export function ProposalCard({
   const c = proposal.content;
   const isOrganiserView = !inGroup;
   const handleOf = (agentId: string) => agents.get(agentId)?.handle ?? "";
-  const avatarOf = (handle: string) => [...agents.values()].find((a) => a.handle === handle)?.avatar;
   // Code decides who's going and who's waitlisted (in the order they said yes).
   const state = evaluate(
     responses.map((r) => ({ handle: handleOf(r.agent_id), response: (r.value as { response: "in" | "out" }).response, at: r.updated_at })),
@@ -93,12 +93,16 @@ export function ProposalCard({
               {state.waitlist.length ? ` · ${state.waitlist.length} on the waitlist` : ""}
             </p>
           )}
-          <ul className="mt-2 space-y-0.5 text-xs" aria-label="Who's in" data-testid="rsvps">
-            {c.participants.map((handle) => (
-              <li key={handle}>
-                {avatarOf(handle)} @{handle}: {statusOf(handle) ?? <span className="text-muted">⏳ waiting</span>}
-              </li>
-            ))}
+          <ul className="mt-3 divide-y divide-border text-xs" aria-label="Who's in" data-testid="rsvps">
+            {c.participants.map((handle) => {
+              const entry = [...agents.entries()].find(([, a]) => a.handle === handle);
+              const response = entry ? responses.find((r) => r.agent_id === entry[0]) : undefined;
+              return <li key={handle} className="py-2">
+                <ActionStamp actor={entry?.[1] ?? { handle, avatar: "" }} at={response?.updated_at}>
+                  {statusOf(handle) ?? <span className="text-muted">⏳ waiting</span>}
+                </ActionStamp>
+              </li>;
+            })}
           </ul>
         </>
       )}

@@ -84,19 +84,19 @@ test("three agents coordinate a dinner and humans approve it", async ({ browser 
   const shared = marco.page.getByTestId("proposal");
   await expect(shared).toContainText("7:30 PM");
   // Group members see the organiser's answer...
-  await expect(shared.getByTestId("rsvps")).toContainText("@luca: ✅ in");
+  await expect(shared.getByTestId("rsvps").getByRole("listitem").filter({ hasText: "Luca" })).toContainText("✅ in");
   await shared.getByRole("radio", { name: "I'm in" }).click();
   // A neutral event line, not a fake message from Marco.
   await expect(marco.page.getByText("Marco is in ✅")).toBeVisible();
   // ...and their own answer, immediately; it stays editable.
-  await expect(shared.getByTestId("rsvps")).toContainText("@marco: ✅ in");
+  await expect(shared.getByTestId("rsvps").getByRole("listitem").filter({ hasText: "Marco" })).toContainText("✅ in");
   await expect(shared.getByRole("radio", { name: /I'm in/ })).toHaveAttribute("aria-checked", "true");
 
   // Luca's page was opened with a full load (the Realtime auth race). It must update live.
   await luca.page.reload();
   const rsvps = luca.page.getByTestId("rsvps").last();
-  await expect(rsvps).toContainText("@marco: ✅ in");
-  await expect(rsvps).toContainText("@paul: ⏳ waiting");
+  await expect(rsvps.getByRole("listitem").filter({ hasText: "Marco" })).toContainText("✅ in");
+  await expect(rsvps.getByRole("listitem").filter({ hasText: "Paul" })).toContainText("⏳ waiting");
 
   // Paul sees who said what in his chat list, then declines.
   const paul = await as(browser, "paul");
@@ -106,12 +106,12 @@ test("three agents coordinate a dinner and humans approve it", async ({ browser 
   await expect(paul.page.getByText("Paul can't make it ❌")).toBeVisible();
 
   // ...and Luca sees it without refreshing.
-  await expect(rsvps).toContainText("@paul: ❌ can't make it", { timeout: 10_000 });
+  await expect(rsvps.getByRole("listitem").filter({ hasText: "Paul" })).toContainText("❌ can't make it", { timeout: 10_000 });
 
   // RSVP v2: Paul changes his mind; everyone sees the change.
   await paul.page.getByTestId("proposal").getByRole("radio", { name: /I'm in/ }).click();
   await expect(paul.page.getByText("Paul changed their answer: is in ✅")).toBeVisible();
-  await expect(rsvps).toContainText("@paul: ✅ in", { timeout: 10_000 });
+  await expect(rsvps.getByRole("listitem").filter({ hasText: "Paul" })).toContainText("✅ in", { timeout: 10_000 });
   await paul.close();
 
   // Recall: Luca's own agent answers from his plans.
@@ -341,7 +341,7 @@ test("an invitation with a waitlist, then the organiser changes the time", async
   await paul.page.getByRole("link", { name: /^👥 Five-a-side/ }).click();
   await paul.page.getByTestId("proposal").getByRole("radio", { name: "I'm in" }).click();
   await expect(paul.page.getByText("Paul is on the waitlist (#1) — the plan is full (2 max).")).toBeVisible();
-  await expect(paul.page.getByTestId("rsvps")).toContainText("@paul: 🕒 waitlist #1");
+  await expect(paul.page.getByTestId("rsvps").getByRole("listitem").filter({ hasText: "Paul" })).toContainText("🕒 waitlist #1");
 
   // Marco drops out: Paul moves up automatically.
   await marco.page.getByTestId("proposal").getByRole("radio", { name: "Can't make it" }).click();
@@ -356,8 +356,8 @@ test("an invitation with a waitlist, then the organiser changes the time", async
   await plan.getByRole("button", { name: "Save change" }).click();
   await expect(luca.page.getByText("Luca changed the plan: Five-a-side, Thursday at 8:00 PM (was Thursday at 7:00 PM). Please confirm again.")).toBeVisible();
   await expect(paul.page.getByTestId("plan-when")).toContainText("8:00 PM", { timeout: 10_000 });
-  await expect(paul.page.getByTestId("rsvps")).toContainText("@paul: ⏳ waiting");
-  await expect(paul.page.getByTestId("rsvps")).toContainText("@luca: ✅ in");
+  await expect(paul.page.getByTestId("rsvps").getByRole("listitem").filter({ hasText: "Paul" })).toContainText("⏳ waiting");
+  await expect(paul.page.getByTestId("rsvps").getByRole("listitem").filter({ hasText: "Luca" })).toContainText("✅ in");
   await luca.close();
   await marco.close();
   await paul.close();
@@ -374,11 +374,11 @@ test("a sign-up list: everyone claims their own items until everything is covere
   const marco = await as(browser, "marco");
   await marco.page.getByRole("link", { name: /^👥 🧺 Who brings what/ }).click();
   await marco.page.getByTestId("item-drinks").getByRole("button", { name: "I'll take it" }).click();
-  await expect(marco.page.getByTestId("item-drinks")).toContainText("you");
+  await expect(marco.page.getByTestId("item-drinks")).toContainText("Marco");
 
   const paul = await as(browser, "paul");
   await paul.page.getByRole("link", { name: /^👥 🧺 Who brings what/ }).click();
-  await expect(paul.page.getByTestId("item-drinks")).toContainText("@marco");
+  await expect(paul.page.getByTestId("item-drinks")).toContainText("Marco");
   await expect(paul.page.getByTestId("item-drinks").getByRole("button")).toHaveCount(0); // can't take someone else's item
   await paul.page.getByTestId("item-dessert").getByRole("button", { name: "I'll take it" }).click();
 

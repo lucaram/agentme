@@ -7,11 +7,15 @@ import type { TaskParsed } from "@/lib/plans/types";
 import type { Database } from "@/lib/database.types";
 import { approveTaskAction, cancelTaskAction, continueWithoutWaitingAction } from "../../actions";
 import { DraftEditor } from "./DraftEditor";
+import { PollCard } from "./PollCard";
+import { AssignCard } from "./AssignCard";
+import type { ActionActor } from "@/components/ActionStamp";
+import { LocalTime } from "@/components/LocalTime";
 
 export type TaskView = Database["public"]["Tables"]["tasks"]["Row"] & { parsed: TaskParsed };
 type Exchange = Database["public"]["Tables"]["task_exchanges"]["Row"];
 type StepRow = Database["public"]["Tables"]["plan_steps"]["Row"];
-type AgentLite = { handle: string; avatar: string };
+type AgentLite = ActionActor;
 
 const STATUS: Record<TaskView["status"], string> = {
   awaiting_approval: "Waiting for your approval",
@@ -154,12 +158,20 @@ export function TaskCard({
   steps,
   agents,
   canAct,
+  participation,
 }: {
   task: TaskView;
   exchanges: Exchange[];
   steps: StepRow[];
   agents: Map<string, AgentLite>;
   canAct: boolean;
+  participation?: {
+    responses: Database["public"]["Tables"]["step_responses"]["Row"][];
+    claims: Database["public"]["Tables"]["item_claims"]["Row"][];
+    myAgentId: string;
+    myHandle: string;
+    myFacts: { category: string; value: string }[];
+  };
 }) {
   const kind = task.parsed.kind ?? "coordinate";
   const ordered = [...steps].sort((a, b) => a.position - b.position);
@@ -217,7 +229,7 @@ export function TaskCard({
           <ul className="space-y-2">
             {latest.map((e) => {
               const to = e.to_agent ? agents.get(e.to_agent) : undefined;
-              const reply = e.response as { data?: { availability?: string | null; food?: string | null; answer?: string }; text?: string } | null;
+              const reply = e.response as { data?: { availability?: string | null; food?: string | null; answer?: string }; text?: string; answered_at?: string } | null;
               const status = replyStatus(e, to?.handle);
               const details =
                 e.status === "completed" && reply?.data && !reply.data.answer
@@ -227,8 +239,9 @@ export function TaskCard({
                 <li key={e.id} className="rounded-xl border border-border p-2.5" data-testid="exchange">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xl" aria-hidden>{to?.avatar}</span>
-                    <span className="text-sm font-medium">@{to?.handle}&apos;s agent</span>
+                    <span className="text-sm font-medium" title={to ? `@${to.handle}` : undefined}>{to?.display_name || `@${to?.handle ?? "participant"}`}&apos;s agent</span>
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE[status.tone]}`}>{status.label}</span>
+                    {e.answered_by === "human" && reply?.answered_at && <span className="ml-auto text-[11px] tabular-nums text-muted"><LocalTime iso={reply.answered_at} /></span>}
                   </div>
                   {e.status === "completed" && reply?.data?.answer && (
                     <p className="mt-2 rounded-lg border-l-4 border-accent bg-accent-soft px-3 py-2 text-base" data-testid="reply-answer">
@@ -276,6 +289,10 @@ export function TaskCard({
         </div>
       )}
       {editable && !askAround && <DraftEditor taskId={task.id} initial={draftFromSteps(task.parsed.event, ordered, task.parsed)} />}
+      {participation && ordered.filter((s) => s.status === "waiting" || s.status === "done").map((step) =>
+        step.type === "poll" ? <PollCard key={step.id} step={step} votes={participation.responses.filter((r) => r.step_id === step.id)} agents={agents} myAgentId={participation.myAgentId} myHandle={participation.myHandle} myFacts={participation.myFacts} isOrganiser={canAct} embedded />
+        : step.type === "assign" ? <AssignCard key={step.id} step={step} claims={participation.claims.filter((c) => c.step_id === step.id)} agents={agents} myAgentId={participation.myAgentId} myHandle={participation.myHandle} embedded /> : null,
+      )}
     </section>
   );
 }
