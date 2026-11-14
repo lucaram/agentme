@@ -21,7 +21,11 @@ export default async function JoinPage({ params }: PageProps<"/join/[token]">) {
       </main>
     );
   }
-  const joined = Boolean(user && agent && (agent.id === invite.organiser.id || (await isMember(invite.conversationId, user.id))));
+  // "In" means in the PLAN (and its group), not only in the group: someone let into the group another way
+  // still gets the Join button, which adds them to the plan.
+  const joined = Boolean(
+    user && agent && (agent.id === invite.organiser.id || (invite.participants.includes(agent.handle) && (await isMember(invite.conversationId, user.id)))),
+  );
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 px-6 py-12">

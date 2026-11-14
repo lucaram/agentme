@@ -40,6 +40,7 @@ describe("✓ Verified: the code must be on the website's own homepage, read fro
 describe("downloads have an absolute deadline", () => {
   let server: http.Server;
   let base = "";
+  let redirectClosed = false;
   const before = process.env.ALLOW_LOCAL_FETCH;
 
   beforeAll(async () => {
@@ -48,6 +49,16 @@ describe("downloads have an absolute deadline", () => {
       if (req.url === "/fast") {
         res.writeHead(200, { "content-type": "text/html" });
         return res.end("<p>hello</p>");
+      }
+      if (req.url === "/hop-stream") {
+        // A redirect whose own body never ends.
+        res.writeHead(302, { location: "/fast", "content-type": "text/html" });
+        const timer = setInterval(() => res.write("."), 50);
+        res.on("close", () => {
+          clearInterval(timer);
+          redirectClosed = true;
+        });
+        return;
       }
       if (req.url === "/hop") {
         res.writeHead(302, { location: "/drip" });
@@ -80,6 +91,15 @@ describe("downloads have an absolute deadline", () => {
     const started = Date.now();
     await expect(safeFetch(`${base}/drip`, 0, Date.now() + 700)).rejects.toThrow("took too long");
     expect(Date.now() - started).toBeLessThan(3000);
+  });
+
+  it("a redirect is closed before the next address is read: it can't keep streaming behind the answer", async () => {
+    redirectClosed = false;
+    const page = await safeFetch(`${base}/hop-stream`);
+    expect(page.body.toString()).toBe("<p>hello</p>");
+    // The destination answered; the redirect's connection must be gone too (not left draining).
+    for (let i = 0; i < 20 && !redirectClosed; i++) await new Promise((r) => setTimeout(r, 50));
+    expect(redirectClosed).toBe(true);
   });
 
   it("the deadline covers redirects too", async () => {

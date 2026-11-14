@@ -4,6 +4,7 @@ import { adminClient } from "@/lib/supabase/admin";
 import { asJson } from "@/lib/data/json";
 import { getAgentById, getAgentForUser, getContactRow, type AgentRow } from "@/lib/data/agents";
 import { createConversation, postMessage } from "@/lib/data/chat";
+import { enrolApproved } from "@/lib/plans/invites";
 import { GROUP_AVATARS, MAX_GROUP_PEOPLE, groupRole, isGroupAdmin, loadJoinLink, notify, type Result } from "./shared";
 
 type Me = { userId: string; agent: AgentRow };
@@ -235,6 +236,8 @@ export async function decideGroupRequest(requestId: string, me: Me, approve: boo
     await db.from("conversation_members").upsert({ conversation_id: req.conversation_id, user_id: req.user_id, role: "member" }, { onConflict: "conversation_id,user_id", ignoreDuplicates: true });
     const them = await getAgentForUser(req.user_id);
     await note(req.conversation_id, `${me.agent.display_name} let ${them?.display_name ?? "someone"} in.`);
+    // They asked through a plan's invite link: they join that plan too, not only its group.
+    if (req.task_id) await enrolApproved(req.task_id, req.user_id).catch((error) => console.error("couldn't add an approved member to the plan", error instanceof Error ? error.message : error));
   }
   const group = await loadGroup(req.conversation_id);
   await notify(

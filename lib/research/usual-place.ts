@@ -1,7 +1,7 @@
 import "server-only";
 import { getFacts, type AgentRow } from "@/lib/data/agents";
 import { dependsOnPlace, townOf, withPlace } from "./place";
-import { isKnownPlace } from "@/lib/geo";
+import { knownTown } from "@/lib/geo";
 
 /**
  * A look-up that depends on where the owner is, with no place named: uses the
@@ -21,7 +21,7 @@ export async function placeFor(
   if (route.place || !dependsOnPlace(text)) return { question: route.question, place: route.place, assumed: null, ask: false };
   const saved = agent.lookup_place === false ? null : (await getFacts(agent.id)).find((f) => f.category === "location")?.value;
   // Only a town we know by name, and only its name: nothing else the owner wrote there goes out.
-  const town = saved ? townOf(saved, isKnownPlace) : null;
+  const town = saved ? townOf(saved, knownTown) : null;
   if (!town) return { question: route.question, place: "", assumed: null, ask: true };
   return { question: withPlace(route.question, town), place: town, assumed: town, ask: false };
 }
