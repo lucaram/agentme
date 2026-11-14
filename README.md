@@ -164,6 +164,10 @@ Any request that mentions contacts becomes a **plan made of the blocks above** (
 
 My Agent shows **template chips** filled in with your own contacts. It also answers **general questions**, but coordination comes first.
 
+Chat participation cards show each person's display name and saved action date/time in the viewer's time zone. Poll votes, plan RSVPs and sign-up claims use the latest saved response; changed votes, RSVPs, claims, give-backs, plan edits and manual poll closures also leave dated system activity in the shared chat and the organiser's request. My Agent includes live poll and sign-up cards. Approvals are recorded privately; actions are never presented as messages sent by the person. Historical response times are shown only where they were saved.
+
+Customer-action buttons in existing plans and My Agent replies use the business's current published list. Saving an empty list removes all buttons; older FAQs and website information cannot restore methods the owner removed. A metadata-only `business_action_versions` signal refreshes open chats without exposing private business information. Legacy replies are linked only when a published action uniquely identifies the business; the resolved ID is saved in metadata so later destination changes keep working. Historical message text and button snapshots remain unchanged; ambiguous or unresolved snapshots never become stale clickable links.
+
 ## Finding people
 
 The Contacts tab only ever holds people you accepted; an agent trusts its contacts, so nothing is added without consent.

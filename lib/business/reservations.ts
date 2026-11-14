@@ -8,16 +8,14 @@ const bookingTopic = /\b(book(?:ing|ings)?|reserv(?:e|ation|ations)|contact|phon
 /** Public information only. Owner-supplied details win over the reviewed website. */
 export function reservationWays(businessInfo: unknown, site?: PublishedSite | null): Way[] {
   const info = (businessInfo ?? {}) as Record<string, unknown>;
+  // Once the owner manages Customer actions, that list is authoritative,
+  // including an intentionally empty list. Old FAQs/site data must not restore removed actions.
+  if (Array.isArray(info.ways)) return waysOf(info).filter(isReservationWay);
   const found: Way[] = [];
-  const explicit = waysOf(info).filter(isReservationWay);
-  const explicitKinds = new Set(explicit.map((way) => way.kind));
   const add = (kind: WayKind, value: string) => {
-    if (explicitKinds.has(kind)) return;
     const checked = normaliseWay(kind, value);
     if (checked.ok && !found.some((way) => way.kind === kind)) found.push(checked.way);
   };
-  // Delivery/order links are not reservation methods.
-  found.push(...explicit);
   const readLinks = (raw: string) => {
     if (bookingTopic.test(raw)) {
       for (const match of raw.matchAll(/https?:\/\/[^\s<>"']+/gi)) {

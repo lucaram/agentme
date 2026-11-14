@@ -6,6 +6,7 @@ import { extractMentions } from "@/lib/policy/handles";
 import { getAgentByHandle, getAgentById, getFacts, getRelationship, type AgentRow } from "@/lib/data/agents";
 import { CATEGORY_LABELS } from "@/lib/policy/disclosure";
 import { getConversation, postMessage } from "@/lib/data/chat";
+import { recordPlanAction } from "@/lib/plans/activity";
 import { COMPOSE_SYSTEM, OWNER_CHAT_SYSTEM, wrapUntrusted } from "@/lib/agents/prompts";
 import { buildRecall } from "@/lib/agents/recall";
 import { RecallRouteSchema, isRecallQuestion, mockRecallRoute, recallChoice } from "@/lib/agents/recall-route";
@@ -463,8 +464,11 @@ async function setTaskStatus(
 
 /** Owner approved the delegation. Returns true if the task should now run. */
 export async function approveTask(taskId: string, userId: string): Promise<boolean> {
-  await loadOwnedTask(taskId, userId);
-  return setTaskStatus(taskId, "running", undefined, ["awaiting_approval"]);
+  const task = await loadOwnedTask(taskId, userId);
+  const changed = await setTaskStatus(taskId, "running", undefined, ["awaiting_approval"]);
+  const actor = changed ? await getAgentById(task.initiator_agent) : null;
+  if (actor) await recordPlanAction({ ...task, group_conversation_id: null }, actor, "approve", `${actor.display_name} approved this request.`);
+  return changed;
 }
 
 export async function cancelTask(taskId: string, userId: string) {
@@ -473,6 +477,8 @@ export async function cancelTask(taskId: string, userId: string) {
   if (changed) {
     // Nobody should be asked to answer for a plan that no longer exists.
     await withdrawInboxForTask(taskId);
+    const actor = await getAgentById(task.initiator_agent);
+    if (actor) await recordPlanAction({ ...task, group_conversation_id: task.status === "awaiting_approval" ? null : task.group_conversation_id }, actor, "cancel", `${actor.display_name} stopped this request.`);
     await postMessage({ conversationId: task.conversation_id, from: "agent", agentId: task.initiator_agent, content: "Stopped. I won't contact anyone else for this.", metadata: { kind: "info", task_id: task.id } });
   }
 }
@@ -496,12 +502,14 @@ export async function decideProposal(proposalId: string, userId: string, decisio
   if (!proposal?.tasks || proposal.tasks.owner_id !== userId) throw new Error("Proposal not found");
   if (proposal.status !== "pending") return false;
   const task = proposal.tasks;
+  const organiser = await getAgentById(task.initiator_agent);
   const content = proposal.content as unknown as Proposal & { disclaimer: string };
 
   if (decision === "reject") {
     await db.from("proposals").update({ status: "rejected" }).eq("id", proposalId);
     await completeProposalStep(task.id, { proposalId, decision: "rejected" });
     await setTaskStatus(task.id, "rejected");
+    if (organiser) await recordPlanAction({ ...task, group_conversation_id: null }, organiser, "reject", `${organiser.display_name} rejected the suggested plan.`);
     await postMessage({ conversationId: task.conversation_id, from: "agent", agentId: task.initiator_agent, content: "OK, I've dropped that plan. Nothing was sent to anyone.", metadata: { kind: "info", task_id: task.id } });
     return false;
   }
@@ -512,6 +520,7 @@ export async function decideProposal(proposalId: string, userId: string, decisio
   const { data: claimed } = await db.from("proposals").update({ status: "accepted", group_conversation_id: group.id }).eq("id", proposalId).eq("status", "pending").select("id");
   if (!claimed?.length) return false;
   await completeProposalStep(task.id, { proposalId, decision: "accepted", groupId: group.id });
+  if (organiser) await recordPlanAction({ ...task, group_conversation_id: group.id }, organiser, "share", `${organiser.display_name} shared the suggested plan.`);
   await postMessage({
     conversationId: group.id,
     from: "agent",

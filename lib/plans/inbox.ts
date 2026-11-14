@@ -45,7 +45,7 @@ export async function answerInboxItem(itemId: string, ownerId: string, raw: Reco
   const agent = await getAgentById(item.agent_id);
   const db = adminClient();
 
-  let response: { text: string; data: Record<string, unknown> };
+  let response: { text: string; data: Record<string, unknown>; answered_at?: string };
   let disclosed: string[];
   let stored: Record<string, unknown>;
 
@@ -96,6 +96,8 @@ export async function answerInboxItem(itemId: string, ownerId: string, raw: Reco
   }
 
   if (item.exchange_id) {
+    // This is the human's answer time, rather than the original question time.
+    response = { ...response, answered_at: new Date().toISOString() };
     await db
       .from("task_exchanges")
       .update({ status: "completed", answered_by: "human", response: asJson(response), disclosed_categories: disclosed, error: null })
@@ -123,7 +125,7 @@ export async function declineInboxItem(itemId: string, ownerId: string): Promise
   if (item.exchange_id) {
     await db
       .from("task_exchanges")
-      .update({ status: "refused", answered_by: "human", error: `@${agent?.handle ?? "they"} preferred not to ${verb}.`, disclosed_categories: [] })
+      .update({ status: "refused", answered_by: "human", error: `@${agent?.handle ?? "they"} preferred not to ${verb}.`, response: asJson({ answered_at: new Date().toISOString() }), disclosed_categories: [] })
       .eq("id", item.exchange_id)
       .eq("status", "waiting_human");
   }

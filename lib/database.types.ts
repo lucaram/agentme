@@ -240,6 +240,11 @@ isOneToOne: false
                   Insert: { id?: boolean; started_at?: string }
                   Update: { id?: boolean; started_at?: string }
                   Relationships: []
+                },"business_action_versions": {
+                  Row: { agent_id: string; version: number; updated_at: string }
+                  Insert: { agent_id: string; version?: number; updated_at?: string }
+                  Update: { agent_id?: string; version?: number; updated_at?: string }
+                  Relationships: []
                 },"business_action_events": {
                   Row: { id: string; agent_id: string; kind: string; label: string; source: string; created_at: string }
                   Insert: { id: string; agent_id: string; kind: string; label: string; source: string; created_at?: string }

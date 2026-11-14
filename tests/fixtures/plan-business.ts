@@ -24,7 +24,7 @@ export async function planBusinessFixture() {
       const { data: agent, error: agentError } = await db.from("agents").insert({
         owner_id: data.user.id, handle, display_name: business ? "Trattoria Sole" : name[0].toUpperCase() + name.slice(1),
         type: business ? "business" : "personal", contact_policy: "anyone",
-        business_info: business ? { hours: "Closed Mondays. Open Tuesday to Sunday.", ways: [{ kind: "book", value: "https://sole.example/book" }, { kind: "email", value: "bookings@sole.example" }], faqs: [{ q: "Are you open on Mondays?", a: "We are closed Mondays." }, { q: "Do you take group bookings?", a: "Please call 020 7946 0000 to book." }] } : {},
+        business_info: business ? { hours: "Closed Mondays. Open Tuesday to Sunday.", ways: [{ kind: "book", value: "https://sole.example/book" }, { kind: "email", value: "bookings@sole.example" }, { kind: "call", value: "020 7946 0000" }], faqs: [{ q: "Are you open on Mondays?", a: "We are closed Mondays." }, { q: "Do you take group bookings?", a: "Please call 020 7946 0000 to book." }] } : {},
       }).select("*").single();
       if (agentError) throw agentError;
       people.push({ userId: data.user.id, email, agent: agent! });

@@ -2,10 +2,11 @@ import type { Database } from "@/lib/database.types";
 import type { AssignConfig } from "@/lib/plans/blocks/assign";
 import { ActionButton } from "@/components/ActionButton";
 import { claimItemAction, unclaimItemAction } from "../../actions";
+import { ActionStamp, type ActionActor } from "@/components/ActionStamp";
 
 type StepRow = Database["public"]["Tables"]["plan_steps"]["Row"];
 type Claim = Database["public"]["Tables"]["item_claims"]["Row"];
-type AgentLite = { handle: string; avatar: string };
+type AgentLite = ActionActor;
 
 /** Sign-up list: everyone claims their own items; an item can only have one taker. */
 export function AssignCard({
@@ -14,19 +15,21 @@ export function AssignCard({
   agents,
   myAgentId,
   myHandle,
+  embedded = false,
 }: {
   step: StepRow;
   claims: Claim[];
   agents: Map<string, AgentLite>;
   myAgentId: string;
   myHandle: string;
+  embedded?: boolean;
 }) {
   const config = step.config as unknown as AssignConfig;
   const canClaim = config.people.includes(myHandle);
   const covered = config.items.filter((item) => claims.some((c) => c.item === item)).length;
 
   return (
-    <section className="mt-2 w-full max-w-[85%] rounded-2xl border-2 border-accent bg-surface p-4 text-sm" aria-label="Sign-up list" data-testid="assign">
+    <section className={`mt-2 w-full ${embedded ? "rounded-xl border border-border" : "max-w-[85%] rounded-2xl border-2 border-accent"} bg-surface p-4 text-sm`} aria-label="Sign-up list" data-testid="assign">
       <p className="text-xs uppercase tracking-wide text-muted">Sign-up list</p>
       <h3 className="mt-1 text-base font-semibold">{config.title}</h3>
       <ul className="mt-2 space-y-1.5">
@@ -36,16 +39,14 @@ export function AssignCard({
           const mine = claim?.agent_id === myAgentId;
           return (
             <li key={item} className="flex items-center justify-between gap-2" data-testid={`item-${item}`}>
-              <span>
-                {item}
+              <div className="min-w-0 flex-1 space-y-1">
+                <span className="font-medium">{item}</span>
                 {claim ? (
-                  <span className="ml-2 text-xs text-muted">
-                    — {taker?.avatar} {mine ? "you" : `@${taker?.handle ?? "someone"}`}
-                  </span>
+                  <ActionStamp actor={taker ?? { handle: "participant", avatar: "" }} at={claim.created_at} />
                 ) : (
                   <span className="ml-2 text-xs text-muted">— open</span>
                 )}
-              </span>
+              </div>
               {mine ? (
                 <ActionButton action={unclaimItemAction.bind(null, step.id, item)} label="Give back" />
               ) : (

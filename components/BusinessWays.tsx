@@ -1,6 +1,6 @@
 "use client";
 
-import { wayHref, wayLabel, type Way } from "@/lib/business/booking";
+import { wayHref, wayLabel, shortWayLabel, type Way } from "@/lib/business/booking";
 
 /** The business's own ways to book or order, as buttons (they open the business's own site, phone or WhatsApp). */
 export function BusinessWays({ ways, block = false, primary = true, agentId, source = "public_page" }: { ways: Way[]; block?: boolean; primary?: boolean; agentId?: string; source?: "public_page" | "plan" | "recall" }) {
@@ -8,11 +8,13 @@ export function BusinessWays({ ways, block = false, primary = true, agentId, sou
   const ordered = [...ways].sort((a, b) => Number(b.primary === true) - Number(a.primary === true));
   const render = (list: Way[], offset = 0) => list.map((w, i) => {
     const external = w.kind !== "call" && w.kind !== "email";
-    return <a key={`${w.kind}-${w.value}-${w.label ?? ""}-${i}`} href={wayHref(w)} title={w.kind === "call" ? "Open your phone app" : external ? "Open the business website in a new tab" : "Open your email app"} onClick={() => {
+    const compact = source !== "public_page";
+    const hint = w.kind === "call" ? "Open your phone app" : external ? "Open the business website in a new tab" : "Open your email app";
+    return <a key={`${w.kind}-${w.value}-${w.label ?? ""}-${i}`} href={wayHref(w)} title={compact ? `${wayLabel(w)} · ${hint}` : hint} onClick={() => {
       try {
         void fetch("/api/business/actions/click", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: crypto.randomUUID(), agentId, kind: w.kind, value: w.value, label: w.label, source }), keepalive: true }).catch(() => {});
       } catch { /* Tracking never prevents the native link from opening. */ }
-    }} className={`${i + offset === 0 && primary ? "btn-primary" : "btn-ghost"} text-center`} {...(external ? { target: "_blank", rel: "noopener noreferrer nofollow" } : {})}>{wayLabel(w)}</a>;
+    }} className={`${i + offset === 0 && primary ? "btn-primary" : "btn-ghost"} text-center`} {...(external ? { target: "_blank", rel: "noopener noreferrer nofollow" } : {})}>{compact ? shortWayLabel(w) : wayLabel(w)}</a>;
   });
   return (
     <div className={`flex flex-wrap gap-2 ${block ? "w-full flex-col" : ""}`} data-testid="business-ways">

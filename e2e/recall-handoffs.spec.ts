@@ -33,9 +33,9 @@ test("recall stays private; a business receives one explicitly approved staff qu
       await expect(messages).toContainText("AGENTME hasn't made a reservation");
       await expect(messages).toContainText("To arrange one, use the options below.");
       await expect(messages.getByTestId("rich-text").filter({ hasText: "Your dinner at Trattoria Sole" })).not.toContainText("020 7946 0000");
-      await expect(luca.getByRole("link", { name: /Call 020 7946 0000/ })).toHaveAttribute("href", "tel:02079460000");
-      await expect(luca.getByRole("link", { name: /Email bookings@sole.example/ })).toHaveAttribute("href", "mailto:bookings@sole.example");
-      await expect(luca.getByRole("link", { name: /Book online/ })).toHaveAttribute("href", "https://sole.example/book");
+      await expect(luca.getByRole("link", { name: /Call/ })).toHaveAttribute("href", "tel:02079460000");
+      await expect(luca.getByRole("link", { name: /Email/ })).toHaveAttribute("href", "mailto:bookings@sole.example");
+      await expect(luca.getByRole("link", { name: /Book/ })).toHaveAttribute("href", "https://sole.example/book");
       await expect(luca.getByRole("button", { name: /Ask @|Ask the team/ })).toHaveCount(0);
     }
     expect((await f.db.from("task_exchanges").select("id").eq("to_agent", f.business.agent.id)).data).toEqual([]);

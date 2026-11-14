@@ -9,6 +9,7 @@ import { validateProposal } from "@/lib/coordination/validate";
 import type { Proposal } from "@/lib/coordination/schemas";
 import type { CollectResult } from "./blocks/collect";
 import { privateResultOf } from "./steps";
+import { recordPlanAction } from "./activity";
 
 const ChangeInput = z.object({
   title: z.string().trim().min(1, "Give the plan a name.").max(120),
@@ -72,7 +73,11 @@ export async function changePlan(proposalId: string, userId: string, input: Chan
   }
 
   const name = organiser?.display_name ?? "The organiser";
-  if (task.group_conversation_id) {
+  if (organiser) {
+    await recordPlanAction(task, organiser, "change_plan", timingChanged
+      ? `${name} changed the plan: ${after.title}, ${when(after)} (was ${when(before)}). Please confirm again.`
+      : `${name} renamed the plan to “${after.title}”.`);
+  } else if (task.group_conversation_id) {
     await postMessage({
       conversationId: task.group_conversation_id,
       from: "system",

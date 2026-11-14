@@ -34,8 +34,8 @@ import { businessIdeas, chatIdeas, personalIdeas, type Idea } from "@/lib/agents
 import { ThreadTitle } from "./ThreadTitle";
 import type { Database } from "@/lib/database.types";
 import { AgentName } from "@/components/AgentName";
-import { adminClient } from "@/lib/supabase/admin";
 import { waysOf } from "@/lib/business/booking";
+import { currentChatActions } from "@/lib/business/current-actions";
 import { canPost, communityMembership, groupRole, isGroupAdmin, isModerator, type ConvRow } from "@/lib/social/shared";
 
 /** Labels moderators see on flagged community messages (posted anyway, or likely selling). */
@@ -109,8 +109,14 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
   ]);
   // A plan's place: that business's own ways to book or order (public; read on the server).
   const venueIds = [...new Set((proposals ?? []).map((p) => (p.content as { venue?: { agent_id?: string } | null }).venue?.agent_id).filter((v): v is string => Boolean(v)))];
-  const { data: venueRows } = venueIds.length ? await adminClient().from("agents").select("id, business_info").in("id", venueIds).eq("type", "business") : { data: [] };
-  const venueWays = new Map((venueRows ?? []).map((v) => [v.id, waysOf(v.business_info)]));
+  const bookingMessages = (isMyAgent ? messages ?? [] : []).flatMap((m) => {
+    const meta = m.metadata as { booking_business_id?: string; booking_ways?: unknown };
+    return m.is_ai_generated && !m.removed_at && Array.isArray(meta.booking_ways) ? [{ messageId: m.id, businessId: meta.booking_business_id, ways: waysOf({ ways: meta.booking_ways }), metadata: m.metadata }] : [];
+  });
+  const { actions: currentActions, legacyIdentities, businessIds: actionBusinessIds } = await currentChatActions(
+    [...venueIds, ...bookingMessages.flatMap((m) => m.businessId ? [m.businessId] : [])],
+    bookingMessages.filter((m) => !m.businessId),
+  );
   // Steps & answers: visible to the plan owner and members of the plan's group (RLS can_see_task).
   const planTaskIds = [...new Set([...taskIds, ...(proposals ?? []).map((p) => p.task_id)])];
   const { data: steps } = planTaskIds.length
@@ -233,7 +239,8 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
       <MarkRead conversationId={id} latestMessageId={(messages ?? []).at(-1)?.id ?? null} threadId={thread?.id} />
       <RealtimeRefresh
         channel={`conv-${id}`}
-        tables={["messages", "tasks", "task_exchanges", "proposals", "plan_steps", "step_responses", "item_claims", "inbox_items"]}
+        tables={["messages", "tasks", "task_exchanges", "proposals", "plan_steps", "step_responses", "item_claims", "inbox_items", "business_action_versions"]}
+        businessIds={actionBusinessIds}
         filter={`conversation_id=eq.${id}`}
       />
       {isMyAgent && (
@@ -311,11 +318,11 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
 
           if (system) {
             return (
-              <li key={m.id} className={`text-center text-xs ${meta.kind === "error" ? "text-danger" : "text-muted"}`} data-testid="system-note">
-                <span className="tabular-nums opacity-70">
+              <li key={m.id} className={`flex flex-wrap items-baseline justify-center gap-x-2 gap-y-0.5 py-1 text-center text-xs ${meta.kind === "error" ? "text-danger" : "text-muted"}`} data-testid="system-note">
+                <span>{m.content}</span>
+                <span className="text-[11px] tabular-nums opacity-70">
                   <LocalTime iso={m.created_at} />
-                </span>{" "}
-                - {m.content}
+                </span>
               </li>
             );
           }
@@ -410,7 +417,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
               {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}
               {meta.kind === "fact_suggestion" && isMyAgent && <FactSuggestion messageId={m.id} decided={meta.decided} />}
               {meta.kind === "business_suggestion" && isMyAgent && <BusinessSuggestion messageId={m.id} handle={meta.handle ?? ""} decided={meta.decided} />}
-              {isMyAgent && !m.removed_at && m.is_ai_generated && Array.isArray(meta.booking_ways) && <BusinessWays ways={waysOf({ ways: meta.booking_ways }).filter((way) => way.kind !== "order")} primary={false} agentId={meta.booking_business_id} source="recall" />}
+              {isMyAgent && !m.removed_at && m.is_ai_generated && Array.isArray(meta.booking_ways) && <BusinessWays ways={currentActions.get(meta.booking_business_id ?? legacyIdentities.get(m.id) ?? "")?.reservation ?? []} primary={false} agentId={meta.booking_business_id ?? legacyIdentities.get(m.id)} source="recall" />}
               {meta.handoff_offer && !m.removed_at && (isMyAgent || conv.kind === "agent_chat" || meta.asked_by === user.id) && <AskTeam messageId={m.id} sent={Boolean(meta.handoff_sent)} />}
               {meta.kind === "business_answer" && isMyAgent && meta.business_id && (
                 <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -433,6 +440,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                   steps={(steps ?? []).filter((s) => s.task_id === task.id)}
                   agents={byId}
                   canAct={task.owner_id === user.id}
+                  participation={isMyAgent ? { responses: stepResponses ?? [], claims: claims ?? [], myAgentId: agent.id, myHandle: agent.handle, myFacts: myFacts ?? [] } : undefined}
                 />
               )}
               {proposal && (
@@ -446,7 +454,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                   myAgentId={agent.id}
                   myHandle={agent.handle}
                   inGroup={conv.kind === "group"}
-                  venueWays={venueWays.get((proposal as ProposalView).content.venue?.agent_id ?? "") ?? []}
+                  venueWays={currentActions.get((proposal as ProposalView).content.venue?.agent_id ?? "")?.all ?? []}
                 />
               )}
               {assignStep && (

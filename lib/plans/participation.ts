@@ -6,6 +6,7 @@ import { describeResult, tally, type PollConfig } from "./poll";
 import { describeTransition, evaluate, type RsvpAnswer, type ThresholdConfig } from "./threshold";
 import type { AssignConfig } from "./blocks/assign";
 import { wakeTask } from "./engine";
+import { recordPlanAction } from "./activity";
 
 type Result = { ok: true; wake?: string | null } | { ok: false; error: string };
 
@@ -56,10 +57,11 @@ export async function respondRsvp(stepId: string, userId: string, agent: AgentRo
   const previous = beforeAnswers.find((a) => a.handle === agent.handle)?.response;
   if (previous === response) return { ok: true };
 
-  await db.from("step_responses").upsert(
+  const { error: saveError } = await db.from("step_responses").upsert(
     { step_id: stepId, agent_id: agent.id, answered_by: "human", value: { response } },
     { onConflict: "step_id,agent_id" },
   );
+  if (saveError) return { ok: false, error: "Your answer couldn't be saved. Please try again." };
 
   const before = evaluate(beforeAnswers, cfg);
   const after = evaluate(await loadAnswers(stepId), cfg);
@@ -67,7 +69,7 @@ export async function respondRsvp(stepId: string, userId: string, agent: AgentRo
   const names = new Map((people ?? []).map((a) => [a.handle, a.display_name]));
   const lines = describeTransition(before, after, cfg, { handle: agent.handle, name: agent.display_name, changed: Boolean(previous) }, names);
   for (const content of lines) {
-    await postMessage({ conversationId: task.group_conversation_id, from: "system", content, metadata: { kind: "event", step_id: stepId } });
+    await recordPlanAction(task, agent, "rsvp", content, stepId);
   }
   // The organiser hears about the threshold in their own chat too.
   if (cfg.min && before.on !== after.on) {
@@ -103,7 +105,7 @@ export async function claimItem(stepId: string, userId: string, agent: AgentRow,
     const { data: other } = holder ? await db.from("agents").select("handle").eq("id", holder.agent_id).maybeSingle() : { data: null };
     return { ok: false, error: `Already taken${other ? ` by @${other.handle}` : ""}.` };
   }
-  await postMessage({ conversationId: task.group_conversation_id, from: "system", content: `${agent.display_name} will bring/do: ${item}`, metadata: { kind: "event", step_id: stepId } });
+  await recordPlanAction(task, agent, "claim", `${agent.display_name} will bring/do: ${item}`, stepId);
 
   const { count } = await db.from("item_claims").select("*", { count: "exact", head: true }).eq("step_id", stepId);
   if ((count ?? 0) < config.items.length) return { ok: true };
@@ -123,7 +125,7 @@ export async function unclaimItem(stepId: string, userId: string, agent: AgentRo
   if (!(await isMember(task.group_conversation_id, userId))) return { ok: false, error: "Not found." };
   const { data } = await adminClient().from("item_claims").delete().eq("step_id", stepId).eq("item", item).eq("agent_id", agent.id).select("item");
   if (!data?.length) return { ok: false, error: "You haven't claimed that." };
-  await postMessage({ conversationId: task.group_conversation_id, from: "system", content: `${agent.display_name} can't bring/do ${item} anymore — it's open again.`, metadata: { kind: "event", step_id: stepId } });
+  await recordPlanAction(task, agent, "unclaim", `${agent.display_name} can't bring/do ${item} anymore — it's open again.`, stepId);
   return { ok: true };
 }
 
@@ -139,10 +141,15 @@ export async function votePoll(stepId: string, userId: string, agent: AgentRow, 
   if (!config.options.includes(option)) return { ok: false, error: "That isn't one of the options." };
 
   const db = adminClient();
-  await db.from("step_responses").upsert(
+  const { data: prior } = await db.from("step_responses").select("value").eq("step_id", stepId).eq("agent_id", agent.id).maybeSingle();
+  const previous = (prior?.value as { option?: string } | undefined)?.option;
+  if (previous === option) return { ok: true };
+  const { error: saveError } = await db.from("step_responses").upsert(
     { step_id: stepId, agent_id: agent.id, answered_by: "human", value: { option } },
     { onConflict: "step_id,agent_id" },
   );
+  if (saveError) return { ok: false, error: "Your vote couldn't be saved. Please try again." };
+  await recordPlanAction(task, agent, "vote", `${agent.display_name} ${previous ? "changed their vote to" : "voted for"} ${option}.`, stepId);
   const { count } = await db.from("step_responses").select("*", { count: "exact", head: true }).eq("step_id", stepId);
   if ((count ?? 0) >= config.voters.length) return closePollStep(stepId, null);
   return { ok: true };
@@ -169,9 +176,9 @@ export async function closePollStep(stepId: string, organiserUserId: string | nu
   if (!closed?.length) return { ok: true };
 
   const text = describeResult(config.question, result);
-  if (task.group_conversation_id) {
-    await postMessage({ conversationId: task.group_conversation_id, from: "system", content: text, metadata: { kind: "event", step_id: stepId } });
-  }
+  const { data: organiser } = await db.from("agents").select("id, handle, display_name").eq("id", task.initiator_agent).single();
+  if (organiserUserId && organiser) await recordPlanAction(task, organiser, "close_poll", `${organiser.display_name} closed the poll. ${text}`, stepId);
+  else if (task.group_conversation_id) await postMessage({ conversationId: task.group_conversation_id, from: "system", content: `Everyone has voted. ${text}`, metadata: { kind: "event", step_id: stepId } });
   await postMessage({ conversationId: task.conversation_id, from: "agent", agentId: task.initiator_agent, content: text, metadata: { kind: "info", task_id: task.id } });
   return { ok: true, wake: (await wakeTask(task.id)) ? task.id : null };
 }
