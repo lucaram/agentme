@@ -80,7 +80,7 @@ export function ProposalCard({
             📍 At <a className="font-medium text-accent underline" href={`/u/${c.venue.handle}`}>{c.venue.name}</a>
             {venueWays.length ? `: book or order directly with ${c.venue.name}` : ` (@${c.venue.handle})`}
           </p>
-          <BusinessWays ways={venueWays} />
+          <BusinessWays ways={venueWays} agentId={c.venue.agent_id} source="plan" />
         </div>
       )}
 

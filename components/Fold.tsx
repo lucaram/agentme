@@ -1,6 +1,7 @@
 /**
  * A tap-to-open section: a summary row (icon, title, one line), highlighted while
- * open. Sections with the same `name` open one at a time.
+ * open. Sections start collapsed; use `open` only for an explicit request
+ * such as search results. Sections with the same `name` open one at a time.
  */
 export function Fold({
   icon,

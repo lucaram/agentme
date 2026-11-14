@@ -112,7 +112,10 @@ test("connecting contacts shows a list to tick: add who you want, invite the res
   // Development simulates the email provider: the demo accounts plus two people not on AGENTME.
   const marco = await as(browser, "marco");
   await marco.page.goto("/discover");
+  await marco.page.getByTestId("fold-find-known").locator("summary").first().click();
   await marco.page.getByRole("link", { name: "Connect", exact: true }).click();
+  await expect(marco.page).toHaveURL(/\/discover\?list=1/);
+  await marco.page.getByTestId("fold-find-known").locator("summary").first().click();
   const list = marco.page.getByTestId("contact-list");
   await expect(list).toContainText("on AGENTME");
 

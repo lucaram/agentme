@@ -163,6 +163,7 @@ test("contact request, accept and direct message", async ({ browser }) => {
   const paul = await as(browser, "paul");
   await paul.page.goto("/contacts");
   await paul.page.getByRole("button", { name: "Accept" }).click();
+  await paul.page.getByTestId("fold-contacts").locator("summary").first().click();
   await paul.page.getByRole("listitem").filter({ hasText: "@eve" }).getByRole("button", { name: "Message" }).click();
   await send(paul.page, "Hi Eve, welcome!");
   await expect(paul.page.getByText("Hi Eve, welcome!")).toBeVisible();

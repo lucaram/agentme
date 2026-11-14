@@ -51,7 +51,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/discove
   return (
     <div className="space-y-4">
       <PeopleTabs active="find" />
-      {/* Tap-to-open sections, one at a time: finding people you know opens first; a search opens its results. */}
+      {/* Sections start closed; an explicit search opens its results. */}
       <div className="space-y-3">
         {!agent.guest && (
           <Fold
@@ -59,7 +59,6 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/discove
             icon="📇"
             title="Find people you know"
             testId="fold-find-known"
-            open={!query}
             summary="From your contacts, or a few emails or numbers. You choose who to add."
           >
             <div className="space-y-2 px-5 py-5 sm:px-6" aria-label="Find people you know">

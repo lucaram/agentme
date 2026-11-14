@@ -73,6 +73,7 @@ test("groups: create from the Groups tab, only admins send, make someone admin",
   const paul = await as(browser, "paul");
   await expect(paul.page.getByTestId("groups-badge")).toBeVisible();
   await paul.page.getByRole("navigation").first().getByRole("link", { name: /^Groups/ }).click();
+  await openSection(paul.page, "notices");
   await expect(paul.page.getByTestId("notice").first()).toContainText(`Luca removed you from “${name}”`);
   await expect(paul.page.getByTestId("groups-badge")).toHaveCount(0);
   await luca.close();
@@ -214,6 +215,7 @@ test("community autopilot: a message kept out can be appealed; a moderator accep
   // The owner sees it in Autopilot and accepts: it's posted as Paul's message.
   await luca.page.goto(communityUrl);
   const autopilot = luca.page.getByTestId("autopilot");
+  await openSection(luca.page, "autopilot");
   const item = autopilot.getByTestId("appeal-item").filter({ hasText: "tickets giveaway" });
   await item.getByRole("button", { name: "Accept: post it" }).click();
   await expect(autopilot.getByTestId("appeal-item")).toHaveCount(0);

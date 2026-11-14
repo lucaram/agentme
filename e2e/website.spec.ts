@@ -90,6 +90,8 @@ test("paste your website: sign-up fills itself in, the agent learns the site, th
   await expect(luca.page.getByText("I've asked the team")).toBeVisible();
 
   await page.goto("/business");
+  await openSection(page, "fold-activity");
+  await openSection(page, "gaps");
   const gap = page.getByTestId("gaps").getByTestId("gap");
   await expect(gap).toContainText("A customer asked: “Is there parking nearby?”");
   await gap.getByRole("textbox").fill("Yes: free parking on Shore Street after 6pm.");

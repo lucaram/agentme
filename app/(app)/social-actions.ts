@@ -250,7 +250,7 @@ export async function joinWithLinkAction(token: string, acceptRules: boolean): P
 
 // ------------------------------------------------------------- updates (tab badges)
 
-/** The person opened Groups/Communities: their updates there are seen (database clock, own rows only). */
+/** The person opened their Updates list (database clock, own rows only). */
 export async function markNoticesSeenAction(area: "groups" | "communities"): Promise<Out> {
   await requireAgent();
   if (area !== "groups" && area !== "communities") return {};

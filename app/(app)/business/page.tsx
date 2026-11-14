@@ -5,7 +5,6 @@ import { adminClient } from "@/lib/supabase/admin";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { Fold } from "@/components/Fold";
 import { OpenFromHash } from "@/components/OpenFromHash";
-import { OpenRequests } from "@/components/requests/OpenRequests";
 import { BusinessInfoForm, BusinessDetailsForm, SourcesManager } from "./BusinessForms";
 import { QuestionsAnswers } from "./QuestionsAnswers";
 import { AddBusinessIntro } from "./AddBusinessIntro";
@@ -17,16 +16,15 @@ import { ActionButton } from "@/components/ActionButton";
 import { answerPartnerInviteAction, leavePlacementAction } from "../social-actions";
 import { linkKey, linksIn } from "@/lib/business/extract";
 import { WebsiteCard } from "./WebsiteCard";
-import { customerActivity } from "@/lib/business/answer-log";
-import { GapsSection } from "./Gaps";
 import { verifiesByEmail } from "@/lib/business/site";
 import { emailProofEnforced } from "@/lib/business/verify";
-import { gapTitle } from "@/lib/business/gaps";
-import { openBusinessQuestions } from "@/lib/business/website";
 import { realPerson } from "@/lib/identities";
 import { daysAgo } from "@/lib/social/shared";
 import { dayBucket } from "@/lib/social/notices";
 import { clearSiteChangesAction } from "./website-actions";
+
+import { businessDashboard, dashboardDays } from "@/lib/business/dashboard";
+import { CustomerDashboard } from "./CustomerDashboard";
 
 type Info = { about?: string; customers?: string; description?: string; hours?: string; address?: string; website?: string | null; faqs?: { q: string; a: string }[] };
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -36,7 +34,8 @@ const BODY = "space-y-4 px-5 py-5 sm:px-6";
 export default async function MyBusinessPage({ searchParams }: PageProps<"/business">) {
   const { user, agent } = await requireAgent();
   if (agent.type !== "business") return <AddBusinessIntro guest={agent.guest} />;
-  const { welcome, live, website, website_error } = await searchParams;
+  const { welcome, live, website, website_error, days } = await searchParams;
+  const period = dashboardDays(days);
   const supabase = await createClient();
   const info = (agent.business_info ?? {}) as Info;
   const about = businessDescription(info);
@@ -45,12 +44,11 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const initialWebsite = savedWebsite || (info.website === undefined && typeof website === "string" ? website.slice(0, 300) : "");
   const { data: allRows, error: sourcesError } = await supabase.from("business_sources").select("*").order("created_at");
   const rows = (allRows ?? []).filter((source) => source.origin === "link");
-  const [{ data: site, error: siteError }, person, { data: changes }, gaps, stats] = await Promise.all([
+  const [{ data: site, error: siteError }, person, { data: changes }, dashboard] = await Promise.all([
     supabase.from("business_sites").select("*").maybeSingle(),
     realPerson(user, agent),
     supabase.from("notices").select("id, text, created_at").eq("area", "business").eq("kind", "site_change").is("dismissed_at", null).gte("created_at", daysAgo(30)).order("created_at", { ascending: false }).limit(10),
-    openBusinessQuestions(agent.id),
-    customerActivity(agent.id),
+    businessDashboard(agent.id, period),
     supabase.rpc("mark_notices_seen", { p_area: "business" }),
   ]);
   const personEmail = person && person !== user.id ? (await adminClient().auth.admin.getUserById(person)).data.user : null;
@@ -80,14 +78,12 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const groupsCount = places.filter((p) => p.conversation_id).length;
   const communitiesCount = places.filter((p) => p.community_id && p.status !== "invited").length;
   const changeList = changes ?? [];
-  const common = gaps.filter((gap) => gap.items.length > 1);
-  const groupedIds = common.flatMap((gap) => gap.items.map((item) => item.id));
   const siteSummary = siteError ? "Website status unavailable" : site ? `${site.domain} · ${site.live_at ? "Connected" : site.status === "reading" ? "Reading…" : site.status === "error" ? "Needs attention" : "Ready for review"}` : initialWebsite ? "Website saved · connection needed" : "No website connected";
   const documentsSummary = `${siteSummary}${sources.length ? ` · ${plural(sources.length, "additional document")}` : ""}`;
 
   return (
     <div className="space-y-6">
-      <RealtimeRefresh channel={`business-${user.id}`} tables={["business_sources", "business_sites", "inbox_items", "task_exchanges"]} />
+      <RealtimeRefresh channel={`business-${user.id}`} tables={["business_sources", "business_sites", "business_action_events", "inbox_items", "task_exchanges"]} />
       <OpenFromHash />
       {welcome && <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status" data-testid="business-welcome">🎉 {agent.display_name} is live at @{agent.handle}. You are now acting as your business. Manage its information below, then share its page with customers.</p>}
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -95,9 +91,12 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
         <TestAgent />
       </div>
       {live && <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status" data-testid="site-live">Your website information is published. Automatic checks are available approximately daily, and changes appear in Website &amp; documents.</p>}
-      {Boolean(stats?.awaiting_team) && <p className="rounded-xl bg-accent-soft p-3 text-sm"><Link className="text-accent underline" href="#customer-activity">{plural(stats!.awaiting_team, "question")} awaiting your team →</Link></p>}
       <div className="space-y-3" data-testid="business-sections">
-        <Fold name={SECTIONS} id="about-business" icon="✍️" title="About your business" testId="fold-own-words" open={!stats?.awaiting_team && !invites} summary={about ? about.replace(/\s+/g, " ").slice(0, 120) : "Introduce your business to customers"}>
+        <Fold name={SECTIONS} id="customer-dashboard" icon="📊" title="Customer dashboard" testId="fold-activity" summary={dashboard ? `${period} days · ${plural(dashboard.totals.received, "recorded question")} · agent answered ${dashboard.totals.automatic}` : "Analytics temporarily unavailable"}>
+          <span id="customer-inbox" /><span id="customer-activity" />
+          <CustomerDashboard data={dashboard} approvedAnswers={faqs.length} />
+        </Fold>
+        <Fold name={SECTIONS} id="about-business" icon="✍️" title="About your business" testId="fold-own-words" summary={about ? about.replace(/\s+/g, " ").slice(0, 120) : "Introduce your business to customers"}>
           <section className={BODY} aria-label="About your business">
             <BusinessInfoForm about={about} />
             <Link href={`/u/${agent.handle}`} target="_blank" className="text-sm text-accent underline">Preview your public page</Link>
@@ -139,24 +138,10 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
             <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Customer-only information</summary><div className="pt-3"><BusinessInfoForm mode="customers" customers={info.customers ?? ""} /></div></details>
           </section>
         </Fold>
-        <Fold name={SECTIONS} id="questions-answers" icon="💬" title="Questions & answers" testId="fold-faqs" badge={{ count: faqs.length, tone: "total" }} summary={faqs.length ? `${plural(faqs.length, "approved answer")}` : "Add the questions customers ask most"}>
+        <Fold name={SECTIONS} id="questions-answers" icon="💬" title="Questions & Answers" testId="fold-faqs" summary={faqs.length ? `${plural(faqs.length, "approved answer")}` : "Add the questions customers ask most"}>
           <section className={BODY} aria-label="Questions and answers">
             <p className="hint">Your approved reusable answers. General answers from your team are added here only when you choose to publish them.</p>
             <QuestionsAnswers faqs={faqs} />
-          </section>
-        </Fold>
-        <Fold name={SECTIONS} id="customer-activity" icon="📊" title="Customer activity" testId="fold-activity" open={Boolean(stats?.awaiting_team)} badge={{ count: stats?.awaiting_team ?? 0, tone: "new" }} summary={stats ? `${plural(stats.received, "request")} in the last 30 days${stats.awaiting_team ? ` · ${stats.awaiting_team} awaiting your team` : ""}` : "Activity temporarily unavailable"}>
-          <section className={BODY} aria-label="Customer activity">
-            <p className="hint">Counts requests to your business agent, including conversations with test accounts. The Test your agent preview is excluded.</p>
-            {stats ? <dl className="grid grid-cols-2 gap-3 text-sm" data-testid="answer-stats">
-              <div><dt>Requests received · last 30 days</dt><dd className="font-semibold">{stats.received}</dd></div>
-              <div><dt>Answered automatically · last 30 days</dt><dd className="font-semibold">{stats.automatic}</dd></div>
-              <div><dt>Answered by your team · last 30 days</dt><dd className="font-semibold">{stats.team_answered}</dd></div>
-              <div><dt>Other requests without an answer · last 30 days</dt><dd className="font-semibold">{stats.unanswered}</dd></div>
-              <div><dt>Awaiting your team · all open requests</dt><dd className="font-semibold">{stats.awaiting_team}</dd></div>
-            </dl> : <p role="alert" className="text-sm text-muted">Customer activity could not be loaded. Please try again later.</p>}
-            <OpenRequests title="Needs your team's answer" kinds={["question"]} excludeIds={groupedIds} hint="Replies go privately to the requester. Publishing a general answer as an FAQ is optional." />
-            <GapsSection name="business-common-questions" gaps={common.map((gap) => ({ key: gap.key, title: gapTitle(gap), questions: gap.items.map((item) => item.question), ids: gap.items.map((item) => item.id) }))} />
           </section>
         </Fold>
         <Fold name={SECTIONS} id="share" icon="📷" title="Share your business" testId="fold-qr" summary="Your public page, customer QR code and printable poster">
@@ -172,7 +157,6 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
             icon="👥"
             title="Groups and communities"
             testId="fold-places"
-            open={invites > 0 && !stats?.awaiting_team}
             badge={{ count: invites, tone: "new" }}
             summary={[
               groupsCount ? plural(groupsCount, "group") : "",

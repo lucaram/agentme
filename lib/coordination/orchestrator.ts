@@ -89,7 +89,7 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
   const selected = text.trim().match(/^(?:(?:option|plan|number)\s+)?([1-9]\d*)[.!]?$/i);
   if (selected && priorChoices.length) {
     const plan = plans.find((p) => p.id === priorChoices[Number(selected[1]) - 1]);
-    return postMessage({ conversationId, from: "agent", agentId: agent.id, content: plan ? describeRecall(text, [plan], agent.handle) : "That plan is no longer available. Which event and date do you mean?", metadata: plan ? { booking_ways: plan.reservationWays ?? [] } : {} });
+    return postMessage({ conversationId, from: "agent", agentId: agent.id, content: plan ? describeRecall(text, [plan], agent.handle) : "That plan is no longer available. Which event and date do you mean?", metadata: plan ? { booking_ways: plan.reservationWays ?? [], booking_business_id: plan.venue?.agent_id } : {} });
   }
   const labels = plans.map(({ title, when, venue, kind, organiser, status }) => ({ title, when, venue, kind, organiser, status }));
   let route;
@@ -107,7 +107,7 @@ export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow
   if (route.kind === "recall") {
     const choice = recallChoice(plans, route.matches);
     return postMessage({ conversationId, from: "agent", agentId: agent.id, content: "plan" in choice ? describeRecall(text, [choice.plan], agent.handle) : choice.text,
-      metadata: "choices" in choice ? { kind: "recall_clarification", plan_ids: choice.choices.flatMap((p) => p.id ? [p.id] : []) } : { booking_ways: choice.plan.reservationWays ?? [] },
+      metadata: "choices" in choice ? { kind: "recall_clarification", plan_ids: choice.choices.flatMap((p) => p.id ? [p.id] : []) } : { booking_ways: choice.plan.reservationWays ?? [], booking_business_id: choice.plan.venue?.agent_id },
     });
   }
 

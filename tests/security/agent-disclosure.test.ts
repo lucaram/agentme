@@ -207,6 +207,23 @@ describe("business agents", () => {
     expect(res.text).toMatch(/can't take bookings/i);
   });
 
+  it.each([
+    ["What is the weather in Falkirk?", "unrelated"],
+    ["Who is coming to our dinner?", "personal_plan"],
+  ])("marks a redirect without claiming to answer business information: %s", async (text, scope) => {
+    useRecorder();
+    const res = await respondAsAgent(trattoria, { callerHandle: "luca", relationship: "accepted", text, data: null }, facts);
+    expect(res).toMatchObject({ status: "completed", disclosed: [], data: { type: "agentme.business.redirect", scope } });
+    expectNoSecrets(JSON.stringify(res));
+  });
+
+  it("does not count an anonymous unknown answer as disclosed business information", async () => {
+    useRecorder();
+    const res = await respondAsAgent(trattoria, { callerHandle: null, relationship: "none", text: "Can you securely store a folding kayak indoors?", data: null }, []);
+    expect(res).toMatchObject({ status: "completed", disclosed: [] });
+    expect(res.text).toContain("I don't have");
+  });
+
   it("respects a business that blocked the caller", async () => {
     const r = useRecorder();
     const res = await respondAsAgent(trattoria, { callerHandle: "eve", relationship: "blocked", text: "hi", data: null }, []);
