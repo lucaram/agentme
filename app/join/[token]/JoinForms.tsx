@@ -12,6 +12,7 @@ export function JoinButton({ token }: { token: string }) {
     <form action={action} className="space-y-2">
       <button className="btn-primary w-full" disabled={pending}>{pending ? "Joining…" : "Join this plan"}</button>
       {state?.error && <p role="alert" className="text-sm text-danger">{state.error}</p>}
+      {state?.notice && <p role="status" className="text-sm text-muted" data-testid="join-requested">{state.notice}</p>}
     </form>
   );
 }

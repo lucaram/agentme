@@ -5,12 +5,26 @@ import { getAgentById, getContactRow, type AgentRow } from "@/lib/data/agents";
 import { postMessage } from "@/lib/data/chat";
 import { randomToken } from "@/lib/people/crypto";
 import { connectPeople } from "@/lib/people/connect";
+import { MAX_GROUP_PEOPLE, groupRole, isGroupAdmin } from "@/lib/social/shared";
 import { MAX_PLAN_PEOPLE, type TaskParsed } from "./types";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
 const INVITE_DAYS = 14;
 const CLOSED = new Set(["cancelled", "failed", "rejected", "awaiting_approval"]);
+
+/**
+ * A plan's invite link brings people into the plan's GROUP, so it follows that group's own rules:
+ * only someone who may add people to the group (its owner or an admin) can hand out the link, and only
+ * while they still are one. A plan started with "@agent" inside an existing group lives in that group:
+ * a regular member organising it can't use the plan to let outsiders in.
+ */
+async function mayInviteTo(conversationId: string, userId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const role = await groupRole(conversationId, userId);
+  if (!role) return { ok: false, error: "You're no longer in this plan's group, so you can't invite people to it." };
+  if (!isGroupAdmin(role)) return { ok: false, error: "Only this group's admins can invite new people. Ask an admin to share the group's own invite link." };
+  return { ok: true };
+}
 
 export const inviteUrl = (token: string) => `${env.appUrl.replace(/\/$/, "")}/join/${token}`;
 
@@ -24,6 +38,8 @@ export async function getOrCreateInvite(taskId: string, userId: string): Promise
   const { data: task } = await db.from("tasks").select("id, owner_id, initiator_agent, status, group_conversation_id").eq("id", taskId).maybeSingle();
   if (!task || task.owner_id !== userId) return { ok: false, error: "Only the organiser can invite people." };
   if (!task.group_conversation_id || CLOSED.has(task.status)) return { ok: false, error: "This plan can't take new people." };
+  const allowed = await mayInviteTo(task.group_conversation_id, userId);
+  if (!allowed.ok) return allowed;
   const { data: existing } = await db
     .from("plan_invites")
     .select("token")
@@ -73,6 +89,8 @@ export async function loadInvite(token: string): Promise<InvitePreview | null> {
   if (!task || !task.group_conversation_id || CLOSED.has(task.status)) return null;
   const organiser = await getAgentById(task.initiator_agent);
   if (!organiser) return null;
+  // The link only works while the organiser may still add people to the group (they left, or are no longer an admin: it stops).
+  if (!(await mayInviteTo(task.group_conversation_id, organiser.owner_id)).ok) return null;
   const parsed = task.parsed as TaskParsed & { title?: string };
   const [{ data: proposal }, { data: group }] = await Promise.all([
     db.from("proposals").select("content").eq("task_id", task.id).maybeSingle(),
@@ -98,13 +116,28 @@ export async function loadInvite(token: string): Promise<InvitePreview | null> {
  * (both chose this: the organiser shared the link, the person opened it and
  * tapped Join).
  */
-export async function joinPlan(token: string, userId: string, agent: AgentRow): Promise<Result<{ conversationId: string }>> {
+export async function joinPlan(token: string, userId: string, agent: AgentRow): Promise<Result<{ conversationId: string; requested?: boolean }>> {
   const invite = await loadInvite(token);
   if (!invite) return { ok: false, error: "This invite link has expired or was turned off." };
   const db = adminClient();
   if (invite.organiser.id !== agent.id) {
     if ((await getContactRow(invite.organiser.id, agent.id))?.status === "blocked") {
       return { ok: false, error: "This invite link has expired or was turned off." };
+    }
+    // Not in the group yet: the group's own admission rules apply, exactly as for its invite link.
+    if (!(await groupRole(invite.conversationId, userId))) {
+      if (agent.type === "business") return { ok: false, error: "Businesses can't join groups. A group admin can add your business instead." };
+      const { data: group } = await db.from("conversations").select("kind, approve_new_members").eq("id", invite.conversationId).maybeSingle();
+      if (!group || group.kind !== "group") return { ok: false, error: "This invite link has expired or was turned off." };
+      const { count } = await db.from("conversation_members").select("*", { count: "exact", head: true }).eq("conversation_id", invite.conversationId);
+      if ((count ?? 0) >= MAX_GROUP_PEOPLE) return { ok: false, error: "This group is full." };
+      // Choosing to join by link lifts your own earlier block.
+      await db.from("conversation_blocks").delete().eq("conversation_id", invite.conversationId).eq("user_id", userId);
+      if (group.approve_new_members) {
+        // Admins approve new members: a request, not an entry. (A second request while one is pending is a no-op.)
+        await db.from("join_requests").insert({ conversation_id: invite.conversationId, user_id: userId });
+        return { ok: true, conversationId: invite.conversationId, requested: true };
+      }
     }
     const { data: outcome } = await db.rpc("add_plan_participant", { p_task: invite.taskId, p_handle: agent.handle, p_max: MAX_PLAN_PEOPLE });
     if (outcome === "full") return { ok: false, error: `This plan is full (${MAX_PLAN_PEOPLE} people max).` };

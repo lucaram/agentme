@@ -5,7 +5,13 @@ import https from "node:https";
 import { isIP, type LookupFunction } from "node:net";
 import { checkUrl, isPublicAddress } from "./extract";
 
+/** No bytes for this long: give up. */
 const TIMEOUT_MS = 10_000;
+/**
+ * The whole download (redirects included) must finish within this, however it trickles in. The idle
+ * timeout alone lets a server keep a connection open for ever by sending a byte now and then.
+ */
+export const DEADLINE_MS = 20_000;
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
 
@@ -34,7 +40,7 @@ const safeLookup: LookupFunction = (hostname, options, callback) => {
 export type Fetched = { contentType: string; body: Buffer; finalUrl: string };
 
 /** GET a public web page/file with strict limits. Throws an Error with a user-readable message. */
-export async function safeFetch(raw: string, redirects = 0): Promise<Fetched> {
+export async function safeFetch(raw: string, redirects = 0, deadlineAt = Date.now() + DEADLINE_MS): Promise<Fetched> {
   const check = checkUrl(raw, { allowLocal: allowLocal() });
   if (!check.ok) throw new Error(check.error);
   const url = check.url;
@@ -44,7 +50,28 @@ export async function safeFetch(raw: string, redirects = 0): Promise<Fetched> {
   if (isIP(literal) && !allowLocal() && !isPublicAddress(literal)) throw new Error("That address isn't a public website.");
   const client = url.protocol === "https:" ? https : http;
 
-  return new Promise<Fetched>((resolve, reject) => {
+  const left = deadlineAt - Date.now();
+  if (left <= 0) throw new Error("The website took too long to answer.");
+
+  return new Promise<Fetched>((done, fail) => {
+    // Settles once: the deadline, the idle timeout, an error or the end of the download, whichever is first.
+    let settled = false;
+    const resolve = (value: Fetched) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      done(value);
+    };
+    const reject = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      fail(error);
+    };
+    const deadline = setTimeout(() => {
+      reject(new Error("The website took too long to answer."));
+      req.destroy();
+    }, left);
     const req = client.get(
       url,
       {
@@ -58,7 +85,9 @@ export async function safeFetch(raw: string, redirects = 0): Promise<Fetched> {
           res.resume();
           if (redirects >= MAX_REDIRECTS) return reject(new Error("Too many redirects."));
           // Every hop is checked again (scheme, host and resolved address).
-          return safeFetch(new URL(res.headers.location, url).toString(), redirects + 1).then(resolve, reject);
+          // The same deadline covers the whole chain of redirects.
+          clearTimeout(deadline);
+          return safeFetch(new URL(res.headers.location, url).toString(), redirects + 1, deadlineAt).then(resolve, reject);
         }
         if (status !== 200) {
           res.resume();

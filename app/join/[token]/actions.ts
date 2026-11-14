@@ -13,13 +13,16 @@ import { AVATARS } from "@/lib/avatars";
 import { describeRetry, hit } from "@/lib/limits";
 import { joinPlan, loadInvite } from "@/lib/plans/invites";
 
-export type JoinState = { error?: string } | undefined;
+export type JoinState = { error?: string; notice?: string } | undefined;
+
+const REQUESTED = "This group's admins approve new members. Your request has been sent: open this link again once they let you in.";
 
 /** Someone with an AGENTME account joins the plan. */
 export async function joinPlanAction(token: string): Promise<JoinState> {
   const { user, agent } = await requireAgent();
   const result = await joinPlan(token, user.id, agent);
   if (!result.ok) return { error: result.error };
+  if (result.requested) return { notice: REQUESTED };
   redirect(`/chats/${result.conversationId}`);
 }
 
@@ -79,5 +82,7 @@ export async function joinAsGuestAction(token: string, _prev: JoinState, form: F
   });
   const result = await joinPlan(token, user.id, agent);
   if (!result.ok) return { error: result.error };
+  // Not in yet: their new account is ready, and their own agent's chat says so.
+  if (result.requested) redirect("/chats");
   redirect(`/chats/${result.conversationId}`);
 }

@@ -131,14 +131,14 @@ isOneToOne: false
                   ]
                 },"agents": {
                   Row: {
-                    "appearance": NonNullable<Json>,"avatar": string,"bio": string | null,"business_info": NonNullable<Json>,"contact_policy": Database["public"]['Enums']["contact_policy"],"contact_sources": NonNullable<Json>,"contacts_synced_at": string | null,"created_at": string,"discoverable": boolean,"display_name": string,"group_add_policy": string,"guest": boolean,"handle": string,"id": string,"lookup_place": boolean,"owner_id": string,"recommendations_ok": boolean,"type": Database["public"]['Enums']["agent_type"],"verified_domain": string | null
+                    "appearance": NonNullable<Json>,"avatar": string,"bio": string | null,"business_info": NonNullable<Json>,"contact_policy": Database["public"]['Enums']["contact_policy"],"contact_sources": NonNullable<Json>,"contacts_synced_at": string | null,"created_at": string,"discoverable": boolean,"display_name": string,"group_add_policy": string,"guest": boolean,"handle": string,"id": string,"lookup_place": boolean,"owner_id": string,"recommendations_ok": boolean,"type": Database["public"]['Enums']["agent_type"],"verified_domain": string | null,"verified_method": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "appearance"?: NonNullable<Json>,"avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name": string,"group_add_policy"?: string,"guest"?: boolean,"handle": string,"id"?: string,"lookup_place"?: boolean,"owner_id": string,"recommendations_ok"?: boolean,"type"?: Database["public"]['Enums']["agent_type"],"verified_domain"?: string | null
+                    "appearance"?: NonNullable<Json>,"avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name": string,"group_add_policy"?: string,"guest"?: boolean,"handle": string,"id"?: string,"lookup_place"?: boolean,"owner_id": string,"recommendations_ok"?: boolean,"type"?: Database["public"]['Enums']["agent_type"],"verified_domain"?: string | null,"verified_method"?: string | null
                   }
                   Update: {
-                    "appearance"?: NonNullable<Json>,"avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name"?: string,"group_add_policy"?: string,"guest"?: boolean,"handle"?: string,"id"?: string,"lookup_place"?: boolean,"owner_id"?: string,"recommendations_ok"?: boolean,"type"?: Database["public"]['Enums']["agent_type"],"verified_domain"?: string | null
+                    "appearance"?: NonNullable<Json>,"avatar"?: string,"bio"?: string | null,"business_info"?: NonNullable<Json>,"contact_policy"?: Database["public"]['Enums']["contact_policy"],"contact_sources"?: NonNullable<Json>,"contacts_synced_at"?: string | null,"created_at"?: string,"discoverable"?: boolean,"display_name"?: string,"group_add_policy"?: string,"guest"?: boolean,"handle"?: string,"id"?: string,"lookup_place"?: boolean,"owner_id"?: string,"recommendations_ok"?: boolean,"type"?: Database["public"]['Enums']["agent_type"],"verified_domain"?: string | null,"verified_method"?: string | null
                   }
                   Relationships: [
                     
@@ -667,14 +667,14 @@ isOneToOne: false
                   ]
                 },"moderation_events": {
                   Row: {
-                    "action": string,"appeal_resolved_at": string | null,"appeal_resolved_by": string | null,"appeal_status": string | null,"appealed_at": string | null,"community_id": string,"confidence": number | null,"conversation_id": string | null,"created_at": string,"excerpt": string | null,"id": string,"message_id": string | null,"original_text": string | null,"reason": string | null,"user_id": string | null,"verdict": string
+                    "action": string,"appeal_resolved_at": string | null,"appeal_resolved_by": string | null,"appeal_status": string | null,"appealed_at": string | null,"community_id": string,"confidence": number | null,"conversation_id": string | null,"created_at": string,"excerpt": string | null,"id": string,"message_id": string | null,"original_text": string | null,"reason": string | null,"text_hash": string | null,"used_at": string | null,"user_id": string | null,"verdict": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "action": string,"appeal_resolved_at"?: string | null,"appeal_resolved_by"?: string | null,"appeal_status"?: string | null,"appealed_at"?: string | null,"community_id": string,"confidence"?: number | null,"conversation_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"message_id"?: string | null,"original_text"?: string | null,"reason"?: string | null,"user_id"?: string | null,"verdict": string
+                    "action": string,"appeal_resolved_at"?: string | null,"appeal_resolved_by"?: string | null,"appeal_status"?: string | null,"appealed_at"?: string | null,"community_id": string,"confidence"?: number | null,"conversation_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"message_id"?: string | null,"original_text"?: string | null,"reason"?: string | null,"text_hash"?: string | null,"used_at"?: string | null,"user_id"?: string | null,"verdict": string
                   }
                   Update: {
-                    "action"?: string,"appeal_resolved_at"?: string | null,"appeal_resolved_by"?: string | null,"appeal_status"?: string | null,"appealed_at"?: string | null,"community_id"?: string,"confidence"?: number | null,"conversation_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"message_id"?: string | null,"original_text"?: string | null,"reason"?: string | null,"user_id"?: string | null,"verdict"?: string
+                    "action"?: string,"appeal_resolved_at"?: string | null,"appeal_resolved_by"?: string | null,"appeal_status"?: string | null,"appealed_at"?: string | null,"community_id"?: string,"confidence"?: number | null,"conversation_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"message_id"?: string | null,"original_text"?: string | null,"reason"?: string | null,"text_hash"?: string | null,"used_at"?: string | null,"user_id"?: string | null,"verdict"?: string
                   }
                   Relationships: [
                     {

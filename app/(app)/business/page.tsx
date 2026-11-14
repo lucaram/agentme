@@ -17,6 +17,7 @@ import { WebsiteCard } from "./WebsiteCard";
 import { answerStats, statsLine } from "@/lib/business/answer-log";
 import { GapsSection } from "./Gaps";
 import { verifiesByEmail } from "@/lib/business/site";
+import { emailProofEnforced } from "@/lib/business/verify";
 import { learnedCount, learnedOf } from "@/lib/business/learn";
 import { gapTitle } from "@/lib/business/gaps";
 import { openBusinessQuestions } from "@/lib/business/website";
@@ -198,7 +199,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
                 }
                 lookup={(agent.business_info as { lookup?: boolean } | null)?.lookup !== false}
                 verified={Boolean(site && agent.verified_domain === site.domain)}
-                canVerifyByEmail={Boolean(site && email.confirmed && verifiesByEmail(email.address, site.domain))}
+                canVerifyByEmail={Boolean(site && emailProofEnforced() && email.confirmed && verifiesByEmail(email.address, site.domain))}
               />
             </div>
             <div id="test-your-agent" className="scroll-mt-40 rounded-xl border border-dashed border-border p-3">

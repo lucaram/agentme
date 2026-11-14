@@ -10,6 +10,7 @@ import { allowLocal, safeFetch } from "@/lib/business/fetch";
 import { hasVerifyToken, homePreview, normaliseSite, verifiesByEmail, type SitePreview } from "@/lib/business/site";
 import { openBusinessQuestions, readWebsite } from "@/lib/business/website";
 import { attachWebsite, markVerified } from "@/lib/business/site-setup";
+import { emailProofEnforced, homepageToVerify, readFromSameSite } from "@/lib/business/verify";
 import { businessSources } from "@/lib/business/sources";
 import { BASICS, itemKey, type BasicKey, type Correction } from "@/lib/business/learn";
 import { draftBusinessAnswer } from "@/lib/agents/respond";
@@ -205,12 +206,20 @@ export async function verifyWebsiteAction(method: "email" | "meta"): Promise<Out
   if (!site) return { error: "Add your website first." };
   if (method === "email") {
     const owner = await ownerEmail(user, agent);
+    if (!emailProofEnforced()) return { error: "Verifying by email isn't available here. Use the code on your homepage instead." };
     if (!owner.emailConfirmed || !verifiesByEmail(owner.email, site.domain)) return { error: `Your verified email isn't at ${site.domain}. Use the code on your homepage instead.` };
   } else {
     const limit = await hit("sitePreviewsPerUser", user.id);
     if (!limit.allowed) return { error: `Please wait ${describeRetry(limit.retryAfterSeconds)} and try again.` };
     try {
-      const home = await safeFetch(site.url);
+      // The code must be on the website's own homepage (its root, over https), and read from that website:
+      // a page under a shared host, or a homepage that redirects to another website, proves nothing.
+      const homepage = homepageToVerify(site.url, { allowLocal: allowLocal() });
+      if (!homepage) return { error: "Your website needs to be on https to be verified." };
+      const home = await safeFetch(homepage);
+      if (!readFromSameSite(home.finalUrl, site.domain)) {
+        return { error: `${site.domain} sends visitors to another website, so the code can't be checked there. Put the code on the homepage of ${site.domain} itself.` };
+      }
       if (!hasVerifyToken(home.body.toString("utf8"), site.verify_token)) {
         return { error: "We couldn't find the code on your homepage yet. Check it's inside <head> and that your website has been published." };
       }
@@ -218,7 +227,7 @@ export async function verifyWebsiteAction(method: "email" | "meta"): Promise<Out
       return { error: `Couldn't open your website: ${error instanceof Error ? error.message : "no answer"}` };
     }
   }
-  const done = await markVerified(agent.id, site.domain);
+  const done = await markVerified(agent.id, site.domain, method);
   if (!done.ok) return { error: done.error };
   revalidatePath("/business");
   return { verified: true };

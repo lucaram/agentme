@@ -182,6 +182,8 @@ describe.skipIf(!dbUp)("finding people (live)", () => {
     const db = admin();
     const own = await chat.getOrCreateMyAgentConversation(a.userId);
     const group = await chat.createConversation({ kind: "group", title: "Picnic", createdBy: a.userId, memberIds: [b.userId] });
+    // As for a plan’s own group (see ensurePlanGroup): the organiser’s link lets people straight in.
+    await db.from("conversations").update({ approve_new_members: false }).eq("id", group.id);
     const { data: task } = await db
       .from("tasks")
       .insert({
@@ -222,6 +224,60 @@ describe.skipIf(!dbUp)("finding people (live)", () => {
     // Turned off: the link stops working.
     await invites.revokeInvites(task!.id, a.userId);
     expect(await invites.loadInvite(token)).toBeNull();
+  });
+
+  it("a plan's invite link follows its group's rules: only admins hand it out, approval is respected, and it stops when the organiser leaves", async () => {
+    const { invites, chat } = await lib();
+    const { a, b, c } = people;
+    const db = admin();
+    // A's group; B is a regular member and organises a plan inside it (what "@agent ..." in a group does).
+    const group = await chat.createConversation({ kind: "group", title: "Club", createdBy: a.userId, memberIds: [b.userId] });
+    const own = await chat.getOrCreateMyAgentConversation(b.userId);
+    const { data: task } = await db
+      .from("tasks")
+      .insert({
+        owner_id: b.userId,
+        initiator_agent: b.agent.id,
+        conversation_id: own.id,
+        goal: "Quiz night on Friday",
+        status: "waiting",
+        group_conversation_id: group.id,
+        parsed: { kind: "poll", event: "Quiz night", window: "Friday", participants: [a.handle], categories: [] },
+      })
+      .select("id")
+      .single();
+    const participants = async () => ((await db.from("tasks").select("parsed").eq("id", task!.id).single()).data!.parsed as { participants: string[] }).participants;
+
+    // A regular member can't use a plan to let outsiders into the group.
+    expect(await invites.getOrCreateInvite(task!.id, b.userId)).toEqual({ ok: false, error: expect.stringContaining("Only this group's admins") });
+    // A link made before this rule existed doesn't work either: nobody gets in, nothing is requested.
+    const token = `rule${Math.random().toString(36).slice(2)}${"x".repeat(24)}`.slice(0, 28);
+    const { error } = await db.from("plan_invites").insert({ token, task_id: task!.id, created_by: b.agent.id, expires_at: new Date(Date.now() + 86_400_000).toISOString() });
+    expect(error).toBeNull();
+    expect(await invites.loadInvite(token)).toBeNull();
+    expect(await invites.joinPlan(token, c.userId, c.agent)).toMatchObject({ ok: false });
+    expect(await chat.isMember(group.id, c.userId)).toBe(false);
+
+    // B is made an admin: the link works. The group approves new members, so joining is a request, not an entry.
+    await db.from("conversation_members").update({ role: "admin" }).eq("conversation_id", group.id).eq("user_id", b.userId);
+    await db.from("conversations").update({ approve_new_members: true }).eq("id", group.id);
+    expect(await invites.joinPlan(token, c.userId, c.agent)).toEqual({ ok: true, conversationId: group.id, requested: true });
+    expect(await chat.isMember(group.id, c.userId)).toBe(false);
+    expect(await participants()).toEqual([a.handle]);
+    const { data: requests } = await db.from("join_requests").select("status").eq("conversation_id", group.id).eq("user_id", c.userId);
+    expect(requests).toEqual([{ status: "pending" }]);
+
+    // Without the approval step, the same link lets C in (the group's rule, not the plan's, decides).
+    await db.from("conversations").update({ approve_new_members: false }).eq("id", group.id);
+    expect(await invites.joinPlan(token, c.userId, c.agent)).toEqual({ ok: true, conversationId: group.id });
+    expect(await chat.isMember(group.id, c.userId)).toBe(true);
+    expect(await participants()).toEqual([a.handle, c.handle]);
+
+    // B leaves the group: the link stops, and B can't make a new one.
+    await db.from("conversation_members").delete().eq("conversation_id", group.id).eq("user_id", b.userId);
+    expect(await invites.loadInvite(token)).toBeNull();
+    expect(await invites.getOrCreateInvite(task!.id, b.userId)).toEqual({ ok: false, error: expect.stringContaining("no longer in this plan's group") });
+    await db.from("conversations").delete().eq("id", group.id);
   });
 
   it("the browser can read only its own identifiers, and none of the matching or invite tables", async () => {

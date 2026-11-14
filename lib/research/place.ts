@@ -7,12 +7,21 @@
 const STREET =
   /\b(street|st|road|rd|avenue|ave|lane|ln|drive|dr|close|court|ct|square|sq|place|pl|way|terrace|crescent|gardens|row|flat|apartment|apt|floor|unit|house|via|viale|piazza|corso|vicolo|largo|strada|rue|calle|strasse|straße)\b\.?/i;
 
+/** Folded for comparing place names: "Sant'Angelo", "sant angelo" and "SANT’ANGELO" are the same. */
+export const placeKey = (name: string) => name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+
 /**
- * The town in what someone wrote as their usual place:
- * "12 High Street, Falkirk FK1 1AA" → "Falkirk"; "Camden, London" → "Camden, London";
- * "near Leith" → "Leith". Parts with numbers or street words are dropped. Null when nothing is left.
+ * The town in what someone wrote as their usual place, and nothing else of it.
+ * "Where you usually are" is free text ("Falkirk, staying with Sarah"), so
+ * cleaning it up isn't enough: whatever the person added would go out with a
+ * search. Only a part that IS a town we know (`isPlace`: the list of towns
+ * shipped with the app) is ever used, and only that one name:
+ *   "12 High Street, Falkirk FK1 1AA" → "Falkirk"
+ *   "Falkirk, staying with Sarah"     → "Falkirk"
+ *   "Lives in Islington"              → "Islington"
+ *   "at my sister's most weeks"       → null (the agent asks which place)
  */
-export function townOf(value: string): string | null {
+export function townOf(value: string, isPlace: (name: string) => boolean): string | null {
   const parts = value
     .replace(/\s+/g, " ")
     .split(/[,;\n/]|\s[-–—]\s/)
@@ -26,10 +35,9 @@ export function townOf(value: string): string | null {
         .replace(/\s+/g, " ")
         .trim(),
     )
-    .filter((p) => p.length >= 2 && !/\d/.test(p) && !STREET.test(p));
-  if (!parts.length) return null;
-  const town = parts.slice(0, 2).join(", ").slice(0, 60).trim();
-  return town || null;
+    .filter((p) => p.length >= 2 && p.length <= 60 && !/\d/.test(p) && !STREET.test(p));
+  // The first part that is a known town, whole: never a part of a part, never a second part.
+  return parts.find((p) => isPlace(p)) ?? null;
 }
 
 const DEPENDS_ON_PLACE =
@@ -50,4 +58,5 @@ export function withPlace(question: string, town: string): string {
 export const placeNote = (town: string, now = false) => `📍 For ${town}, where you ${now ? "are now" : "usually are"}.`;
 
 /** No place named and none saved (or the owner turned this off). */
-export const WHICH_PLACE = "Which place do you mean? Tell me the town, or save where you usually are in Settings → What your agent knows and I'll use it when you don't say.";
+export const WHICH_PLACE =
+  "Which place do you mean? Tell me the town, or save where you usually are in Settings → What your agent knows (start it with the town's name, e.g. “Falkirk”) and I'll use it when you don't say.";
