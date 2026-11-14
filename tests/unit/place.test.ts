@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { dependsOnPlace, placeKey, placeNote, townOf, withPlace } from "@/lib/research/place";
-import { isKnownPlace } from "@/lib/geo";
+import { knownTown } from "@/lib/geo";
 
-/** A stand-in for the list of towns shipped with the app. */
-const TOWNS = new Set(["falkirk", "islington", "london", "edinburgh", "milano", "charlotte", "sant angelo"]);
-const known = (name: string) => TOWNS.has(placeKey(name));
+/** A stand-in for the list of towns shipped with the app: the list's own spelling of each name. */
+const TOWNS = new Map(["Falkirk", "Islington", "London", "Edinburgh", "Milano", "Charlotte", "Sant'Angelo"].map((n) => [placeKey(n), n]));
+const known = (name: string) => TOWNS.get(placeKey(name)) ?? null;
 
 describe("look-ups use the town where you usually are", () => {
   it("only the town leaves: never a street, a house number or a postcode", () => {
@@ -27,19 +27,33 @@ describe("look-ups use the town where you usually are", () => {
     expect(townOf("Falkirkshire somewhere", known)).toBeNull();
   });
 
-  it("reads how people write a town", () => {
+  it("text in another script next to a town's name is not the town", () => {
+    // "Falkirk, staying at Sara's house" in Japanese: dropping what isn't a-z would leave "falkirk" and let it all through.
+    expect(placeKey("Falkirk サラの家に滞在")).not.toBe(placeKey("Falkirk"));
+    expect(townOf("Falkirk サラの家に滞在", known)).toBeNull();
+    expect(townOf("Falkirk у Сары дома", known)).toBeNull();
+    expect(townOf("Falkirk 🏠 with Sarah", known)).toBeNull();
+    // Written as its own part, the town is used, and the rest still isn't.
+    expect(townOf("Falkirk, サラの家に滞在", known)).toBe("Falkirk");
+  });
+
+  it("what goes out is the list's own name for the town, never the person's text", () => {
+    expect(townOf("FALKIRK", known)).toBe("Falkirk");
+    expect(townOf("  falkirk.  ", known)).toBe("Falkirk");
+    expect(townOf("SANT’ANGELO", known)).toBe("Sant'Angelo");
     expect(townOf("Lives in Islington", known)).toBe("Islington");
     expect(townOf("Islington, London", known)).toBe("Islington"); // one name only
     expect(townOf("I'm usually near Edinburgh", known)).toBe("Edinburgh");
-    expect(townOf("SANT’ANGELO", known)).toBe("SANT’ANGELO");
     expect(townOf("   ", known)).toBeNull();
   });
 
   it("the real list knows real towns, and not arbitrary words", () => {
-    for (const town of ["Falkirk", "Islington", "Edinburgh", "Milan", "Polmont"]) expect(isKnownPlace(town), town).toBe(true);
-    for (const text of ["staying with Sarah", "my mum's house", "x", ""]) expect(isKnownPlace(text), text).toBe(false);
-    expect(townOf("Falkirk, staying with Sarah", isKnownPlace)).toBe("Falkirk");
-    expect(withPlace("What is the weather?", townOf("Falkirk, staying with Sarah", isKnownPlace)!)).toBe("What is the weather in Falkirk?");
+    for (const town of ["Falkirk", "Islington", "Edinburgh", "Milan", "Polmont"]) expect(knownTown(town), town).toBe(town);
+    expect(knownTown("falkirk")).toBe("Falkirk");
+    for (const text of ["staying with Sarah", "my mum's house", "x", "", "Falkirk サラの家に滞在"]) expect(knownTown(text), text).toBeNull();
+    expect(townOf("Falkirk, staying with Sarah", knownTown)).toBe("Falkirk");
+    expect(townOf("Falkirk サラの家に滞在", knownTown)).toBeNull();
+    expect(withPlace("What is the weather?", townOf("Falkirk, staying with Sarah", knownTown)!)).toBe("What is the weather in Falkirk?");
   });
 
   it("only for questions that depend on where you are", () => {

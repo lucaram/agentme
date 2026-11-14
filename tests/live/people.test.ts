@@ -246,6 +246,8 @@ describe.skipIf(!dbUp)("finding people (live)", () => {
       })
       .select("id")
       .single();
+    await db.from("plan_steps").insert({ task_id: task!.id, position: 0, type: "poll", status: "waiting", config: { question: "Which round?", options: ["Music", "Sport"], voters: [b.handle, a.handle] } });
+    const voters = async () => ((await db.from("plan_steps").select("config").eq("task_id", task!.id).single()).data!.config as { voters: string[] }).voters;
     const participants = async () => ((await db.from("tasks").select("parsed").eq("id", task!.id).single()).data!.parsed as { participants: string[] }).participants;
 
     // A regular member can't use a plan to let outsiders into the group.
@@ -267,11 +269,23 @@ describe.skipIf(!dbUp)("finding people (live)", () => {
     const { data: requests } = await db.from("join_requests").select("status").eq("conversation_id", group.id).eq("user_id", c.userId);
     expect(requests).toEqual([{ status: "pending" }]);
 
-    // Without the approval step, the same link lets C in (the group's rule, not the plan's, decides).
-    await db.from("conversations").update({ approve_new_members: false }).eq("id", group.id);
-    expect(await invites.joinPlan(token, c.userId, c.agent)).toEqual({ ok: true, conversationId: group.id });
+    // An admin approves the request: C is in the group AND in the plan (its participants and its open poll),
+    // so C can vote. Before, approval gave the group only and "You're not part of this poll".
+    const { data: pending } = await db.from("join_requests").select("id, task_id").eq("conversation_id", group.id).eq("user_id", c.userId).eq("status", "pending").single();
+    expect(pending!.task_id).toBe(task!.id);
+    const groups = await import("@/lib/social/groups");
+    expect(await groups.decideGroupRequest(pending!.id, { userId: a.userId, agent: a.agent }, true)).toEqual({ ok: true });
     expect(await chat.isMember(group.id, c.userId)).toBe(true);
     expect(await participants()).toEqual([a.handle, c.handle]);
+    expect(await voters()).toEqual([b.handle, a.handle, c.handle]);
+    const preview = await invites.loadInvite(token);
+    expect(preview!.participants).toContain(c.handle);
+
+    // Someone let into the group another way is a member but not in the plan: the link still adds them to it.
+    await db.from("conversation_members").insert({ conversation_id: group.id, user_id: people.d.userId, role: "member" });
+    expect((await invites.loadInvite(token))!.participants).not.toContain(people.d.handle);
+    expect(await invites.joinPlan(token, people.d.userId, people.d.agent)).toEqual({ ok: true, conversationId: group.id });
+    expect(await participants()).toEqual([a.handle, c.handle, people.d.handle]);
 
     // B leaves the group: the link stops, and B can't make a new one.
     await db.from("conversation_members").delete().eq("conversation_id", group.id).eq("user_id", b.userId);

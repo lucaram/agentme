@@ -7,21 +7,33 @@
 const STREET =
   /\b(street|st|road|rd|avenue|ave|lane|ln|drive|dr|close|court|ct|square|sq|place|pl|way|terrace|crescent|gardens|row|flat|apartment|apt|floor|unit|house|via|viale|piazza|corso|vicolo|largo|strada|rue|calle|strasse|straße)\b\.?/i;
 
-/** Folded for comparing place names: "Sant'Angelo", "sant angelo" and "SANT’ANGELO" are the same. */
-export const placeKey = (name: string) => name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+/**
+ * Folded for comparing place names: "Sant'Angelo", "sant angelo" and
+ * "SANT’ANGELO" are the same. Letters of every script are KEPT (only accents,
+ * case and punctuation are folded away): dropping what isn't a-z would make
+ * "Falkirk サラの家に滞在" look like "Falkirk".
+ */
+export const placeKey = (name: string) =>
+  name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/\p{M}+/gu, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
 
 /**
  * The town in what someone wrote as their usual place, and nothing else of it.
  * "Where you usually are" is free text ("Falkirk, staying with Sarah"), so
  * cleaning it up isn't enough: whatever the person added would go out with a
- * search. Only a part that IS a town we know (`isPlace`: the list of towns
- * shipped with the app) is ever used, and only that one name:
+ * search. Only a part that IS a town we know (`knownTown`: looks it up in the
+ * list of towns shipped with the app) is ever used, and what comes back is
+ * the name as the LIST writes it, never the person's own text:
  *   "12 High Street, Falkirk FK1 1AA" → "Falkirk"
  *   "Falkirk, staying with Sarah"     → "Falkirk"
  *   "Lives in Islington"              → "Islington"
  *   "at my sister's most weeks"       → null (the agent asks which place)
  */
-export function townOf(value: string, isPlace: (name: string) => boolean): string | null {
+export function townOf(value: string, knownTown: (name: string) => string | null): string | null {
   const parts = value
     .replace(/\s+/g, " ")
     .split(/[,;\n/]|\s[-–—]\s/)
@@ -36,8 +48,12 @@ export function townOf(value: string, isPlace: (name: string) => boolean): strin
         .trim(),
     )
     .filter((p) => p.length >= 2 && p.length <= 60 && !/\d/.test(p) && !STREET.test(p));
-  // The first part that is a known town, whole: never a part of a part, never a second part.
-  return parts.find((p) => isPlace(p)) ?? null;
+  // The first part that is a known town, whole (never a part of a part, never a second part), as the list names it.
+  for (const p of parts) {
+    const town = knownTown(p);
+    if (town) return town;
+  }
+  return null;
 }
 
 const DEPENDS_ON_PLACE =

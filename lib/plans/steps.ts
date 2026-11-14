@@ -96,8 +96,11 @@ export async function updateStep(stepId: string, fields: { status?: StepRow["sta
   let result = fields.result;
   if (result !== undefined) {
     // What people told the organiser goes where only the server reads; the shared row gets a marker.
-    const { data: step } = await db.from("plan_steps").select("type").eq("id", stepId).maybeSingle();
-    if (step && hasPrivateResult(step.type)) {
+    const { data: step, error: lookup } = await db.from("plan_steps").select("type").eq("id", stepId).maybeSingle();
+    // The type decides where the result may be written. If it can't be read, nothing is written at all:
+    // guessing "not private" would put people's replies in the row the whole group can read.
+    if (lookup || !step) throw new Error(`Couldn't save the step's result (${lookup?.message ?? "step not found"}).`);
+    if (hasPrivateResult(step.type)) {
       if (result === null) await db.from("plan_step_private").delete().eq("step_id", stepId);
       else {
         const { error } = await db.from("plan_step_private").upsert({ step_id: stepId, result: asJson(result) });

@@ -82,7 +82,8 @@ export async function safeFetch(raw: string, redirects = 0, deadlineAt = Date.no
       (res) => {
         const status = res.statusCode ?? 0;
         if (status >= 300 && status < 400 && res.headers.location) {
-          res.resume();
+          // Closed, not drained: a redirect whose body never ends would otherwise stream on past the deadline.
+          res.destroy();
           if (redirects >= MAX_REDIRECTS) return reject(new Error("Too many redirects."));
           // Every hop is checked again (scheme, host and resolved address).
           // The same deadline covers the whole chain of redirects.
@@ -90,7 +91,7 @@ export async function safeFetch(raw: string, redirects = 0, deadlineAt = Date.no
           return safeFetch(new URL(res.headers.location, url).toString(), redirects + 1, deadlineAt).then(resolve, reject);
         }
         if (status !== 200) {
-          res.resume();
+          res.destroy();
           return reject(new Error(`The website answered with an error (${status}).`));
         }
         const declared = Number(res.headers["content-length"] ?? 0);

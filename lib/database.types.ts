@@ -577,14 +577,14 @@ isOneToOne: false
                   ]
                 },"join_requests": {
                   Row: {
-                    "community_id": string | null,"conversation_id": string | null,"created_at": string,"decided_by": string | null,"id": string,"status": string,"user_id": string
+                    "community_id": string | null,"conversation_id": string | null,"created_at": string,"decided_by": string | null,"id": string,"status": string,"task_id": string | null,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "community_id"?: string | null,"conversation_id"?: string | null,"created_at"?: string,"decided_by"?: string | null,"id"?: string,"status"?: string,"user_id": string
+                    "community_id"?: string | null,"conversation_id"?: string | null,"created_at"?: string,"decided_by"?: string | null,"id"?: string,"status"?: string,"task_id"?: string | null,"user_id": string
                   }
                   Update: {
-                    "community_id"?: string | null,"conversation_id"?: string | null,"created_at"?: string,"decided_by"?: string | null,"id"?: string,"status"?: string,"user_id"?: string
+                    "community_id"?: string | null,"conversation_id"?: string | null,"created_at"?: string,"decided_by"?: string | null,"id"?: string,"status"?: string,"task_id"?: string | null,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -598,6 +598,12 @@ isOneToOne: false
       columns: ["conversation_id"]
 isOneToOne: false
       referencedRelation: "conversations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "join_requests_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
       referencedColumns: ["id"]
     }
                   ]

@@ -146,6 +146,12 @@ describe.skipIf(!up)("RLS: plans shared in a group (live)", () => {
     const full = (await ensureSteps(task!)).filter((s) => made.includes(s.id));
     expect(full.map((s) => s.result)).toEqual(kinds.map((k) => results[k]));
 
+    // If the step can't be looked up, nothing is written anywhere: the result never falls back to the shared row.
+    const missing = "00000000-0000-4000-8000-000000000000";
+    await expect(updateStep(missing, { status: "done", result: results.collect })).rejects.toThrow("Couldn't save the step's result");
+    const { data: stray } = await db.from("plan_steps").select("id").eq("id", missing);
+    expect(stray).toEqual([]);
+
     // A step for the group (who's in) is untouched: its result stays where members read it.
     const { data: rsvp } = await marco.from("plan_steps").select("result").eq("id", stepId).single();
     expect(rsvp!.result).toBeNull();

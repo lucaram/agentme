@@ -1,7 +1,7 @@
 import "server-only";
 import { adminClient } from "@/lib/supabase/admin";
 import { env } from "@/lib/env";
-import { getAgentById, getContactRow, type AgentRow } from "@/lib/data/agents";
+import { getAgentById, getAgentForUser, getContactRow, type AgentRow } from "@/lib/data/agents";
 import { postMessage } from "@/lib/data/chat";
 import { randomToken } from "@/lib/people/crypto";
 import { connectPeople } from "@/lib/people/connect";
@@ -77,6 +77,8 @@ export type InvitePreview = {
   when: string;
   organiser: AgentRow;
   people: number;
+  /** Who is in the plan (handles, without the organiser). Being in its group isn't the same thing. */
+  participants: string[];
 };
 
 /** What someone opening the link may see: title, when, who organises, how many. Null if invalid. */
@@ -107,7 +109,24 @@ export async function loadInvite(token: string): Promise<InvitePreview | null> {
     when: content.when || `${parsed.window ?? ""}${time}`.trim(),
     organiser,
     people: 1 + (parsed.participants?.length ?? 0),
+    participants: parsed.participants ?? [],
   };
+}
+
+/**
+ * The group's admins approved someone who had asked to join through a plan's invite link: they are added to
+ * that plan as well (its participants, its open polls and sign-up lists) and connected with the organiser,
+ * exactly as if the link had let them straight in. Without this they would be in the group but not in the plan.
+ */
+export async function enrolApproved(taskId: string, userId: string): Promise<void> {
+  const db = adminClient();
+  const { data: task } = await db.from("tasks").select("id, initiator_agent, status, group_conversation_id").eq("id", taskId).maybeSingle();
+  if (!task?.group_conversation_id || CLOSED.has(task.status)) return;
+  const [agent, organiser] = await Promise.all([getAgentForUser(userId), getAgentById(task.initiator_agent)]);
+  if (!agent || !organiser || agent.id === organiser.id || agent.type === "business") return;
+  if ((await getContactRow(organiser.id, agent.id))?.status === "blocked") return;
+  const { data: outcome } = await db.rpc("add_plan_participant", { p_task: task.id, p_handle: agent.handle, p_max: MAX_PLAN_PEOPLE });
+  if (outcome === "added" || outcome === "already") await connectPeople(organiser, agent);
 }
 
 /**
@@ -135,7 +154,9 @@ export async function joinPlan(token: string, userId: string, agent: AgentRow): 
       await db.from("conversation_blocks").delete().eq("conversation_id", invite.conversationId).eq("user_id", userId);
       if (group.approve_new_members) {
         // Admins approve new members: a request, not an entry. (A second request while one is pending is a no-op.)
-        await db.from("join_requests").insert({ conversation_id: invite.conversationId, user_id: userId });
+        // The request remembers the plan: once approved, they join the plan too (see enrolApproved).
+        const { error } = await db.from("join_requests").insert({ conversation_id: invite.conversationId, user_id: userId, task_id: invite.taskId });
+        if (error) await db.from("join_requests").update({ task_id: invite.taskId }).eq("conversation_id", invite.conversationId).eq("user_id", userId).eq("status", "pending");
         return { ok: true, conversationId: invite.conversationId, requested: true };
       }
     }
