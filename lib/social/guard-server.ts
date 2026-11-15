@@ -25,7 +25,7 @@ export async function communityTrust(communityId: string, userId: string): Promi
   const monthAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
   const [{ count: messages }, { count: removed }] = await Promise.all([
     db.from("messages").select("*", { count: "exact", head: true }).in("conversation_id", ids).eq("sender_user_id", userId).is("removed_at", null),
-    db.from("messages").select("*", { count: "exact", head: true }).in("conversation_id", ids).eq("sender_user_id", userId).gt("removed_at", monthAgo),
+    db.from("messages").select("*", { count: "exact", head: true }).in("conversation_id", ids).eq("sender_user_id", userId).gt("removed_at", monthAgo).is("deleted_at", null),
   ]);
   return trustLevel({ role: member.role, joinedAt: member.joined_at, messages: messages ?? 0, removedRecently: removed ?? 0, now: Date.now() });
 }

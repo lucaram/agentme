@@ -47,6 +47,8 @@ describe.skipIf(!dbUp)("businesses in groups and communities (live)", () => {
         .single();
       people[key] = { userId: created.user.id, email, agent: agent! };
     }
+    // This member explicitly allows direct adds; the business remains a mention-only service.
+    await db.from("agents").update({ group_add_policy: "contacts" }).eq("id", people.member.agent.id);
     // The admin knows the member and (as a customer) the shop.
     for (const k of ["member", "shop"] as const) await db.from("contacts").insert({ requester_agent: people.admin.agent.id, addressee_agent: people[k].agent.id, status: "accepted" });
   });

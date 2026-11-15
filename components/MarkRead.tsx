@@ -2,22 +2,24 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { markReadAction, markThreadReadAction } from "@/app/(app)/actions";
+import { acknowledgeVisibleMessages } from "@/app/(app)/receipt-actions";
 import { READ_EVENT } from "./ChatsBadge";
 import { scheduleRefresh } from "@/lib/refresh";
+import { watchVisibleMessages } from "@/lib/client/message-visibility";
 
 /**
- * Marks the open conversation as read once it is on screen, and again whenever
- * a new message arrives while it is open; then refreshes so the unread badges
- * update (the Chats tab total also reloads itself on READ_EVENT).
+ * Only individually visible messages in the active tab become read. Page
+ * rendering, prefetching and offscreen arrivals never mark a chat read.
  */
-export function MarkRead({ conversationId, latestMessageId, threadId }: { conversationId: string; latestMessageId: string | null; threadId?: string }) {
+export function MarkRead({ conversationId, messageIds, threadId }: { conversationId: string; messageIds: string[]; threadId?: string }) {
   const router = useRouter();
+  const key = messageIds.join(",");
   useEffect(() => {
-    Promise.all([markReadAction(conversationId), threadId ? markThreadReadAction(threadId) : null]).then(() => {
-      window.dispatchEvent(new Event(READ_EVENT)); // the Chats tab total reloads itself
-      scheduleRefresh(() => router.refresh()); // shared with live updates: one render, not several
+    return watchVisibleMessages(key.split(",").filter(Boolean), "data-seen-message", async (ids) => {
+      const accepted = await acknowledgeVisibleMessages(ids);
+      if (accepted.length) { window.dispatchEvent(new CustomEvent(READ_EVENT, { detail: { ids: accepted } })); scheduleRefresh(() => router.refresh()); }
+      return accepted;
     });
-  }, [conversationId, latestMessageId, threadId, router]);
+  }, [conversationId, key, threadId, router]);
   return null;
 }

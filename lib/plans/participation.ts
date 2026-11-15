@@ -12,6 +12,7 @@ type Result = { ok: true; wake?: string | null } | { ok: false; error: string };
 
 async function loadStep(stepId: string) {
   const { data } = await adminClient().from("plan_steps").select("*, tasks(*)").eq("id", stepId).maybeSingle();
+  if (data?.tasks?.group_conversation_id && (await adminClient().rpc("space_is_suspended", { p_conversation: data.tasks.group_conversation_id })).data) return null;
   return data;
 }
 

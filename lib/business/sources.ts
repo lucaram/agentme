@@ -7,6 +7,7 @@ import type { KnowledgeSource } from "./knowledge";
 import { htmlToText } from "./extract";
 import { safeFetch } from "./fetch";
 import { learnedOf, learnedText } from "./learn";
+import { accountRestricted } from "@/lib/moderation/accounts";
 
 const MAX_CONTENT = 30_000;
 const MAX_IMAGE_BYTES = 3.5 * 1024 * 1024; // keeps the encoded image under the model's limit
@@ -32,6 +33,7 @@ export async function readSource(sourceId: string) {
   const { data: source } = await db.from("business_sources").select("id, url, agent_id").eq("id", sourceId).maybeSingle();
   if (!source) return;
   const { data: owner } = await db.from("agents").select("owner_id").eq("id", source.agent_id).single();
+  if (!owner || await accountRestricted(owner.owner_id)) return;
   await db.from("business_sources").update({ status: "reading" }).eq("id", source.id);
   try {
     const fetched = await safeFetch(source.url);
@@ -66,14 +68,8 @@ export async function readSource(sourceId: string) {
 /** Keeps knowledge fresh: re-reads a few links not read in the last day (called by the sweeper). Website pages are re-read with their site. */
 export async function refreshDueSources(limit = 3) {
   const cutoff = new Date(Date.now() - REFRESH_HOURS * 3600_000).toISOString();
-  const { data } = await adminClient()
-    .from("business_sources")
-    .select("id")
-    .eq("origin", "link")
-    .in("status", ["ok", "error"])
-    .lt("last_read_at", cutoff)
-    .order("last_read_at")
-    .limit(limit);
+  const { data, error } = await adminClient().rpc("due_business_refreshes", { p_before: cutoff, p_limit: limit });
+  if (error) throw new Error("Couldn't load business links due for refresh.");
   for (const s of data ?? []) await readSource(s.id);
 }
 

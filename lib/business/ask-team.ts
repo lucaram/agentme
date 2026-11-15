@@ -6,10 +6,13 @@ import { canContact } from "@/lib/policy/contactPolicy";
 import { tellOwner, NEEDS_ANSWER } from "@/lib/requests/notify";
 import { asJson } from "@/lib/data/json";
 import { HandoffOfferSchema } from "./question-scope";
+import { accountRestricted } from "@/lib/moderation/accounts";
 
 /** Only the original asker may accept an offer, using server-saved content. */
 export async function askTeam(userId: string, agent: AgentRow, messageId: string): Promise<{ error?: string; notice?: string }> {
   const db = adminClient();
+  if (await accountRestricted(userId)) return { error: "This account is restricted by AGENTME." };
+  if (!(await db.rpc("can_read_chat_message", { p_message: messageId, p_user: userId })).data) return { error: "Not found." };
   const { data: msg } = await db.from("messages").select("*").eq("id", messageId).maybeSingle();
   const meta = (msg?.metadata ?? {}) as Record<string, unknown>;
   if (!msg || msg.removed_at || agent.owner_id !== userId || meta.handoff_offer !== true || typeof meta.a2a_task !== "string" ||
@@ -24,6 +27,7 @@ export async function askTeam(userId: string, agent: AgentRow, messageId: string
   const inGroup = ["group", "channel"].includes(conv.kind) && meta.asked_by === userId && msg.sender_agent_id === exchange.to_agent;
   if (!mine && !inGroup) return { error: "Not found." };
   const business = await getAgentById(exchange.to_agent);
+  if (business && await accountRestricted(business.owner_id)) return { error: "This business is currently unavailable." };
   if (!business || !canContact(business.contact_policy, await getRelationship(agent.id, business.id)).allowed) return { error: "This business isn't accepting requests from you." };
   const { data, error } = await db.rpc("request_business_handoff", { p_exchange: exchange.id, p_caller: agent.id });
   const result = data?.[0];
@@ -31,6 +35,7 @@ export async function askTeam(userId: string, agent: AgentRow, messageId: string
   if (result.outcome === "caller_limit") return { error: "You've reached today's limit for questions to this team. Please try tomorrow." };
   if (result.outcome === "business_limit") return { error: "This team has reached today's request limit. Please try tomorrow or contact the business directly." };
   if (!result.item_id) return { error: "This offer is no longer available." };
+  await db.rpc("link_business_receipt", { p_inbox: result.item_id });
   if (result.created) await tellOwner(business.owner_id, business.id, `@${agent.handle} asked ${business.display_name}: “${offer.data.question}” ${NEEDS_ANSWER}`);
   // Keep offers private in shared chats: UI state belongs to the original asker.
   const notice = result.created

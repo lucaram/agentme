@@ -1,5 +1,6 @@
 "use server";
 import { askTeam } from "@/lib/business/ask-team";
+import { sendRichMessage } from "@/lib/chat/send-rich";
 
 import { after } from "next/server";
 import { redirect } from "next/navigation";
@@ -61,22 +62,30 @@ export async function sendMessage(
   text: string,
   threadId?: string | null,
   /** Community: the author chose "Post anyway" after a nudge. replyTo: ↩ Reply to this earlier message in the chat. */
-  options: { confirmed?: boolean; replyTo?: string | null; /** My Agent, "📍 Near me now": the sender's position, for this message only (never stored). */ here?: { lat: number; lon: number } | null } = {},
+  options: { confirmed?: boolean; replyTo?: string | null; rich?: unknown; /** My Agent, "📍 Near me now": the sender's position, for this message only (never stored). */ here?: { lat: number; lon: number } | null } = {},
 ): Promise<{ error?: string; threadId?: string; nudge?: { rule: string; message: string }; appealId?: string }> {
   const { user, agent } = await requireAgent();
   const content = text.trim().slice(0, 4000);
-  if (!content || !Id.safeParse(conversationId).success) return {};
+  if ((!content && !options.rich) || !Id.safeParse(conversationId).success) return {};
   if (!(await isMember(conversationId, user.id))) throw new Error("Not found");
   const conv = await getConversation(conversationId);
   if (!conv) throw new Error("Not found");
+  if ((await adminClient().rpc("space_is_suspended", { p_conversation: conversationId })).data) return { error: "AGENTME suspended this space. It is read-only until restored." };
   // Direct messages are for contacts: removed or blocked closes the chat (also for "@agent" there).
   if (conv.kind === "dm") {
     const { state } = await dmState(conversationId, user.id, agent.id);
     if (state !== "open") return { error: DM_CLOSED[state] };
   }
+  if (options.rich) {
+    const allowed = await canPost(conv as ConvRow, user.id);
+    if (!allowed.ok) return { error: allowed.error };
+    const result = await sendRichMessage({ conv, userId: user.id, agent, text: content, threadId, replyTo: options.replyTo, confirmed: options.confirmed, raw: options.rich });
+    revalidatePath(`/chats/${conversationId}`);
+    return result;
+  }
 
   // ↩ Reply: only a message in this chat that everyone here can see (otherwise it's sent without the quote).
-  const reply = await resolveReply(conversationId, options.replyTo);
+  const reply = await resolveReply(conversationId, options.replyTo, user.id);
   const replyContext = reply ? quoteContext(reply.author, reply.text) : undefined;
 
   // "@agent ..." in a group, DM or community chat summons the sender's own agent (privately). Also inside a
@@ -203,6 +212,7 @@ export async function sendDraftAction(conversationId: string, draftMessageId: st
   if (!allowed.ok) return { error: allowed.error };
   const db = adminClient();
   // Only the owner's own, unused private draft in this chat.
+  if (!(await db.rpc("can_read_chat_message", { p_message: draftMessageId, p_user: user.id })).data) return { error: "Not found." };
   const { data: draft } = await db.from("messages").select("id, metadata").eq("id", draftMessageId).eq("conversation_id", conversationId).eq("visible_to", user.id).maybeSingle();
   const meta = (draft?.metadata ?? {}) as Record<string, unknown>;
   if (!draft || meta.kind !== "draft") return { error: "Not found." };
@@ -499,6 +509,10 @@ export async function saveSettings(form: FormData) {
     .eq("id", agent.id);
 
   // What the agent knows about you is edited in Settings → What your agent knows (its own page).
+  if (form.get("receipts_form")) {
+    const { error } = await (await createClient()).rpc("set_read_receipts", { p_enabled: form.get("read_receipts") === "on" });
+    if (error) redirect("/settings/privacy?error=receipts");
+  }
   // Business details are edited in My Business (they'd be wiped if saved from here).
   // Back to the settings page the form was on.
   const returnTo = String(form.get("return_to") ?? "");

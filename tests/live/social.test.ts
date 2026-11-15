@@ -34,7 +34,8 @@ describe.skipIf(!dbUp)("groups and communities (live)", () => {
       const { data: agent } = await db.from("agents").insert({ owner_id: created.user.id, handle, display_name: `Test ${key.toUpperCase()}`, avatar: "🦊" }).select("*").single();
       people[key] = { userId: created.user.id, email, agent: agent!, me: { userId: created.user.id, agent: agent! } };
     }
-    // a knows everyone; c only accepts group invites.
+    // a knows everyone; b and d explicitly opt into direct adds, c requires invitations.
+    await db.from("agents").update({ group_add_policy: "contacts" }).in("id", [people.b.agent.id, people.d.agent.id]);
     for (const k of ["b", "c", "d"] as const) await db.from("contacts").insert({ requester_agent: people.a.agent.id, addressee_agent: people[k].agent.id, status: "accepted" });
     await db.from("agents").update({ group_add_policy: "nobody" }).eq("id", people.c.agent.id);
     people.c.agent.group_add_policy = "nobody";

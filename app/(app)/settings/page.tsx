@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isManagedLogin } from "@/lib/identities";
 import { appearanceSummary } from "@/lib/appearance";
 import { currentAppearance } from "@/lib/appearance-server";
+import { platformModerator, platformOperator } from "@/lib/moderation/access";
 
 const CONTACT_POLICY: Record<string, string> = { contacts_only: "Only contacts", anyone: "Anyone", nobody: "Nobody" };
 
@@ -19,8 +20,12 @@ export default async function SettingsPage() {
   const managedBusiness = isManagedLogin(user.email);
   const shared = (facts ?? []).filter((f) => f.disclosure === "contacts").length;
   const look = await currentAppearance();
+  const platformStaff = await platformModerator();
+  const operator = await platformOperator();
 
   const rows: { href: string; icon: string; title: string; summary: string; testId?: string; highlight?: boolean }[] = [
+    ...(operator ? [{ href: "/moderation/staff", icon: "🛡️", title: "Platform staff", summary: "Grant or remove platform reviewer access" }] : []),
+    ...(platformStaff ? [{ href: "/moderation", icon: "🛡️", title: "Platform moderation", summary: "Review reported messages, groups and communities" }] : []),
     {
       href: "/settings/profile",
       icon: "👤",
@@ -78,6 +83,8 @@ export default async function SettingsPage() {
       summary: "Everything your agent did: plans, what it asked and what it shared",
       testId: "activity-link",
     },
+    { href: "/reports", icon: "📨", title: "Your reports", summary: "Track reports you sent to AGENTME" },
+    { href: "/account-status", icon: "🛡️", title: "Account decisions", summary: "Your account restrictions and appeals" },
   ];
 
   return (

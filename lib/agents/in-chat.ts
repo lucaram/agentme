@@ -3,7 +3,7 @@ import { canPost, type ConvRow } from "@/lib/social/shared";
 import { adminClient } from "@/lib/supabase/admin";
 import { llm, LLMError } from "@/lib/llm";
 import type { AgentRow } from "@/lib/data/agents";
-import { getOrCreateMyAgentConversation, postMessage } from "@/lib/data/chat";
+import { getOrCreateMyAgentConversation, isMember, postMessage } from "@/lib/data/chat";
 import { composePlan } from "@/lib/coordination/orchestrator";
 import { CHAT_ASSIST_SYSTEM, wrapUntrusted } from "./prompts";
 import { DEFAULT_DRAFT, parseAgentCommand, splitInline } from "./commands";
@@ -32,6 +32,7 @@ type Conversation = { id: string; kind: string; title: string | null };
  */
 export async function handleAgentCommand(opts: { userId: string; agent: AgentRow; conversation: Conversation; text: string; reply?: ReplyInfo | null }) {
   const { userId, agent, conversation, text } = opts;
+  if (agent.owner_id !== userId || !await isMember(conversation.id, userId)) throw new Error("You can only use your agent in chats you belong to.");
   const inline = splitInline(text);
   const own = inline?.own ?? "";
   const command = parseAgentCommand(inline ? `@agent ${inline.instruction}` : text);
@@ -46,13 +47,7 @@ export async function handleAgentCommand(opts: { userId: string; agent: AgentRow
 
   // Shared context: only messages everyone in this chat can see.
   const [{ data: recent }, { data: members }] = await Promise.all([
-    db
-      .from("messages")
-      .select("content, sender_user_id, sender_agent_id, created_at")
-      .eq("conversation_id", conversation.id)
-      .is("visible_to", null)
-      .order("created_at", { ascending: false })
-      .limit(40),
+    db.rpc("read_member_context", { p_group: conversation.id, p_user: userId }),
     db.from("conversation_members").select("user_id").eq("conversation_id", conversation.id),
   ]);
   const memberIds = (members ?? []).map((m) => m.user_id);

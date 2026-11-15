@@ -32,6 +32,7 @@ import { asJson } from "@/lib/data/json";
 import { hit } from "@/lib/limits";
 import { ipTrustFromEnv, trustedClientIp } from "./client-ip";
 import { withUsageContext } from "@/lib/usage/context";
+import { accountRestricted } from "@/lib/moderation/accounts";
 
 
 /**
@@ -68,6 +69,7 @@ export async function handleA2ARequest(request: Request, handle: string): Promis
 
   const recipient = await getAgentByHandle(handle);
   if (!recipient) return jsonRpcError(body.id, -32001, "Agent not found", 404);
+  if (await accountRestricted(recipient.owner_id)) return jsonRpcError(body.id, -32003, "Agent unavailable", 403);
 
   // --- Authentication: a present token must be valid; absent = anonymous caller.
   const authorization = request.headers.get("authorization");
@@ -77,6 +79,7 @@ export async function handleA2ARequest(request: Request, handle: string): Promis
     if (!verified.ok) return jsonRpcError(body.id, -32003, `Unauthorized (${verified.reason})`, 401);
     caller.agent = await getAgentById(verified.claims.sub);
     if (!caller.agent) return jsonRpcError(body.id, -32003, "Unauthorized (unknown agent)", 401);
+    if (await accountRestricted(caller.agent.owner_id)) return jsonRpcError(body.id, -32003, "Account unavailable", 403);
     caller.exchangeId = verified.claims.xid;
     caller.taskId = verified.claims.tid;
   }

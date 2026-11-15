@@ -4,6 +4,7 @@ import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { OpenRequests } from "@/components/requests/OpenRequests";
 import { threadStatus, type ThreadGroup } from "@/lib/agents/threads";
 import { Composer } from "./Composer";
+import { ModerationAttention } from "@/components/moderation/ModerationAttention";
 
 const GROUPS: { key: ThreadGroup; title: string }[] = [
   { key: "needs", title: "Needs you" },
@@ -28,7 +29,7 @@ export async function MyAgentHome({ conversationId, examples, now }: { conversat
 
   return (
     <div className="flex flex-1 flex-col">
-      <RealtimeRefresh channel={`my-agent-${conversationId}`} tables={["messages", "inbox_items"]} filter={`conversation_id=eq.${conversationId}`} />
+      <RealtimeRefresh channel={`my-agent-${conversationId}`} tables={["messages", "inbox_items", "reports", "platform_cases", "platform_notifications", "platform_moderators", "platform_evidence_requests", "platform_account_appeals"]} filter={`conversation_id=eq.${conversationId}`} />
       {/* New requests start in the box at the bottom (one way to start, not two). */}
       <div className="mb-3">
         <h1 className="text-lg font-semibold">My Agent</h1>
@@ -39,9 +40,10 @@ export async function MyAgentHome({ conversationId, examples, now }: { conversat
       </div>
 
       <div className="mb-4">
-        <OpenRequests title="Needs your answer" kinds={["info_request", "question"]} hint="Only you can decide these. Nothing is shared until you choose." />
+        <OpenRequests title="Needs your answer" kinds={["info_request", "question", "group_invite"]} hint="Only you can decide these. Nothing is shared until you choose." />
       </div>
 
+      <ModerationAttention />
       {threads.length === 0 && (
         <p className="card text-sm text-muted">No requests yet. Ask your agent something below, e.g. “Arrange dinner with @marco on Saturday evening”.</p>
       )}

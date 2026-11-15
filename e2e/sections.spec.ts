@@ -78,6 +78,11 @@ test("sections start collapsed across the app; updates stay unread until opened"
     await shop.goto("/business");
     await expect(shop.getByTestId("fold-documents")).toBeVisible();
     await expect(shop.locator("details[open]")).toHaveCount(0);
+    // SSR markup can be visible before client effects register hashchange handlers.
+    // Confirm interactivity before exercising same-document fragment navigation.
+    await shop.getByRole("button", { name: "Test your agent", exact: true }).click();
+    await expect(shop.getByRole("dialog", { name: "Test your agent", exact: true })).toBeVisible();
+    await shop.getByRole("button", { name: "Close agent preview", exact: true }).click();
     await shop.goto("/business#website-documents");
     await expect(shop.getByTestId("fold-documents")).toHaveAttribute("open", "");
     await expect(shop.locator("details[open]")).toHaveCount(1);

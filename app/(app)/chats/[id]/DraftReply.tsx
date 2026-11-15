@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { sendDraftAction } from "../../actions";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
+import { notifyChatSent } from "@/lib/client/chat-position";
 
 /** A reply drafted by the owner's agent: editable, sent only when the owner taps "Send as me". */
 export function DraftReply({ conversationId, messageId, draft, sent }: { conversationId: string; messageId: string; draft: string; sent: boolean }) {
@@ -20,6 +21,7 @@ export function DraftReply({ conversationId, messageId, draft, sent }: { convers
           setError(null);
           const result = await sendDraftAction(conversationId, messageId, text);
           if (result.error) setError(result.error);
+          else notifyChatSent(conversationId);
         });
       }}
     >

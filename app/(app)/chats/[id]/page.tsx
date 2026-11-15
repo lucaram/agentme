@@ -1,86 +1,44 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { historyPage, prepareHistory } from "@/lib/chat/history";
+import { EMPTY_HISTORY } from "@/lib/chat/history-types";
+import { ChatTimeline } from "@/components/chat/ChatTimeline";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { Composer } from "./Composer";
-import { TaskCard, type TaskView } from "./TaskCard";
-import { ProposalCard, type ProposalView } from "./ProposalCard";
-import { PollCard } from "./PollCard";
-import { AssignCard } from "./AssignCard";
-import { leaveConversation, openAgentChat } from "../../actions";
-import { MarkRead } from "@/components/MarkRead";
-import { DraftReply } from "./DraftReply";
-import { MAX_MESSAGES_SHOWN, MESSAGES_PER_PAGE, shownCount } from "@/lib/social/paging";
-import { RichText } from "@/components/RichText";
-import { LocalTime } from "@/components/LocalTime";
+import { leaveConversation } from "../../actions";
 import { InviteLink } from "./InviteLink";
-import { MessageActions } from "./MessageActions";
 import { OpenRequests } from "@/components/requests/OpenRequests";
+import { ModerationAttention } from "@/components/moderation/ModerationAttention";
 import { MyAgentHome } from "./MyAgentHome";
-import { FactSuggestion } from "./FactSuggestion";
-import { BusinessSuggestion } from "./BusinessSuggestion";
-import { BusinessWays } from "@/components/BusinessWays";
-import { AskTeam } from "./AskTeam";
-import { ActionButton } from "@/components/ActionButton";
-import { canForward as canForwardMessage, forwardLabel, type Forwarded } from "@/lib/social/forward";
-import { ForwardButton } from "./Forward";
-import { ForwardIcon, QuoteBlock, ReplyButton } from "./Reply";
-import { canQuote, quoteSnippet } from "@/lib/social/quote";
-import { HiddenAppeal } from "./HiddenAppeal";
 import { touchSeen } from "@/lib/social/digest";
 import { dmState } from "@/lib/people/dm";
 import { businessIdeas, chatIdeas, personalIdeas, type Idea } from "@/lib/agents/ideas";
 import { ThreadTitle } from "./ThreadTitle";
-import type { Database } from "@/lib/database.types";
-import { AgentName } from "@/components/AgentName";
-import { waysOf } from "@/lib/business/booking";
-import { currentChatActions } from "@/lib/business/current-actions";
 import { canPost, communityMembership, groupRole, isGroupAdmin, isModerator, type ConvRow } from "@/lib/social/shared";
-
-/** Labels moderators see on flagged community messages (posted anyway, or likely selling). */
-const FLAG_LABEL: Record<string, string> = {
-  selling: "🏷️ possible selling",
-  spam: "🏷️ possibly spam (posted anyway)",
-  disrespectful: "⚠️ posted after a respect nudge",
-  abusive: "⚠️ posted after a respect nudge",
-  off_topic: "↪️ possibly off-topic",
-};
 
 export default async function ChatPage({ params, searchParams }: PageProps<"/chats/[id]">) {
   const { id } = await params;
-  const { t, earlier } = await searchParams;
+  const { t } = await searchParams;
   const { user, agent } = await requireAgent();
   const supabase = await createClient();
 
   // All reads use the user's session: RLS decides what is visible.
   const { data: conv } = await supabase.from("conversations").select("*, conversation_members(user_id)").eq("id", id).maybeSingle();
   if (!conv) notFound();
-  // Seen now (database clock). The client also re-marks when new messages arrive while open.
-  await supabase.rpc("mark_conversation_read", { p_conversation: id });
 
   // My Agent: the list of requests (no ?t), one request's thread (?t=<id>), or a new request (?t=new).
   const isMyAgent = conv.kind === "my_agent";
   const threadParam = isMyAgent && typeof t === "string" ? t : null;
   const { data: thread } =
     threadParam && threadParam !== "new" && /^[0-9a-f-]{36}$/i.test(threadParam)
-      ? await supabase.from("agent_threads").select("id, title, kind").eq("id", threadParam).maybeSingle()
+      ? await supabase.from("agent_threads").select("id, title, kind").eq("id", threadParam).eq("conversation_id", id).maybeSingle()
       : { data: null };
   const showMessages = !isMyAgent || Boolean(thread);
-  // The latest messages (a long chat used to show its first 200 and nothing after); "Show earlier messages" loads more.
-  const shown = shownCount(earlier);
-  const [{ data: newestFirst }, { data: agents }] = await Promise.all([
-    showMessages
-      ? (thread ? supabase.from("messages").select("*").eq("conversation_id", id).eq("thread_id", thread.id) : supabase.from("messages").select("*").eq("conversation_id", id))
-          .order("created_at", { ascending: false })
-          .order("id", { ascending: false })
-          .limit(shown + 1)
-      : Promise.resolve({ data: [] as Database["public"]["Tables"]["messages"]["Row"][] }),
+  const [{ data: agents }, initialPage] = await Promise.all([
     supabase.from("agents").select("id, owner_id, handle, display_name, avatar, type, verified_domain"),
+    showMessages ? historyPage(supabase, id, thread?.id ?? null, { mode: "initial" }) : Promise.resolve(EMPTY_HISTORY),
   ]);
-  // One more than shown was asked for, to know whether there are earlier ones. Oldest first on the page.
-  const hasEarlier = (newestFirst?.length ?? 0) > shown;
-  const messages = (newestFirst ?? []).slice(0, shown).reverse();
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));
   const byOwner = new Map((agents ?? []).map((a) => [a.owner_id, a]));
   // Businesses placed in this group or community, to mention (RLS: members see them).
@@ -95,39 +53,6 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
         ).data ?? []
       : [];
   const mentionable = placed.map((p) => byId.get(p.business_agent_id)?.handle).filter(Boolean);
-
-  const metas = (messages ?? []).map((m) => m.metadata as { task_id?: string; proposal_id?: string; step_id?: string });
-  const taskIds = [...new Set(metas.map((m) => m.task_id).filter(Boolean) as string[])];
-  const proposalIds = [...new Set(metas.map((m) => m.proposal_id).filter(Boolean) as string[])];
-
-  const [{ data: tasks }, { data: exchanges }, { data: proposals }, { data: myFacts }] = await Promise.all([
-    // RLS: tasks are owner-only; exchanges the user sent or received.
-    taskIds.length ? supabase.from("tasks").select("*").in("id", taskIds) : Promise.resolve({ data: [] }),
-    taskIds.length ? supabase.from("task_exchanges").select("*").in("task_id", taskIds).order("created_at") : Promise.resolve({ data: [] }),
-    proposalIds.length ? supabase.from("proposals").select("*").in("id", proposalIds) : Promise.resolve({ data: [] }),
-    supabase.from("agent_facts").select("category, value"),
-  ]);
-  // A plan's place: that business's own ways to book or order (public; read on the server).
-  const venueIds = [...new Set((proposals ?? []).map((p) => (p.content as { venue?: { agent_id?: string } | null }).venue?.agent_id).filter((v): v is string => Boolean(v)))];
-  const bookingMessages = (isMyAgent ? messages ?? [] : []).flatMap((m) => {
-    const meta = m.metadata as { booking_business_id?: string; booking_ways?: unknown };
-    return m.is_ai_generated && !m.removed_at && Array.isArray(meta.booking_ways) ? [{ messageId: m.id, businessId: meta.booking_business_id, ways: waysOf({ ways: meta.booking_ways }), metadata: m.metadata }] : [];
-  });
-  const { actions: currentActions, legacyIdentities, businessIds: actionBusinessIds } = await currentChatActions(
-    [...venueIds, ...bookingMessages.flatMap((m) => m.businessId ? [m.businessId] : [])],
-    bookingMessages.filter((m) => !m.businessId),
-  );
-  // Steps & answers: visible to the plan owner and members of the plan's group (RLS can_see_task).
-  const planTaskIds = [...new Set([...taskIds, ...(proposals ?? []).map((p) => p.task_id)])];
-  const { data: steps } = planTaskIds.length
-    ? await supabase.from("plan_steps").select("*").in("task_id", planTaskIds)
-    : { data: [] };
-  const answerStepIds = (steps ?? []).filter((s) => s.type === "rsvp" || s.type === "poll").map((s) => s.id);
-  const assignStepIds = (steps ?? []).filter((s) => s.type === "assign").map((s) => s.id);
-  const [{ data: stepResponses }, { data: claims }] = await Promise.all([
-    answerStepIds.length ? supabase.from("step_responses").select("*").in("step_id", answerStepIds) : Promise.resolve({ data: [] }),
-    assignStepIds.length ? supabase.from("item_claims").select("*").in("step_id", assignStepIds) : Promise.resolve({ data: [] }),
-  ]);
 
   const target = conv.target_agent ? byId.get(conv.target_agent) : undefined;
 
@@ -186,22 +111,6 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
   // Who may post here, and who may remove other people's messages.
   const posting = shared ? await canPost(conv as unknown as ConvRow, user.id) : { ok: true as const };
 
-  // ↩ Reply: the messages quoted here (some may be older than what's shown; RLS decides what you can see).
-  type QuoteSource = { id: string; content: string; sender_user_id: string | null; sender_agent_id: string | null; is_ai_generated: boolean; removed_at: string | null; visible_to: string | null };
-  const loadedIds = new Set((messages ?? []).map((m) => m.id));
-  const olderIds = [...new Set((messages ?? []).flatMap((m) => (m.reply_to && !loadedIds.has(m.reply_to) ? [m.reply_to] : [])))];
-  const { data: olderQuoted } = olderIds.length
-    ? await supabase.from("messages").select("id, content, sender_user_id, sender_agent_id, is_ai_generated, removed_at, visible_to").in("id", olderIds)
-    : { data: [] as QuoteSource[] };
-  const quotedById = new Map<string, QuoteSource>([...(messages ?? []), ...(olderQuoted ?? [])].map((q) => [q.id, q]));
-  // You can reply where you can post (not in a closed direct chat).
-  const canReplyHere = ["my_agent", "dm", "group", "channel"].includes(conv.kind) && posting.ok && !dmClosed;
-  const authorOf = (q: { sender_user_id: string | null; sender_agent_id: string | null }) =>
-    q.sender_agent_id
-      ? `@${byId.get(q.sender_agent_id)?.handle ?? "an"}'s agent`
-      : q.sender_user_id === user.id
-        ? "You"
-        : byOwner.get(q.sender_user_id ?? "")?.display_name ?? "Someone";
   const canModerate =
     conv.kind === "group" ? isGroupAdmin(await groupRole(id, user.id)) : community ? isModerator((await communityMembership(community.id, user.id))?.role) : false;
   const title =
@@ -233,16 +142,10 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
                 ? "Not contacts any more"
                 : "Direct message";
 
+  const initial = await prepareHistory(supabase, user.id, agent, conv, thread?.id ?? null, initialPage);
+
   return (
     <div className="flex flex-1 flex-col">
-      {/* Seeing the chat (including messages that arrive while it is open) clears its unread counter. */}
-      <MarkRead conversationId={id} latestMessageId={(messages ?? []).at(-1)?.id ?? null} threadId={thread?.id} />
-      <RealtimeRefresh
-        channel={`conv-${id}`}
-        tables={["messages", "tasks", "task_exchanges", "proposals", "plan_steps", "step_responses", "item_claims", "inbox_items", "business_action_versions"]}
-        businessIds={actionBusinessIds}
-        filter={`conversation_id=eq.${id}`}
-      />
       {isMyAgent && (
         <div className="mb-1 flex items-center justify-between gap-3 text-sm">
           <Link href={`/chats/${id}`} className="text-accent hover:underline" data-testid="back-to-my-agent">‹ My Agent</Link>
@@ -273,221 +176,13 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
         </div>
       )}
 
-      {thread?.kind === "updates" && (
-        <div className="mb-4">
-          <OpenRequests title="Needs your answer" kinds={["info_request", "question"]} hint="Only you can decide these. Nothing is shared until you choose." />
-        </div>
-      )}
-
-      {hasEarlier && (
-        <p className="mb-3 text-center text-xs">
-          {shown < MAX_MESSAGES_SHOWN ? (
-            <Link href={`/chats/${id}?${new URLSearchParams({ ...(thread ? { t: thread.id } : {}), earlier: String(shown / MESSAGES_PER_PAGE) })}`} className="font-medium text-accent hover:underline" data-testid="show-earlier">
-              ↑ Show earlier messages
-            </Link>
-          ) : (
-            <span className="text-muted">Showing the latest {MAX_MESSAGES_SHOWN.toLocaleString("en-GB")} messages. Use search to find older ones.</span>
-          )}
-        </p>
-      )}
-      <ol className="flex flex-1 flex-col gap-3" aria-label="Messages">
-        {(messages ?? []).map((m) => {
-          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string; flags?: string[]; auto_hidden?: boolean; appeal?: string; business_id?: string; handle?: string; handoff_offer?: boolean; handoff_sent?: boolean; asked_by?: string; booking_ways?: unknown; booking_business_id?: string; forwarded?: Forwarded; sources?: { url?: string; title?: string }[] };
-          // Where a looked-up answer came from: links to the pages themselves (web addresses only).
-          const sources = (Array.isArray(meta.sources) ? meta.sources : []).filter((s) => typeof s?.url === "string" && /^https?:\/\//i.test(s.url)).slice(0, 3);
-          const isPrivate = Boolean(m.visible_to);
-          const mine = m.sender_user_id === user.id;
-          const senderAgent = m.sender_agent_id ? byId.get(m.sender_agent_id) : undefined;
-          const senderUser = m.sender_user_id ? byOwner.get(m.sender_user_id) : undefined;
-          const system = !m.sender_agent_id && !m.sender_user_id;
-          // Plan cards, drafts, suggestions and app notes can't be forwarded; messages can.
-          const forwardOk = canForwardMessage({ ...m, system }).ok;
-          // ↩ Reply: this message can be quoted here; and the message this one quotes (if any).
-          const replyTarget = canReplyHere && canQuote(m) ? { id: m.id, author: authorOf(m), snippet: quoteSnippet(m.content) } : undefined;
-          const quoted = m.reply_to ? quotedById.get(m.reply_to) : undefined;
-          const quoteState = !quoted || (quoted.visible_to && quoted.visible_to !== user.id) ? "missing" : quoted.removed_at ? "removed" : "ok";
-          // Actions on this message: in direct chats, groups and communities; and, to reply or forward (labelled
-          // "from @you's agent"), your own agent's replies in My Agent and your private @agent answers.
-          const showActions =
-            !m.removed_at &&
-            Boolean(
-              ((shared || conv.kind === "dm") && !isPrivate) ||
-                replyTarget ||
-                (m.is_ai_generated && forwardOk && ((isPrivate && m.visible_to === user.id) || (isMyAgent && meta.kind !== "business_answer"))),
-            );
-
-          if (system) {
-            return (
-              <li key={m.id} className={`flex flex-wrap items-baseline justify-center gap-x-2 gap-y-0.5 py-1 text-center text-xs ${meta.kind === "error" ? "text-danger" : "text-muted"}`} data-testid="system-note">
-                <span>{m.content}</span>
-                <span className="text-[11px] tabular-nums opacity-70">
-                  <LocalTime iso={m.created_at} />
-                </span>
-              </li>
-            );
-          }
-          const task = meta.kind === "task_card" ? tasks?.find((t) => t.id === meta.task_id) : undefined;
-          const proposal = meta.kind === "proposal" ? proposals?.find((p) => p.id === meta.proposal_id) : undefined;
-          const rsvpStep = proposal ? steps?.find((s) => s.task_id === proposal.task_id && s.type === "rsvp") : undefined;
-          const pollStep = meta.kind === "poll" ? steps?.find((s) => s.id === meta.step_id) : undefined;
-          const assignStep = meta.kind === "assign" ? steps?.find((s) => s.id === meta.step_id) : undefined;
-          const isPlanOwner = (taskId?: string) => Boolean(taskId && (tasks ?? []).some((t) => t.id === taskId && t.owner_id === user.id));
-
-          return (
-            <li key={m.id} id={`m-${m.id}`} className={`group flex flex-col ${mine ? "items-end" : "items-start"}`}>
-              <span className="mb-0.5 flex items-center gap-1 text-xs text-muted">
-                {m.is_ai_generated ? (
-                  <>
-                    <AgentName agent={senderAgent}>{senderAgent?.avatar} {senderAgent ? `@${senderAgent.handle}'s agent` : "An agent"}</AgentName>
-                    <span className="rounded bg-agent-border px-1 text-[10px] font-semibold uppercase text-foreground" title="Written by an AI agent">AI</span>
-                  </>
-                ) : mine ? (
-                  "You"
-                ) : (
-                  `${senderUser?.avatar ?? ""} ${senderUser?.display_name ?? "Someone"}`
-                )}
-                {/* Flagged by the community spam guard: shown to moderators only. */}
-                {canModerate &&
-                  (meta.flags ?? []).filter((f) => FLAG_LABEL[f]).map((f) => (
-                    <span key={f} className="rounded bg-danger/10 px-1 text-[10px] text-danger" data-testid={`flag-${f}`} title="Flagged by the community's automatic checks">
-                      {FLAG_LABEL[f]}
-                    </span>
-                  ))}
-                {isPrivate && (
-                  <span className="text-[10px]" data-testid="private-label" title="Only you can see this message">
-                    · 🔒 only visible to you
-                  </span>
-                )}
-              </span>
-              <div className={`flex max-w-[85%] items-start gap-1 ${mine ? "flex-row-reverse" : ""}`}>
-                <div
-                  className={`whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ${isPrivate ? "border border-dashed opacity-90" : ""} ${
-                    m.removed_at
-                      ? "border border-border italic text-muted"
-                      : m.is_ai_generated
-                        ? "border border-agent-border bg-agent"
-                        : mine
-                          ? "bg-accent text-white dark:text-black"
-                          : "border border-border bg-surface"
-                  }`}
-                  data-testid={isPrivate ? "private-message" : m.removed_at ? "removed-message" : undefined}
-                >
-                  {m.reply_to && !m.removed_at && (
-                    <QuoteBlock
-                      targetId={m.reply_to}
-                      author={quoted ? authorOf(quoted) : ""}
-                      snippet={quoted ? quoteSnippet(quoted.content) : ""}
-                      ai={Boolean(quoted?.is_ai_generated)}
-                      state={quoteState}
-                    />
-                  )}
-                  {meta.forwarded && !m.removed_at && (
-                    <span className="mb-0.5 block text-[11px] italic opacity-80" data-testid="forwarded-label">
-                      {forwardLabel(meta.forwarded)}
-                    </span>
-                  )}
-                  {m.is_ai_generated && !m.removed_at ? <RichText text={m.content} /> : m.content}
-                </div>
-                {showActions && (
-                  // With a mouse: ↩ Reply · ↪ Forward · ⋯ appear on hover. On phones: ⋯ (with everything in it).
-                  <div className={`msg-actions flex items-center gap-0.5 self-center ${mine ? "flex-row-reverse" : ""}`}>
-                    {replyTarget && <ReplyButton conversationId={id} target={replyTarget} />}
-                    {forwardOk && <ForwardIcon messageId={m.id} />}
-                    <MessageActions
-                      messageId={m.id}
-                      conversationId={id}
-                      canReport={shared && !mine && !isPrivate}
-                      canRemove={shared && !isPrivate && (mine || canModerate)}
-                      canForward={forwardOk}
-                      reply={replyTarget}
-                    />
-                  </div>
-                )}
-              </div>
-              {sources.length > 0 && !m.removed_at && (
-                <p className="mt-1 flex max-w-[85%] flex-wrap gap-x-3 gap-y-1 text-xs" data-testid="sources">
-                  {sources.map((s) => (
-                    <a key={s.url} href={s.url} target="_blank" rel="noopener noreferrer nofollow" className="text-accent underline">
-                      🔗 {(s.title || s.url!.replace(/^https?:\/\/(www\.)?/i, "")).slice(0, 60)}
-                    </a>
-                  ))}
-                </p>
-              )}
-              {m.removed_at && meta.auto_hidden && mine && <HiddenAppeal messageId={m.id} conversationId={id} status={meta.appeal} />}
-              {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}
-              {meta.kind === "fact_suggestion" && isMyAgent && <FactSuggestion messageId={m.id} decided={meta.decided} />}
-              {meta.kind === "business_suggestion" && isMyAgent && <BusinessSuggestion messageId={m.id} handle={meta.handle ?? ""} decided={meta.decided} />}
-              {isMyAgent && !m.removed_at && m.is_ai_generated && Array.isArray(meta.booking_ways) && <BusinessWays ways={currentActions.get(meta.booking_business_id ?? legacyIdentities.get(m.id) ?? "")?.reservation ?? []} primary={false} agentId={meta.booking_business_id ?? legacyIdentities.get(m.id)} source="recall" />}
-              {meta.handoff_offer && !m.removed_at && (isMyAgent || conv.kind === "agent_chat" || meta.asked_by === user.id) && <AskTeam messageId={m.id} sent={Boolean(meta.handoff_sent)} />}
-              {meta.kind === "business_answer" && isMyAgent && meta.business_id && (
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <span data-testid="continue-with-business">
-                    <ActionButton action={openAgentChat.bind(null, meta.business_id)} label={`💬 Continue with @${meta.handle ?? "them"}`} />
-                  </span>
-                  {/* Passing it on is yours to do: labelled as forwarded, from the business's agent. */}
-                  <ForwardButton messageId={m.id} />
-                </div>
-              )}
-              {conv.kind === "agent_chat" && !mine && !m.removed_at && forwardOk && (
-                <div className="mt-1">
-                  <ForwardButton messageId={m.id} />
-                </div>
-              )}
-              {task && (
-                <TaskCard
-                  task={task as TaskView}
-                  exchanges={(exchanges ?? []).filter((e) => e.task_id === task.id)}
-                  steps={(steps ?? []).filter((s) => s.task_id === task.id)}
-                  agents={byId}
-                  canAct={task.owner_id === user.id}
-                  participation={isMyAgent ? { responses: stepResponses ?? [], claims: claims ?? [], myAgentId: agent.id, myHandle: agent.handle, myFacts: myFacts ?? [] } : undefined}
-                />
-              )}
-              {proposal && (
-                <ProposalCard
-                  proposal={proposal as ProposalView}
-                  rsvpStepId={rsvpStep?.id ?? null}
-                  rsvpConfig={(rsvpStep?.config ?? {}) as { min?: number | null; max?: number | null }}
-                  canChange={proposal.status === "accepted" && isPlanOwner(proposal.task_id)}
-                  responses={(stepResponses ?? []).filter((r) => r.step_id === rsvpStep?.id)}
-                  agents={byId}
-                  myAgentId={agent.id}
-                  myHandle={agent.handle}
-                  inGroup={conv.kind === "group"}
-                  venueWays={currentActions.get((proposal as ProposalView).content.venue?.agent_id ?? "")?.all ?? []}
-                />
-              )}
-              {assignStep && (
-                <AssignCard
-                  step={assignStep}
-                  claims={(claims ?? []).filter((c) => c.step_id === assignStep.id)}
-                  agents={byId}
-                  myAgentId={agent.id}
-                  myHandle={agent.handle}
-                />
-              )}
-              {pollStep && (
-                <PollCard
-                  step={pollStep}
-                  votes={(stepResponses ?? []).filter((r) => r.step_id === pollStep.id)}
-                  agents={byId}
-                  myAgentId={agent.id}
-                  myHandle={agent.handle}
-                  myFacts={myFacts ?? []}
-                  isOrganiser={pollStep.task_id ? (tasks ?? []).some((t) => t.id === pollStep.task_id && t.owner_id === user.id) : false}
-                />
-              )}
-            </li>
-          );
-        })}
-      </ol>
-
+      <ChatTimeline key={`${user.id}:${id}:${thread?.id ?? "new"}`} initial={initial} leading={thread?.kind === "updates" ? <div className="mb-4"><OpenRequests title="Needs your answer" kinds={["info_request", "question", "group_invite"]} hint="Only you can decide these. Nothing is shared until you choose." /><ModerationAttention /></div> : undefined}>
       {!posting.ok && (
         <p className="mt-4 rounded-2xl border border-border bg-surface px-4 py-2 text-center text-sm text-muted" data-testid="cannot-post">
-          {posting.error} You can still ask @agent privately.
+          {posting.error} {!initial.suspended && "You can still ask @agent privately."}
         </p>
       )}
-      {dmClosed ? (
+      {initial.suspended ? null : dmClosed ? (
         <p className="mt-4 rounded-2xl border border-border bg-surface px-4 py-3 text-center text-sm text-muted" data-testid="dm-closed">
           {dm?.state === "removed" ? (
             <>
@@ -505,6 +200,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
         </p>
       ) : (
       <Composer
+        key={`${id}:${threadParam ?? ""}`}
         conversationId={id}
         nearMe={isMyAgent}
         threadId={isMyAgent ? (thread && thread.kind === "request" ? thread.id : "new") : undefined}
@@ -533,6 +229,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
         examplesHint={isMyAgent ? undefined : "Only you see @agent and its answer."}
       />
       )}
+      </ChatTimeline>
     </div>
   );
 }

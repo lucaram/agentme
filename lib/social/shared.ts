@@ -3,6 +3,7 @@ import { hideIfReportsAgree } from "./moderation-server";
 import { adminClient } from "@/lib/supabase/admin";
 import { env } from "@/lib/env";
 import { randomToken } from "@/lib/people/crypto";
+import { accountRestricted } from "@/lib/moderation/accounts";
 
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -35,6 +36,8 @@ export const isModerator = (role: string | null | undefined) => role === "owner"
  * can read but not post until the mute ends.
  */
 export async function canPost(conv: ConvRow, userId: string): Promise<Result> {
+  if (await accountRestricted(userId)) return { ok: false, error: "Your account is restricted by AGENTME." };
+  if ((await adminClient().rpc("space_is_suspended", { p_conversation: conv.id })).data) return { ok: false, error: "AGENTME suspended this space. It is read-only until restored." };
   if (conv.kind === "group" && conv.only_admins_send && !isGroupAdmin(await groupRole(conv.id, userId))) {
     return { ok: false, error: "Only admins can send messages in this group." };
   }
@@ -90,24 +93,19 @@ export async function loadJoinLink(token: string) {
 const REMOVED = "🚫 This message was removed";
 
 /** Report a message to the group's admins / the community's moderators. */
-export async function reportMessage(messageId: string, userId: string, reason: string): Promise<Result> {
+export async function reportMessage(messageId: string, userId: string, reason: string, options?: { category: string; evidence: string[]; versions?: Record<string, string> }): Promise<Result> {
   const db = adminClient();
+  if (!(await db.rpc("can_read_chat_message", { p_message: messageId, p_user: userId })).data) return { ok: false, error: "Not found." };
   const { data: msg } = await db.from("messages").select("id, conversation_id, content, visible_to, removed_at").eq("id", messageId).maybeSingle();
   if (!msg || msg.visible_to || msg.removed_at) return { ok: false, error: "Not found." };
   const { data: conv } = await db.from("conversations").select("id, kind, community_id").eq("id", msg.conversation_id).single();
   if (!conv || (conv.kind !== "group" && conv.kind !== "channel")) return { ok: false, error: "Not found." };
   const { data: member } = await db.from("conversation_members").select("user_id").eq("conversation_id", conv.id).eq("user_id", userId).maybeSingle();
   if (!member) return { ok: false, error: "Not found." };
-  const text = reason.trim().slice(0, 300);
+  const text = reason.trim().slice(0, 1000);
   if (!text) return { ok: false, error: "Say briefly what's wrong." };
-  await db.from("reports").insert({
-    reporter_id: userId,
-    conversation_id: conv.id,
-    community_id: conv.community_id,
-    message_id: msg.id,
-    excerpt: msg.content.slice(0, 500),
-    reason: text,
-  });
+  const { error } = await db.rpc("submit_local_message_report", { p_message: msg.id, p_reason: text, p_actor: userId, p_category: options?.category ?? "other", p_evidence: options?.evidence ?? [msg.id], p_versions: options?.versions });
+  if (error) return { ok: false, error: error.message.includes("evidence") ? "The evidence changed. Review it again before sending." : "Couldn't report this message. Check your access or try again later." };
   // Community: enough different members reporting it + the AI check agreeing hides it, no moderator needed.
   if (conv.kind === "channel") await hideIfReportsAgree(msg.id);
   return { ok: true };

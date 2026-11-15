@@ -4,6 +4,7 @@ import { useState } from "react";
 import { replyTo } from "@/lib/client/reply";
 import type { ReplyTarget } from "@/lib/social/quote";
 import { ForwardPicker } from "./Forward";
+import { CHAT_JUMP } from "@/lib/client/chat-position";
 
 const ICON = "hover-only rounded-full px-1.5 py-0.5 text-sm text-muted hover:bg-accent-soft hover:text-foreground";
 
@@ -30,8 +31,9 @@ export function ForwardIcon({ messageId }: { messageId: string }) {
 }
 
 /** The quote at the top of a reply: who and what; tap to jump to the original (it flashes). */
-export function QuoteBlock({ targetId, author, snippet, ai, state }: { targetId: string; author: string; snippet: string; ai: boolean; state: "ok" | "removed" | "missing" }) {
+export function QuoteBlock({ targetId, author, snippet, ai, state }: { targetId: string; author: string; snippet: string; ai: boolean; state: "ok" | "removed" | "deleted" | "missing" }) {
   const jump = () => {
+    if (document.querySelector("[data-chat-scroll]")) { window.dispatchEvent(new CustomEvent(CHAT_JUMP, { detail: { id: targetId } })); return; }
     const el = document.getElementById(`m-${targetId}`);
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -47,7 +49,7 @@ export function QuoteBlock({ targetId, author, snippet, ai, state }: { targetId:
       data-testid="quote"
       aria-label={state === "ok" ? `Replying to ${author}: ${snippet}. Show the original` : undefined}
     >
-      {state === "removed" ? (
+      {state === "deleted" ? <span className="italic opacity-80">Deleted message</span> : state === "removed" ? (
         <span className="italic opacity-80">Original message removed</span>
       ) : state === "missing" ? (
         <span className="italic opacity-80">Original message not available</span>

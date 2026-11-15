@@ -55,7 +55,12 @@ export function ChatsBadge({ initial }: { initial: number }) {
     const channel = supabase
       .channel("chats-badge")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, reload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "inbox_items" }, reload);
+      .on("postgres_changes", { event: "*", schema: "public", table: "inbox_items" }, reload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "reports" }, reload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "platform_cases" }, reload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "platform_notifications" }, reload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "platform_evidence_requests" }, reload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "platform_account_appeals" }, reload);
     supabase.auth.getSession().then(async ({ data }) => {
       if (!live) return;
       if (data.session) await supabase.realtime.setAuth(data.session.access_token);

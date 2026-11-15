@@ -6,7 +6,7 @@ import { AvatarPicker } from "@/components/social/Controls";
 import { CORE_RULES, HOUSE_RULES, LANGUAGES, MAX_DESCRIPTION, MAX_HOUSE_RULES, MAX_NAME, MIN_DESCRIPTION, houseRuleLabel } from "@/lib/social/rules";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 
-type Values = { name: string; description: string; avatar: string; visibility: "public" | "private"; houseRules: string[]; language: string | null };
+type Values = { name: string; description: string; avatar: string; visibility: "public" | "private"; houseRules: string[]; language: string | null; approveLinkMembers?: boolean };
 
 /** Members accept these before joining: the three core rules (fixed) and up to five house rules picked from a list. */
 function RulesPicker({ initial, language }: { initial: string[]; language: string | null }) {
@@ -143,6 +143,7 @@ function Fields({ values, avatars, isOwner, detectLanguage }: { values: Values; 
             <input type="radio" name="visibility" value="private" defaultChecked={values.visibility === "private"} className="mt-1" />
             <span>Private<span className="block text-xs text-muted">Not listed; people join with an invite link or ask and a moderator approves.</span></span>
           </label>
+          <label className="flex items-start gap-2 pt-2 text-sm"><input type="checkbox" name="approve_link_members" defaultChecked={values.approveLinkMembers} className="mt-1" /><span>Approve people joining private communities through a link<span className="block text-xs text-muted">A moderator must approve the request even when the person has an invitation link.</span></span></label>
         </fieldset>
       )}
     </>

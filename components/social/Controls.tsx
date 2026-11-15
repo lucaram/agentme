@@ -154,7 +154,7 @@ export function ReportForm({ action, withLeave, label = "Report" }: { action: (r
 type Person = { id: string; avatar: string; display_name: string; handle: string };
 
 /** Find contacts by name or @handle, pick them, then add them all at once. */
-export function MemberPicker({ people, action, button = "Add to group" }: { people: Person[]; action: (ids: string[]) => Promise<{ error?: string; note?: string }>; button?: string }) {
+export function MemberPicker({ people, action, button = "Invite to group" }: { people: Person[]; action: (ids: string[]) => Promise<{ error?: string; note?: string }>; button?: string }) {
   const router = useRouter();
   const [round, setRound] = useState(0); // remounts the search (clears the chips) after adding
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);

@@ -22,6 +22,10 @@ export function setReply(target: Current) {
   listeners.forEach((l) => l());
 }
 
+export function clearReplyTo(ids: readonly string[]) {
+  if (current && ids.includes(current.id)) setReply(null);
+}
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);

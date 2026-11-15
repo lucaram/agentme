@@ -30,6 +30,12 @@ export function quoteSnippet(text: string, max = 140): string {
   return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat;
 }
 
+/** A quoted forward still identifies its original author and AI provenance. */
+export function quoteAttribution(message: { metadata?: unknown; is_ai_generated?: boolean }, author: string) {
+  const forwarded = ((message.metadata ?? {}) as { forwarded?: { origin_author?: string; origin_ai?: boolean; from_ai?: string | null } }).forwarded;
+  return { author: forwarded?.origin_author ? `${author} · forwarded from ${forwarded.origin_author}` : author, ai: Boolean(message.is_ai_generated || forwarded?.origin_ai || forwarded?.from_ai) };
+}
+
 /** What an agent is told about the quoted message (the caller wraps it as untrusted data). */
 export function quoteContext(author: string, text: string): string {
   return `${author}: ${text.trim().slice(0, 1500)}`;

@@ -22,7 +22,7 @@ export function JoinWithLink({ token, rules, label }: { token: string; rules: bo
           start(async () => {
             const result = await joinWithLinkAction(token, accepted);
             if (result?.error) setMessage({ ok: false, text: result.error });
-            else if (result?.status === "requested") setMessage({ ok: true, text: "Request sent. An admin will let you in." });
+            else if (result?.status === "requested") setMessage({ ok: true, text: "Request sent. Waiting for approval." });
           })
         }
       >

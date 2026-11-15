@@ -1,11 +1,13 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { sendMessage } from "../../actions";
 import { appealAction } from "../../social-actions";
 import { setReply, useReply } from "@/lib/client/reply";
 import { summonsAgent } from "@/lib/agents/commands";
+import { useComposerExtras } from "@/components/chat/useComposerExtras";
+import { notifyChatSent } from "@/lib/client/chat-position";
 
 const MAX_HEIGHT = 200; // about 8 lines
 
@@ -37,6 +39,7 @@ export function Composer({
   const [error, setError] = useState<string | null>(null);
   const [summoned, setSummoned] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const messageId = useId();
   const router = useRouter();
   const [showExamples, setShowExamples] = useState(!collapseExamples);
   /** Community autopilot: "This might break …" before posting; the author decides. */
@@ -48,6 +51,15 @@ export function Composer({
   /** 📍 Near me now: your position, attached to the next message only (never saved). */
   const [here, setHere] = useState<{ lat: number; lon: number } | null>(null);
   const [locating, setLocating] = useState(false);
+  const extras = useComposerExtras(conversationId, (emoji) => {
+    const el = ref.current; if (!el) return;
+    const start = el.selectionStart; const end = el.selectionEnd;
+    el.value = el.value.slice(0, start) + emoji + el.value.slice(end); fit(); el.focus(); el.setSelectionRange(start + emoji.length, start + emoji.length);
+  });
+  useEffect(() => {
+    // File choosers and capture dialogs take focus away; continue the same message here.
+    if (extras.draftCount) ref.current?.focus({ preventScroll: true });
+  }, [extras.draftCount]);
 
   function toggleHere() {
     if (here) return setHere(null);
@@ -79,8 +91,8 @@ export function Composer({
   }
 
   function submit(confirmed = false) {
-    const text = (confirmed ? nudge?.text : ref.current?.value)?.trim();
-    if (!text || pending) return;
+    const text = (confirmed ? nudge?.text : ref.current?.value)?.trim() ?? "";
+    if ((!text && !extras.hasDraft) || pending || extras.busy) return;
     setNudge(null);
     setAppeal(null);
     ref.current!.value = "";
@@ -88,11 +100,13 @@ export function Composer({
     setError(null);
     setSummoned(summonsAgent(text));
     startTransition(async () => {
-      const result = await sendMessage(conversationId, text, threadId, { confirmed, replyTo: replying?.id ?? null, here });
+      try {
+      const rich = await extras.prepare();
+      const result = await sendMessage(conversationId, text, threadId, { confirmed, replyTo: replying?.id ?? null, here, ...(rich ? { rich } : {}) });
       // Your location was for this one message.
       if (!result?.error) setHere(null);
       // Sent (or handed to the agent): the quote is done. Kept when it comes back (nudge or error).
-      if (!result?.nudge && !result?.error) setReply(null);
+      if (!result?.nudge && !result?.error) { setReply(null); extras.clear(); notifyChatSent(conversationId, result?.threadId ?? threadId); }
       if (result?.nudge) {
         // Not posted yet: the text comes back, with Edit / Post anyway.
         setNudge({ ...result.nudge, text });
@@ -113,11 +127,15 @@ export function Composer({
           fit();
         }
       }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't send. Your draft is still here.");
+        if (ref.current && !ref.current.value) { ref.current.value = text; fit(); }
+      }
     });
   }
 
   return (
-    <div className="sticky bottom-0 mt-4 bg-background pb-3 pt-2">
+    <div className="sticky bottom-0 mt-4 bg-background pb-3 pt-2" data-chat-composer="">
       {examples && !showExamples && (
         <button type="button" className="mb-2 text-xs font-medium text-accent hover:underline" onClick={() => setShowExamples(true)}>
           💡 Ideas
@@ -144,7 +162,7 @@ export function Composer({
         </div>
       )}
       {examples && showExamples && examplesHint && <p className="-mt-1 mb-2 text-[11px] text-muted">{examplesHint}</p>}
-      {pending && (thinkingLabel || summoned) && (
+      {pending && !extras.hasDraft && (thinkingLabel || summoned) && (
         <p className="mb-1 text-xs text-muted" aria-live="polite">{thinkingLabel ?? "Your agent is thinking… (only you will see the answer)"}</p>
       )}
       {nudge && (
@@ -191,6 +209,8 @@ export function Composer({
         </p>
       )}
       {/* One rounded box with the send button inside, like ChatGPT / Claude / Gemini. */}
+      {extras.panel}
+      {extras.hasDraft && thinkingLabel && <p className="mb-2 text-xs text-muted">Attachments are saved in this chat. Agent file analysis and audio transcription aren&apos;t available yet.</p>}
       {replying && (
         <div className="mb-1.5 flex items-center gap-2 rounded-2xl border-l-4 border-accent bg-surface px-3 py-1.5 text-xs" data-testid="replying-to">
           <span className="min-w-0 flex-1">
@@ -202,19 +222,22 @@ export function Composer({
           </button>
         </div>
       )}
+      {extras.hasDraft && <label htmlFor={messageId} className="mb-1 ml-3 block text-xs font-medium text-muted">Add a message (optional)</label>}
       <form
-        className="flex items-end gap-2 rounded-3xl border border-border bg-surface py-2 pl-4 pr-2 shadow-sm transition-colors focus-within:border-accent"
+        className="flex items-end gap-1 rounded-3xl border border-border bg-surface p-2 shadow-sm transition-colors focus-within:border-accent"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
       >
+        <fieldset disabled={pending} className="contents">{extras.buttons}</fieldset>
         <textarea
+          id={messageId}
           ref={ref}
           aria-label="Message"
           rows={1}
-          className="thin-scrollbar block min-h-10 flex-1 resize-none overflow-hidden bg-transparent py-2 text-[15px] leading-6 outline-none placeholder:text-muted"
-          placeholder={placeholder}
+          className="thin-scrollbar block min-h-10 min-w-0 flex-1 resize-none overflow-hidden bg-transparent py-2 text-[15px] leading-6 outline-none placeholder:text-muted"
+          placeholder={extras.hasDraft ? "Add a message…" : placeholder}
           onInput={fit}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -238,11 +261,12 @@ export function Composer({
             {locating ? "…" : "📍"}
           </button>
         )}
+        <fieldset disabled={pending} className="contents">{extras.microphone}</fieldset>
         <button
           aria-label="Send"
           title="Send (Enter) · New line: Shift+Enter"
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-lg font-semibold text-white transition hover:opacity-90 disabled:opacity-50 dark:text-black"
-          disabled={pending}
+          disabled={pending || extras.busy}
         >
           {pending ? "…" : "↑"}
         </button>

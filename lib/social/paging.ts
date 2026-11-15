@@ -1,12 +1,7 @@
-/**
- * How many messages a chat page shows: the latest 200, and 200 more each
- * time "Show earlier messages" is tapped (?earlier=1, 2, …), up to 2,000.
- * Pure (unit-tested).
- */
-export const MESSAGES_PER_PAGE = 200;
-export const MAX_MESSAGES_SHOWN = 2000;
-
-export function shownCount(earlier: unknown): number {
-  const pages = typeof earlier === "string" && /^\d{1,3}$/.test(earlier) ? Number(earlier) : 0;
-  return Math.min(MAX_MESSAGES_SHOWN, MESSAGES_PER_PAGE * (1 + pages));
+/** Each request fetches one chunk; older history remains accessible beyond the bounded DOM window. */
+export const MESSAGES_PER_PAGE = 50;
+export const MAX_RENDERED_MESSAGES = 150;
+const micros = (iso: string) => Number((iso.match(/\.(\d+)/)?.[1] ?? "").padEnd(6, "0").slice(3, 6));
+export function compareMessages(a: { created_at: string; id: string }, b: { created_at: string; id: string }) {
+  return Date.parse(a.created_at) - Date.parse(b.created_at) || micros(a.created_at) - micros(b.created_at) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }

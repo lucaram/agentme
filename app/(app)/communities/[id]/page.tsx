@@ -26,6 +26,11 @@ import {
 } from "../../social-actions";
 import { EditCommunityForm } from "../CommunityForm";
 import { JoinCommunity } from "./JoinCommunity";
+import { SpaceReportForm } from "@/components/moderation/SpaceReportForm";
+import { Evidence } from "@/lib/moderation/types";
+import { EvidenceList } from "@/components/moderation/EvidenceList";
+import { z } from "zod";
+import { OpenFromHash } from "@/components/OpenFromHash";
 import { BusinessHandleForm } from "@/components/social/BusinessHandleForm";
 import { Fold } from "@/components/Fold";
 import { languageOf, rulesList } from "@/lib/social/rules";
@@ -117,7 +122,7 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
         {pending ? (
           <p className="card text-sm text-muted">Request sent. A moderator will let you in.</p>
         ) : (
-          <JoinCommunity id={id} hasRules isPrivate={community.visibility === "private"} />
+          community.platform_suspended ? <p className="text-sm text-danger">Joining is paused while AGENTME reviews this community.</p> : <JoinCommunity id={id} hasRules isPrivate={community.visibility === "private"} />
         )}
       </div>
     );
@@ -137,7 +142,7 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
         supabase.from("community_members").select("user_id, role, muted_until, joined_at").eq("community_id", id).order("joined_at").limit(300),
         supabase.from("agents").select("owner_id, handle, display_name, avatar"),
         supabase.from("join_requests").select("id, user_id, created_at").eq("community_id", id).eq("status", "pending").order("created_at"),
-        supabase.from("reports").select("id, message_id, conversation_id, excerpt, reason, created_at").eq("community_id", id).eq("status", "open").order("created_at", { ascending: false }),
+        supabase.from("reports").select("id, message_id, conversation_id, excerpt, reason, created_at, evidence, category").eq("community_id", id).eq("status", "open").order("created_at", { ascending: false }),
         supabase.from("community_bans").select("user_id, reason, created_at").eq("community_id", id),
       ])
     : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
@@ -165,6 +170,8 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
       <Link href="/communities" className="text-sm text-accent">‹ Communities</Link>
       {header}
 
+      <OpenFromHash />
+      {community.platform_suspended && <p role="status" className="card border-danger text-sm">This community is suspended by AGENTME. Existing messages remain readable; posting and joining are paused.</p>}
       <section className="card space-y-2" aria-label="Chats">
         <h2 className="font-semibold">Chats</h2>
         {/* Each chat is a row you tap (highlighted on hover, like Settings); Mute stays separate. */}
@@ -274,6 +281,7 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
             name="community-sections"
             icon="🛡️"
             title="Moderation"
+            id="moderation"
             testId="fold-moderation"
             summary={[
               requests?.length ? `${requests.length} asking to join` : "Invite link",
@@ -304,7 +312,7 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
                 <ul className="divide-y divide-border">
                   {reports.map((r) => (
                     <li key={r.id} className="space-y-1 py-2" data-testid="report">
-                      <p className="rounded-lg bg-accent-soft px-2 py-1 text-sm">“{r.excerpt}”</p>
+                      {z.array(Evidence).safeParse(r.evidence).data?.length ? <EvidenceList messages={z.array(Evidence).parse(r.evidence)} /> : <p className="rounded-lg bg-accent-soft px-2 py-1 text-sm">“{r.excerpt}”</p>}
                       <p className="text-xs text-muted">Reason: {r.reason} · <LocalTime iso={r.created_at} /></p>
                       <span className="flex gap-2">
                         {r.message_id && r.conversation_id && (
@@ -414,7 +422,7 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
                 id={id}
                 isOwner={isOwner}
                 avatars={COMMUNITY_AVATARS}
-                values={{ name: community.name, description: community.description ?? "", avatar: community.avatar, visibility: community.visibility as "public" | "private", houseRules: community.house_rules ?? [], language: community.language }}
+                values={{ name: community.name, description: community.description ?? "", avatar: community.avatar, visibility: community.visibility as "public" | "private", houseRules: community.house_rules ?? [], language: community.language, approveLinkMembers: community.approve_link_members }}
               />
             </div>
           </Fold>
@@ -422,6 +430,7 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
       )}
 
       <section className="card flex flex-wrap gap-2" aria-label="Leave">
+        <SpaceReportForm kind="community" target={id} canLeave={!isOwner} />
         {isOwner ? (
           <ConfirmButton action={deleteCommunityAction.bind(null, id)} label="Delete community" question="Delete this community, its chats and all messages for everyone? This can't be undone." />
         ) : (

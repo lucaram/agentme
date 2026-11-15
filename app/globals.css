@@ -264,6 +264,7 @@ body {
 }
 .thin-scrollbar::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 .thin-scrollbar::-webkit-scrollbar-thumb {
   background: var(--border);
@@ -308,6 +309,7 @@ body {
   }
   li:hover > div > .msg-actions,
   .msg-actions:focus-within,
+  .msg-actions:has([aria-expanded="true"]),
   .msg-actions:has(details[open]) {
     opacity: 1;
   }

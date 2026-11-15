@@ -7,7 +7,7 @@ import { COMMUNITY_AVATARS, MAX_COMMUNITY_PEOPLE, communityMembership, isModerat
 
 type Me = { userId: string; agent: AgentRow };
 /** houseRules: ids from the list (lib/social/rules.ts); the three core rules are always there. */
-export type CommunityInput = { name: string; description: string; avatar: string; visibility: "public" | "private"; houseRules?: string[]; language?: string | null };
+export type CommunityInput = { name: string; description: string; avatar: string; visibility: "public" | "private"; houseRules?: string[]; language?: string | null; approveLinkMembers?: boolean };
 
 async function loadCommunity(id: string) {
   const { data } = await adminClient().from("communities").select("*").eq("id", id).maybeSingle();
@@ -46,7 +46,8 @@ function clean(input: CommunityInput): Result<{
 /** Adds someone to the community and both of its chats. */
 async function addMember(communityId: string, userId: string, role: "owner" | "moderator" | "member" = "member") {
   const db = adminClient();
-  await db.from("community_members").upsert({ community_id: communityId, user_id: userId, role }, { onConflict: "community_id,user_id", ignoreDuplicates: true });
+  const { error } = await db.from("community_members").upsert({ community_id: communityId, user_id: userId, role }, { onConflict: "community_id,user_id", ignoreDuplicates: true });
+  if (error) throw new Error("Couldn't join this community. It may be suspended or your access changed.");
   const rows = (await channels(communityId)).map((c) => ({ conversation_id: c.id, user_id: userId }));
   if (rows.length) await db.from("conversation_members").upsert(rows, { onConflict: "conversation_id,user_id", ignoreDuplicates: true });
 }
@@ -70,7 +71,7 @@ export async function createCommunity(me: Me, input: CommunityInput): Promise<Re
   if (!cleaned.ok) return cleaned;
   const c = cleaned.values;
   const db = adminClient();
-  const { data: community, error } = await db.from("communities").insert({ ...c, owner_id: me.userId }).select("id").single();
+  const { data: community, error } = await db.from("communities").insert({ ...c, owner_id: me.userId, approve_link_members: Boolean(input.approveLinkMembers) }).select("id").single();
   if (error || !community) return { ok: false, error: error?.code === "23505" ? "A community with that name already exists." : "Couldn't create the community." };
   for (const [channel, title] of [["announcements", "Announcements"], ["general", "General"]] as const) {
     const conv = await createConversation({ kind: "channel", title, createdBy: me.userId, memberIds: [] });
@@ -90,6 +91,7 @@ export async function joinCommunity(id: string, me: Me, opts: { acceptRules: boo
   const community = await loadCommunity(id);
   if (!community) return { ok: false, error: "Not found." };
   if (await communityMembership(id, me.userId)) return { ok: true, status: "member" };
+  if (community.platform_suspended) return { ok: false, error: "Joining is paused while AGENTME reviews this community." };
   // Businesses run their own communities; elsewhere a moderator can invite them as an official partner.
   if (me.agent.type === "business") return { ok: false, error: "Businesses can't join communities. A moderator can invite your business as an official partner." };
   if (community.rules && !opts.acceptRules) return { ok: false, error: "Please accept the community rules to join." };
@@ -99,11 +101,11 @@ export async function joinCommunity(id: string, me: Me, opts: { acceptRules: boo
   if ((await size(id)) >= MAX_COMMUNITY_PEOPLE) return { ok: false, error: "This community is full." };
   const link = opts.viaLink ? await loadJoinLink(opts.viaLink) : null;
   const invited = link?.community_id === id;
-  if (community.visibility === "private" && !invited) {
+  if (community.visibility === "private" && (!invited || community.approve_link_members)) {
     await db.from("join_requests").insert({ community_id: id, user_id: me.userId }); // a duplicate pending request is a no-op
     return { ok: true, status: "requested" };
   }
-  await addMember(id, me.userId);
+  try { await addMember(id, me.userId); } catch { return { ok: false, error: "Couldn't join this community. It may be suspended or your access changed." }; }
   return { ok: true, status: "joined" };
 }
 
@@ -183,7 +185,7 @@ export async function updateCommunity(id: string, me: Me, input: CommunityInput)
   const cleaned = clean(role === "owner" ? input : { ...input, name: community.name });
   if (!cleaned.ok) return cleaned;
   const c = cleaned.values;
-  const ownerOnly = role === "owner" ? { name: c.name, visibility: c.visibility, avatar: c.avatar } : {};
+  const ownerOnly = role === "owner" ? { name: c.name, visibility: c.visibility, avatar: c.avatar, approve_link_members: Boolean(input.approveLinkMembers) } : {};
   const { error } = await adminClient()
     .from("communities")
     .update({ description: c.description, rules: c.rules, house_rules: c.house_rules, language: c.language, ...ownerOnly })
@@ -207,11 +209,12 @@ export async function decideCommunityRequest(requestId: string, me: Me, approve:
   if (!req?.community_id || req.status !== "pending" || !isModerator((await communityMembership(req.community_id, me.userId))?.role)) {
     return { ok: false, error: "Not found." };
   }
-  await db.from("join_requests").update({ status: approve ? "approved" : "declined", decided_by: me.userId }).eq("id", req.id);
   if (approve) {
     if ((await size(req.community_id)) >= MAX_COMMUNITY_PEOPLE) return { ok: false, error: "The community is full." };
+    if ((await db.from("community_bans").select("user_id").eq("community_id", req.community_id).eq("user_id", req.user_id).maybeSingle()).data || (await getAgentForUser(req.user_id))?.type === "business") return { ok: false, error: "This person can no longer join." };
     await addMember(req.community_id, req.user_id);
   }
+  await db.from("join_requests").update({ status: approve ? "approved" : "declined", decided_by: me.userId }).eq("id", req.id).eq("status", "pending");
   const community = await loadCommunity(req.community_id);
   await notify(
     [req.user_id],

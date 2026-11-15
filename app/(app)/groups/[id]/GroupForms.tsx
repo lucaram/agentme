@@ -23,7 +23,7 @@ export function GroupInfoForm({ groupId, title, description, avatar, avatars }: 
   );
 }
 
-type Settings = { only_admins_send: boolean; only_admins_edit: boolean; approve_new_members: boolean };
+type Settings = { only_admins_send: boolean; only_admins_edit: boolean; approve_new_members: boolean; share_earlier_history: boolean };
 
 export function GroupSettings({ groupId, initial }: { groupId: string; initial: Settings }) {
   const [settings, setSettings] = useState(initial);
@@ -51,6 +51,7 @@ export function GroupSettings({ groupId, initial }: { groupId: string; initial: 
       {row("only_admins_send", "Only admins can send messages", "Everyone else can read (good for announcements).")}
       {row("only_admins_edit", "Only admins can edit group info", "Name, picture and description.")}
       {row("approve_new_members", "Approve new members", "People who use the invite link ask first; an admin lets them in.")}
+      {row("share_earlier_history", "Share earlier messages with new members", "Applies to future joins. Otherwise they see messages from joining and current shared activities. Existing members keep their access.")}
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
     </div>
   );

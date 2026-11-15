@@ -13,11 +13,12 @@ const subscribe = () => () => {};
  * A date and time in the viewer's own time zone. The server doesn't know it, so
  * it renders UTC and the browser switches to local time right after hydration.
  */
-export function LocalTime({ iso }: { iso: string }) {
+export function LocalTime({ iso, full = false }: { iso: string; full?: boolean }) {
+  const format = (zone?: string) => full ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "long", timeZone: zone }).format(new Date(iso)) : formatShort(iso, zone);
   const text = useSyncExternalStore(
     subscribe,
-    () => formatShort(iso),
-    () => formatShort(iso, "UTC"),
+    () => format(),
+    () => format("UTC"),
   );
   return <time dateTime={iso}>{text}</time>;
 }

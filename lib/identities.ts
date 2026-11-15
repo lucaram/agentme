@@ -1,6 +1,7 @@
 import "server-only";
 import { createHmac, randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
+import { decodeJwt } from "jose";
 import { adminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
@@ -13,6 +14,7 @@ import { MAX_BUSINESS_NAME, MIN_NAME } from "@/lib/social/limits";
 import { BUSINESS_AVATARS } from "@/lib/avatars";
 import { normaliseSite } from "@/lib/business/site";
 import { allowLocal } from "@/lib/business/fetch";
+import { accountRestricted } from "@/lib/moderation/accounts";
 
 /**
  * One person, several identities. A person signs in with their own account and
@@ -48,6 +50,8 @@ export async function realPerson(user: { id: string }, agent: AgentRow): Promise
   if (agent.type === "personal") return user.id;
   const personId = readPersonCookie((await cookies()).get(PERSON_COOKIE)?.value);
   if (personId && (await manages(personId, agent.id))) return personId;
+  const { data } = await adminClient().auth.admin.getUserById(user.id);
+  if (isManagedLogin(data.user?.email)) return null;
   // Signed in directly as a business (its own login): the business is its own person.
   return user.id;
 }
@@ -90,11 +94,12 @@ export async function switchTo(user: { id: string }, agent: AgentRow, targetAgen
   const person = await realPerson(user, agent);
   const { data: target } = await db.from("agents").select("id, owner_id, type").eq("id", targetAgentId).maybeSingle();
   if (!person || !target) return { ok: false, error: "Not found." };
+  if (await accountRestricted(person) || await accountRestricted(target.owner_id)) return { ok: false, error: "This account is restricted by AGENTME." };
   const allowed = target.owner_id === person || (target.type === "business" && (await manages(person, target.id)));
   if (!allowed) return { ok: false, error: "You can't switch to that account." };
   if (target.owner_id === user.id) return { ok: true };
 
-  if (!(await signInAs(target.owner_id))) return { ok: false, error: "Couldn't switch. Please try again." };
+  if (!(await signInAs(target.owner_id, target.type === "business" ? person : undefined))) return { ok: false, error: "Couldn't switch. Please try again." };
 
   // Remember the person while acting as a business, so they can switch back.
   const jar = await cookies();
@@ -104,14 +109,21 @@ export async function switchTo(user: { id: string }, agent: AgentRow, targetAgen
 }
 
 /** Replace this browser's session with one for `userId` (server-side; no email is sent). */
-export async function signInAs(userId: string): Promise<boolean> {
+export async function signInAs(userId: string, actingPersonId?: string): Promise<boolean> {
   const db = adminClient();
   const { data: owner } = await db.auth.admin.getUserById(userId);
   const email = owner.user?.email;
   if (!email) return false;
   const { data: link, error } = await db.auth.admin.generateLink({ type: "magiclink", email });
   if (error || !link.properties?.hashed_token) return false;
-  const { error: signInError } = await (await createClient()).auth.verifyOtp({ type: "email", token_hash: link.properties.hashed_token });
+  const client = await createClient();
+  const { data: signed, error: signInError } = await client.auth.verifyOtp({ type: "email", token_hash: link.properties.hashed_token });
+  if (!signInError && actingPersonId && signed.session) {
+    const sessionId = decodeJwt(signed.session.access_token).session_id;
+    if (typeof sessionId !== "string") { await client.auth.signOut(); return false; }
+    const binding = await db.from("managed_identity_sessions").insert({ session_id: sessionId, business_user: userId, person_user: actingPersonId });
+    if (binding.error) { await client.auth.signOut(); return false; }
+  }
   return !signInError;
 }
 
@@ -131,6 +143,8 @@ export { BUSINESS_AVATARS };
  */
 export async function createBusinessFor(personId: string, input: { name: string; handle: string; avatar: string; about: string; website?: string }): Promise<{ ok: true; agentId: string } | { ok: false; error: string }> {
   const db = adminClient();
+  const person = await db.from("agents").select("type").eq("owner_id", personId).maybeSingle();
+  if (person.data?.type !== "personal" || await accountRestricted(personId)) return { ok: false, error: "Use an unrestricted personal account to add a business." };
   const name = input.name.trim().slice(0, MAX_BUSINESS_NAME);
   if (name.length < MIN_NAME) return { ok: false, error: "Give your business a name." };
   const handle = validateHandle(input.handle);

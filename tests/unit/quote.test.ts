@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canQuote, quoteContext, quoteSnippet, withReplyContext } from "@/lib/social/quote";
+import { canQuote, quoteContext, quoteSnippet, withReplyContext, quoteAttribution } from "@/lib/social/quote";
 
 const msg = (over: Partial<Parameters<typeof canQuote>[0]> = {}) => ({ sender_user_id: "u1", sender_agent_id: null, removed_at: null, visible_to: null, metadata: {}, content: "Pitch is booked for 7pm", ...over });
 
@@ -21,6 +21,10 @@ describe("↩ Reply: what can be quoted", () => {
   it("a short, one-line preview", () => {
     expect(quoteSnippet("Line one\n\nline   two")).toBe("Line one line two");
     expect(quoteSnippet("x".repeat(200), 10)).toBe(`${"x".repeat(9)}…`);
+  });
+
+  it("keeps attribution when replying to forwarded AI content", () => {
+    expect(quoteAttribution({ metadata: { forwarded: { origin_author: "@trattoria's agent", from_ai: "trattoria", origin_ai: true } } }, "Luca")).toEqual({ author: "Luca · forwarded from @trattoria's agent", ai: true });
   });
 
   it("agents are told what the message replies to", () => {
