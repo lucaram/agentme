@@ -1,8 +1,16 @@
-import { expect, test, type BrowserContext } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { config } from "dotenv";
 import { planBusinessFixture } from "../tests/fixtures/plan-business";
 
 config({ path: ".env.local", quiet: true });
+
+async function expectActivity(page: Page, text: string) {
+  const note = page.getByTestId("system-note").filter({ hasText: text }); const down = page.getByTestId("jump-to-latest");
+  // While reading a card, new activity waits below instead of interrupting it.
+  await expect.poll(async () => await note.count() > 0 || await down.isVisible()).toBe(true);
+  if (!await note.count()) await down.click();
+  await expect(note.locator("time")).toBeVisible();
+}
 
 test("names and local action times stay current in shared cards and My Agent", async ({ browser }) => {
   const f = await planBusinessFixture();
@@ -61,19 +69,19 @@ test("names and local action times stay current in shared cards and My Agent", a
     await expect(currentVote.locator("time")).toHaveAttribute("datetime", vote!.updated_at);
     const localTime = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/New_York" }).format(new Date(vote!.updated_at));
     await expect(currentVote.locator("time")).toHaveText(localTime);
-    await expect(owner.getByTestId("system-note").filter({ hasText: "Marco voted for Pizza." }).locator("time")).toBeVisible();
-    await expect(owner.getByTestId("system-note").filter({ hasText: "Marco changed their vote to Sushi." }).locator("time")).toBeVisible();
+    await expectActivity(owner, "Marco voted for Pizza.");
+    await expectActivity(owner, "Marco changed their vote to Sushi.");
 
     await marco.getByTestId("item-Drinks").getByRole("button", { name: "I'll take it", exact: true }).click();
     await expect(owner.getByTestId("item-Drinks")).toContainText("Marco");
     await expect(owner.getByTestId("item-Drinks").locator("time")).toBeVisible();
     await marco.getByTestId("item-Drinks").getByRole("button", { name: "Give back", exact: true }).click();
     await expect(owner.getByTestId("item-Drinks").locator("time")).toHaveCount(0);
-    await expect(owner.getByTestId("system-note").filter({ hasText: "Marco can't bring/do Drinks anymore" }).locator("time")).toBeVisible();
+    await expectActivity(owner, "Marco can't bring/do Drinks anymore");
 
     await ownerPoll.getByRole("button", { name: "Close poll now", exact: true }).click();
     await expect(sharedPoll).toContainText("Poll closed");
-    await expect(marco.getByTestId("system-note").filter({ hasText: "Luca closed the poll." }).locator("time")).toBeVisible();
+    await expectActivity(marco, "Luca closed the poll.");
 
     // A changed plan clears stale RSVP timestamps while preserving the dated activity.
     await owner.getByTestId("proposal").getByRole("button", { name: "Change plan", exact: true }).click();
@@ -81,7 +89,7 @@ test("names and local action times stay current in shared cards and My Agent", a
     await owner.getByTestId("proposal").getByRole("button", { name: "Save change", exact: true }).click();
     await expect(ownerRsvp).toContainText("waiting");
     await expect(ownerRsvp.locator("time")).toHaveCount(0);
-    await expect(marco.getByTestId("system-note").filter({ hasText: "Luca changed the plan:" }).locator("time")).toBeVisible();
+    await expectActivity(marco, "Luca changed the plan:");
     await owner.reload();
     await expect(ownerPoll.getByRole("list", { name: "Votes for Sushi", exact: true })).toContainText("Marco");
 

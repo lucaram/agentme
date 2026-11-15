@@ -42,13 +42,21 @@ export async function createConversation(opts: {
     .single();
   if (error) throw error;
   // The creator of a group owns it (plans' groups too: the organiser).
-  const members = [...new Set([opts.createdBy, ...opts.memberIds])].map((user_id) => ({
+  const members = [...new Set([opts.createdBy, ...(opts.kind === "group" ? [] : opts.memberIds)])].map((user_id) => ({
     conversation_id: conv.id,
     user_id,
     role: opts.kind === "group" && user_id === opts.createdBy ? "owner" : "member",
   }));
   const { error: memberError } = await db.from("conversation_members").insert(members);
   if (memberError) throw memberError;
+  if (opts.kind === "group" && opts.memberIds.length) {
+    const { data: people } = await db.from("agents").select("id,owner_id").in("owner_id", [...new Set(opts.memberIds)]).eq("type", "personal");
+    for (const person of people ?? []) {
+      const { data: inviteResult, error: inviteError } = await db.rpc("invite_group_person", { p_group: conv.id, p_inviter: opts.createdBy, p_agent: person.id });
+      if (inviteError) throw new Error("Couldn't invite everyone to the group. Please try again.");
+      if ((inviteResult as { status?: string })?.status === "invited") await getOrCreateMyAgentConversation(person.owner_id);
+    }
+  }
   return conv;
 }
 

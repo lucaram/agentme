@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { z } from "zod";
+import { Evidence } from "@/lib/moderation/types";
+import { EvidenceList } from "@/components/moderation/EvidenceList";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { ActionButton } from "@/components/ActionButton";
-import { ConfirmButton, JoinLinkBox, MemberPicker, ReportForm } from "@/components/social/Controls";
+import { ConfirmButton, JoinLinkBox, MemberPicker } from "@/components/social/Controls";
+import { SpaceReportForm } from "@/components/moderation/SpaceReportForm";
 import { LocalTime } from "@/components/LocalTime";
 import { GROUP_AVATARS, MAX_GROUP_PEOPLE } from "@/lib/social/shared";
 import { leaveConversation } from "../../actions";
@@ -18,7 +22,6 @@ import {
   removeBusinessFromGroupAction,
   removeMemberAction,
   removeMessageAction,
-  reportGroupAction,
   searchBusinessesAction,
   revokeGroupLinkAction,
   setGroupRoleAction,
@@ -27,6 +30,8 @@ import {
 import { GroupInfoForm, GroupSettings } from "./GroupForms";
 import { BusinessHandleForm } from "@/components/social/BusinessHandleForm";
 import { AgentName } from "@/components/AgentName";
+import { pendingGroupInvites } from "@/lib/social/groups";
+import { cancelGroupInviteAction } from "../../social-actions";
 
 const ROLE_LABEL = { owner: "Owner", admin: "Admin", member: "" } as const;
 
@@ -46,6 +51,7 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
   const me = (members ?? []).find((m) => m.user_id === user.id);
   if (!me) notFound();
   const isAdmin = me.role === "owner" || me.role === "admin";
+  const invitations = isAdmin ? await pendingGroupInvites(id, user.id) : [];
   const canEdit = isAdmin || !group.only_admins_edit;
   const byOwner = new Map((agents ?? []).map((a) => [a.owner_id, a]));
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));
@@ -64,7 +70,7 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
   const [{ data: requests }, { data: reports }] = isAdmin
     ? await Promise.all([
         supabase.from("join_requests").select("id, user_id, created_at").eq("conversation_id", id).eq("status", "pending").order("created_at"),
-        supabase.from("reports").select("id, message_id, excerpt, reason, created_at").eq("conversation_id", id).eq("status", "open").not("message_id", "is", null).order("created_at", { ascending: false }),
+        supabase.from("reports").select("id, message_id, excerpt, reason, created_at, evidence, category").eq("conversation_id", id).eq("status", "open").not("message_id", "is", null).order("created_at", { ascending: false }),
       ])
     : [{ data: [] }, { data: [] }];
 
@@ -87,6 +93,9 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
         </div>
       </section>
 
+      {isAdmin && invitations.length > 0 && <details className="card" data-testid="pending-group-invites"><summary className="cursor-pointer font-semibold">Pending invitations · {invitations.length}</summary><p className="hint mt-2">These people have not joined. Invitations expire after 7 days.</p><ul className="mt-2 divide-y divide-border">{invitations.map((invite) => <li key={invite.id} className="flex flex-wrap items-center justify-between gap-2 py-2"><span className="text-sm">{byOwner.get(invite.owner_id)?.display_name ?? "Invited person"}<span className="ml-2 text-xs text-muted"><LocalTime iso={invite.created_at} /></span></span><ActionButton action={cancelGroupInviteAction.bind(null, id, invite.id)} label="Withdraw invitation" /></li>)}</ul></details>}
+
+      {group.platform_suspended && <p role="status" className="card border-danger text-sm">This group is suspended by AGENTME. Existing messages remain readable; posting and joining are paused.</p>}
       {canEdit && (
         <details className="card">
           <summary className="cursor-pointer font-semibold">Edit group info</summary>
@@ -130,7 +139,7 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
         </ul>
         {isAdmin && (
           <details>
-            <summary className="cursor-pointer text-sm font-medium text-accent">＋ Add people</summary>
+            <summary className="cursor-pointer text-sm font-medium text-accent">＋ Invite people</summary>
             <div className="mt-2">
               <MemberPicker people={addable} action={addMembersAction.bind(null, id)} />
             </div>
@@ -181,7 +190,7 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
       {isAdmin && (
         <section className="card space-y-4" aria-label="Admin settings">
           <h2 className="font-semibold">Admin settings</h2>
-          <GroupSettings groupId={id} initial={{ only_admins_send: group.only_admins_send, only_admins_edit: group.only_admins_edit, approve_new_members: group.approve_new_members }} />
+          <GroupSettings groupId={id} initial={{ only_admins_send: group.only_admins_send, only_admins_edit: group.only_admins_edit, approve_new_members: group.approve_new_members, share_earlier_history: group.share_earlier_history }} />
           <JoinLinkBox create={groupLinkAction.bind(null, id)} revoke={revokeGroupLinkAction.bind(null, id)} what={`“${group.title}”`} />
           {requests && requests.length > 0 && (
             <div>
@@ -202,11 +211,11 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
           )}
           {reports && reports.length > 0 && (
             <div>
-              <h3 className="mb-1 text-sm font-semibold">Reported messages</h3>
+              <h3 id="reported-messages" className="mb-1 scroll-mt-40 text-sm font-semibold">Reported messages</h3>
               <ul className="divide-y divide-border">
                 {reports.map((r) => (
                   <li key={r.id} className="space-y-1 py-2" data-testid="report">
-                    <p className="rounded-lg bg-accent-soft px-2 py-1 text-sm">“{r.excerpt}”</p>
+                    {z.array(Evidence).safeParse(r.evidence).data?.length ? <EvidenceList messages={z.array(Evidence).parse(r.evidence)} /> : <p className="rounded-lg bg-accent-soft px-2 py-1 text-sm">“{r.excerpt}”</p>}
                     <p className="text-xs text-muted">Reason: {r.reason} · <LocalTime iso={r.created_at} /></p>
                     <span className="flex gap-2">
                       {r.message_id && <ActionButton action={removeMessageAction.bind(null, r.message_id, id)} label="Remove message" variant="btn-danger" />}
@@ -225,7 +234,7 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
           <button className="btn-ghost">Leave group</button>
         </form>
         <ConfirmButton action={blockGroupAction.bind(null, id)} label="Block group" question="Leave this group and stop anyone adding you back?" variant="btn-ghost" />
-        <ReportForm action={reportGroupAction.bind(null, id)} withLeave label="Report group" />
+        <SpaceReportForm kind="group" target={id} />
         {me.role === "owner" && (
           <ConfirmButton action={deleteGroupAction.bind(null, id)} label="Delete group" question="Delete this group and all its messages for everyone? This can't be undone." />
         )}

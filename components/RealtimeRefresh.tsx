@@ -6,7 +6,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { browserClient } from "@/lib/supabase/client";
 import { scheduleRefresh } from "@/lib/refresh";
 
-type Table = "messages" | "tasks" | "task_exchanges" | "proposals" | "proposal_responses" | "inbox_items" | "plan_steps" | "step_responses" | "item_claims" | "plan_changes" | "business_sources" | "business_sites" | "business_action_events" | "business_action_versions";
+type Table = "messages" | "tasks" | "task_exchanges" | "proposals" | "proposal_responses" | "inbox_items" | "plan_steps" | "step_responses" | "item_claims" | "plan_changes" | "business_sources" | "business_sites" | "business_action_events" | "business_action_versions" | "message_receipt_versions" | "message_reaction_versions" | "reports" | "platform_cases" | "platform_notifications" | "platform_moderators" | "platform_operators" | "platform_staff_events" | "platform_evidence_requests" | "platform_account_sanctions" | "platform_account_appeals" | "account_access_versions";
 
 /** A page rendered this recently is already up to date when its socket connects. */
 const FRESH_MS = 2000;
@@ -45,7 +45,7 @@ export function RealtimeRefresh({ channel, tables, filter, businessIds = [] }: {
         }
         sub = sub.on(
           "postgres_changes",
-          { event: "*", schema: "public", table, ...(filter && table === "messages" ? { filter } : {}) },
+          { event: "*", schema: "public", table, ...(filter && (table === "messages" || table === "message_receipt_versions" || table === "message_reaction_versions") ? { filter } : {}) },
           refresh,
         );
       }
@@ -53,7 +53,7 @@ export function RealtimeRefresh({ channel, tables, filter, businessIds = [] }: {
         if (status !== "SUBSCRIBED") return;
         // Catch up on anything missed while connecting or offline, unless the
         // page was rendered a moment ago (then it is already current).
-        if (businessKey || connectedBefore || Date.now() - mountedAt > FRESH_MS) refresh();
+        if (businessKey || tableKey.includes("message_receipt_versions") || tableKey.includes("platform_") || connectedBefore || Date.now() - mountedAt > FRESH_MS) refresh();
         connectedBefore = true;
       });
     })();

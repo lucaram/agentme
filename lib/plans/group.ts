@@ -1,7 +1,7 @@
 import "server-only";
 import { adminClient } from "@/lib/supabase/admin";
 import { getAgentByHandle, type AgentRow } from "@/lib/data/agents";
-import { createConversation, getConversation } from "@/lib/data/chat";
+import { createConversation, getConversation, isMember } from "@/lib/data/chat";
 import type { TaskRow } from "./types";
 
 /**
@@ -13,10 +13,14 @@ export async function ensurePlanGroup(task: TaskRow, handles: string[], title: s
   if (task.group_conversation_id) {
     // A plan started from a chat ("@agent ...") lives in that chat.
     const existing = await getConversation(task.group_conversation_id);
-    if (existing) return { ...existing, created: false };
+    if (existing) {
+      if (!await isMember(existing.id, task.owner_id)) throw new Error("You are no longer a member of this chat.");
+      if ((await adminClient().rpc("space_is_suspended", { p_conversation: existing.id })).data) throw new Error("AGENTME suspended this space. It is read-only until restored.");
+      return { ...existing, created: false };
+    }
   }
   const agents = (await Promise.all(handles.map((h) => getAgentByHandle(h)))).filter((a): a is AgentRow => a !== null);
-  const memberIds = agents.map((a) => a.owner_id).filter((id) => id !== task.owner_id);
+  const memberIds = agents.filter((a) => a.type === "personal").map((a) => a.owner_id).filter((id) => id !== task.owner_id);
   const group = await createConversation({ kind: "group", title: title.slice(0, 80), createdBy: task.owner_id, memberIds });
   // A plan’s own group is there for the plan: the organiser (its owner) lets people in with the plan’s invite
   // link, so it starts without the "admins approve new members" step. They can turn it on in the group’s

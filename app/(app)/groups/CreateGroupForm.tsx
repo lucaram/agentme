@@ -30,7 +30,7 @@ export function CreateGroupForm({ contacts, avatars }: { contacts: Person[]; ava
         <AutoGrowTextarea className="input" id="group-description" name="description" minRows={2} maxRows={6} maxLength={500} />
       </div>
       <fieldset>
-        <legend className="label">Members (from your contacts)</legend>
+        <legend className="label">Invite people from your contacts</legend>
         <ContactSearch contacts={contacts} />
       </fieldset>
       {state?.error && <p role="alert" className="text-sm text-danger">{state.error}</p>}
@@ -38,7 +38,7 @@ export function CreateGroupForm({ contacts, avatars }: { contacts: Person[]; ava
         <button className="btn-primary" disabled={pending || !contacts.length}>{pending ? "Creating…" : "Create group"}</button>
         <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
       </div>
-      <p className="hint">You&apos;ll be the group&apos;s owner. People who approve group invites themselves are asked by their agent first.</p>
+      <p className="hint">You&apos;ll be the group&apos;s owner. People choose whether to join, unless they allow their contacts to add them directly.</p>
     </form>
   );
 }

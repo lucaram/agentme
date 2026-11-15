@@ -45,13 +45,19 @@ test("groups: create from the Groups tab, only admins send, make someone admin",
   await form.getByRole("button", { name: "Create group" }).click();
   await expect(luca.page).toHaveURL(/\/groups\/[0-9a-f-]+$/);
   await expect(luca.page.getByRole("heading", { name })).toBeVisible();
+  await expect(luca.page.getByTestId("group-member")).toHaveCount(1);
+  const marco = await as(browser, "marco"); const paul = await as(browser, "paul");
+  for (const invited of [marco, paul]) {
+    await invited.page.goto("/chats"); await invited.page.getByRole("link", { name: /My Agent/ }).first().click();
+    await invited.page.getByTestId("inbox-item").filter({ hasText: name }).getByRole("button", { name: "Join group", exact: true }).click();
+  }
+  await luca.page.reload();
   await expect(luca.page.getByTestId("group-member")).toHaveCount(3);
   await expect(luca.page.getByTestId("group-member").filter({ hasText: "You" })).toContainText("Owner");
 
   await luca.page.getByLabel("Only admins can send messages").check();
   const chatUrl = luca.page.url().replace("/groups/", "/chats/");
 
-  const marco = await as(browser, "marco");
   await expect
     .poll(async () => {
       await marco.page.goto(chatUrl);
@@ -70,7 +76,6 @@ test("groups: create from the Groups tab, only admins send, make someone admin",
   // An admin removes Paul: he's told under Groups, with a badge until he's seen it.
   await luca.page.getByTestId("group-member").filter({ hasText: "Paul" }).getByRole("button", { name: "Remove" }).click();
   await expect(luca.page.getByTestId("group-member")).toHaveCount(2);
-  const paul = await as(browser, "paul");
   await expect(paul.page.getByTestId("groups-badge")).toBeVisible();
   await paul.page.getByRole("navigation").first().getByRole("link", { name: /^Groups/ }).click();
   await openSection(paul.page, "notices");
@@ -133,7 +138,7 @@ test("communities: create, join by accepting the rules, Announcements vs General
   await expect(luca.page.getByRole("listitem").filter({ hasText: "Ref was an idiot today" }).getByTestId("flag-disrespectful")).toBeVisible();
   const message = luca.page.getByRole("listitem").filter({ hasText: "Hello fans!" });
   await message.getByLabel("Message options").click();
-  await message.getByRole("button", { name: /Delete/ }).click();
+  await message.getByRole("button", { name: /Remove/ }).click();
   await expect(luca.page.getByTestId("removed-message").filter({ hasText: "removed by a moderator" })).toBeVisible();
   await luca.close();
   await eve.close();
@@ -267,8 +272,9 @@ test("↩ Reply: quote a message, jump to it, let @agent use it, and a removed o
   await luca.page.reload();
   const mine = luca.page.getByRole("listitem").filter({ hasText: "Pitch is booked for 7pm" }).first();
   await mine.getByLabel("Message options").click();
-  await mine.getByRole("button", { name: /Delete/ }).click();
+  await mine.locator("details").getByRole("button", { name: "Delete", exact: true }).click();
+  await luca.page.getByRole("dialog", { name: "Delete message", exact: true }).getByRole("button", { name: "Delete for everyone", exact: true }).click();
   await marco.page.reload();
-  await expect(marco.page.getByRole("listitem").filter({ hasText: "Great, I'll bring the ball" }).getByTestId("quote")).toContainText("Original message removed");
+  await expect(marco.page.getByRole("listitem").filter({ hasText: "Great, I'll bring the ball" }).getByTestId("quote")).toContainText("Deleted message");
   await Promise.all([luca.close(), marco.close()]);
 });

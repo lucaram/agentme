@@ -12,6 +12,7 @@ import { readWithAi } from "./sources";
 import { LearnedDraftSchema, clampLearned, learnedOf, type Learned, type PageText } from "./learn";
 import { groupQuestions } from "./gaps";
 import { indexSite } from "./site-index";
+import { accountRestricted } from "@/lib/moderation/accounts";
 import { detectSearch, pageLang } from "./site-search";
 import {
   MAX_PAGE_TEXT,
@@ -71,7 +72,7 @@ export async function readWebsite(agentId: string, reason: Reason): Promise<void
   // Already being read (and not stuck): don't read it twice at once.
   if (site.reading_started_at && Date.parse(site.reading_started_at) > Date.now() - STUCK_MINUTES * 60_000) return;
   const { data: agent } = await db.from("agents").select("owner_id").eq("id", agentId).maybeSingle();
-  if (!agent) return;
+  if (!agent || await accountRestricted(agent.owner_id)) return;
   // The owner sees "Reading…" for a first read or "Re-read now"; the daily check happens quietly.
   const visible = reason !== "refresh";
   await db
@@ -335,16 +336,9 @@ export async function refreshDueSites(limit = 1) {
     .eq("status", "reading")
     .lt("reading_started_at", stuck);
   const cutoff = new Date(Date.now() - SITE_REFRESH_HOURS * 3600_000).toISOString();
-  const { data } = await db
-    .from("business_sites")
-    .select("agent_id")
-    .not("live_at", "is", null)
-    .eq("auto_refresh", true)
-    .is("reading_started_at", null)
-    .lt("last_read_at", cutoff)
-    .order("last_read_at")
-    .limit(limit);
-  for (const s of data ?? []) await readWebsite(s.agent_id, "refresh");
+  const { data, error } = await db.rpc("due_business_refreshes", { p_before: cutoff, p_limit: limit, p_site: true });
+  if (error) throw new Error("Couldn't load business websites due for refresh.");
+  for (const s of data ?? []) await readWebsite(s.id, "refresh");
 }
 
 /** Open customer questions a business agent couldn't answer, grouped by topic (newest first). */
@@ -380,6 +374,7 @@ export async function nudgeBusinessGaps() {
   const businesses = new Map<string, string>();
   for (const i of data ?? []) if ((i.payload as { business?: boolean } | null)?.business) businesses.set(i.agent_id, i.owner_id);
   for (const [agentId, ownerId] of businesses) {
+    if (await accountRestricted(ownerId)) continue;
     const top = (await openBusinessQuestions(agentId, 7)).find((g) => g.items.length >= 2 && g.topic);
     if (!top) continue;
     const { count } = await db

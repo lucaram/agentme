@@ -14,6 +14,7 @@ import { runAssign } from "./blocks/assign";
 import { runAnnounce } from "./blocks/announce";
 import { runAskAround } from "./blocks/askAround";
 import type { StepHandler, StepType, TaskParsed, TaskRow } from "./types";
+import { accountRestricted } from "@/lib/moderation/accounts";
 
 // ------------------------------------------------------------- the plan engine
 //
@@ -56,6 +57,8 @@ function errorText(error: unknown) {
 
 /** Claims the task and runs it as far as it can go. Safe to call concurrently. */
 export async function runTask(taskId: string) {
+  const { data: owner } = await adminClient().from("tasks").select("owner_id").eq("id", taskId).maybeSingle();
+  if (owner && await accountRestricted(owner.owner_id)) return;
   const { data } = await adminClient().rpc("claim_task", { p_task: taskId, p_lease_seconds: LEASE_SECONDS });
   const task = data?.[0];
   if (!task) return; // not running, or another worker holds a live lease
@@ -132,6 +135,7 @@ async function executeTask(task: TaskRow) {
     return Boolean(data?.length);
   };
   const renew = async () => {
+    if (await accountRestricted(task.owner_id)) throw new LeaseLost();
     const { data } = await db.rpc("renew_task_lease", { p_task: taskId, p_token: token, p_lease_seconds: LEASE_SECONDS });
     if (!data) throw new LeaseLost(); // cancelled by the owner, or taken over
   };

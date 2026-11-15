@@ -175,6 +175,7 @@ export async function answerMentions(opts: {
   replyContext?: string;
 }): Promise<void> {
   const { conversation, userId, agent, text } = opts;
+  if (agent.owner_id !== userId || !await groupRole(conversation.id, userId)) return;
   const question = withReplyContext(text, opts.replyContext);
   const handles = mentionedHandles(text);
   if (!handles.length) return;

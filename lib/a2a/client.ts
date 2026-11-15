@@ -4,6 +4,8 @@ import { env } from "@/lib/env";
 import { agentEndpoint } from "./card";
 import { signAgentToken } from "./auth";
 import { buildMessage, dataPart, extractResult, textPart } from "./messages";
+import { getAgentById } from "@/lib/data/agents";
+import { accountRestricted } from "@/lib/moderation/accounts";
 
 export type A2ASendResult =
   | { ok: true; text: string; data: Record<string, unknown> | null; state: string; taskId: string | null }
@@ -23,6 +25,9 @@ export async function sendAgentMessage(opts: {
   timeoutMs?: number;
 }): Promise<A2ASendResult> {
   try {
+    const sender = await getAgentById(opts.fromAgentId);
+    if (!sender) return { ok: false, error: "Agent unavailable." };
+    if (sender && await accountRestricted(sender.owner_id)) return { ok: false, error: "This account is restricted by AGENTME." };
     const token = await signAgentToken(
       { sub: opts.fromAgentId, recipient: opts.toHandle, tid: opts.taskId, xid: opts.exchangeId },
       env.a2aSigningSecret,

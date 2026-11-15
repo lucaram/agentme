@@ -7,7 +7,9 @@ import { nudgeBusinessGaps, refreshDueSites } from "@/lib/business/website";
 import { autoResolveAppeals } from "@/lib/social/appeals";
 import { pruneResearchCache } from "@/lib/research";
 import { pruneAnswerLog } from "@/lib/business/answer-log";
+import { pruneChatAttachments } from "@/lib/chat/files";
 import { nudgeInactiveModerators, sendDigests } from "@/lib/social/digest";
+import { expireGroupInvites } from "@/lib/social/groups";
 
 const SWEEP_EVERY_MS = 30_000;
 const PRUNE_EVERY_MS = 15 * 60_000;
@@ -25,6 +27,7 @@ declare global {
  */
 const MAINTENANCE: readonly (readonly [string, () => Promise<unknown>])[] = [
   ["rate limits", pruneRateLimits],
+  ["group invitations", expireGroupInvites],
   ["contact lists", pruneContactLists],
   ["business links", () => refreshDueSources()],
   // Business websites: the daily re-read (tells the owner what changed), and the weekly "customers asked about…".
@@ -32,6 +35,7 @@ const MAINTENANCE: readonly (readonly [string, () => Promise<unknown>])[] = [
   ["business gaps", nudgeBusinessGaps],
   ["research cache", pruneResearchCache],
   ["answer log", pruneAnswerLog],
+  ["chat attachments", pruneChatAttachments],
   // Communities: appeals nobody answered in 3 days, the daily digest, quiet moderators.
   ["appeals", () => autoResolveAppeals()],
   ["digests", () => sendDigests()],

@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { adminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { createConversation, findConversation, postMessage } from "@/lib/data/chat";
@@ -7,7 +8,12 @@ import { DM_CLOSED, dmState } from "@/lib/people/dm";
 import { canPost, type ConvRow } from "./shared";
 import { guardCommunityPost } from "./guard-server";
 import { autopilot } from "./moderation-server";
-import { canForward, forwardText, nextForward, placesAllowed } from "./forward";
+import { canForward, nextForward, placesAllowed } from "./forward";
+import { shareSnapshot } from "./share-snapshot";
+import { copyForwardAttachments } from "./forward-attachments";
+import { LocationSchema, mapsUrl, type AttachmentView } from "@/lib/chat/rich";
+import { chatWriteAccess } from "@/lib/chat/access";
+import { communityMembership, isModerator } from "./shared";
 
 /**
  * ↪ Forward, on the server: where you can forward to (your contacts, groups you
@@ -60,28 +66,38 @@ export async function forwardable(userId: string, messageId: string) {
   const supabase = await createClient();
   const { data: original } = await supabase
     .from("messages")
-    .select("id, content, is_ai_generated, removed_at, metadata, sender_agent_id, sender_user_id, visible_to")
+    .select("id, conversation_id, created_at, content, is_ai_generated, removed_at, metadata, sender_agent_id, sender_user_id, visible_to")
     .eq("id", messageId)
     .maybeSingle();
   if (!original || (original.visible_to && original.visible_to !== userId)) return { ok: false as const, error: "Not found." };
   const sender = original.sender_agent_id ? (await adminClient().from("agents").select("handle").eq("id", original.sender_agent_id).maybeSingle()).data : null;
-  const message = { ...original, senderHandle: sender?.handle ?? null, system: !original.sender_agent_id && !original.sender_user_id };
+  const person = original.sender_user_id ? (await adminClient().from("agents").select("display_name").eq("owner_id", original.sender_user_id).limit(1).maybeSingle()).data : null;
+  const message = { ...original, senderHandle: sender?.handle ?? null, senderName: original.sender_agent_id ? `@${sender?.handle ?? "unknown"}'s agent` : person?.display_name ?? "Someone", system: !original.sender_agent_id && !original.sender_user_id };
   const allowed = canForward(message);
   if (!allowed.ok) return { ok: false as const, error: allowed.error };
-  return { ok: true as const, message, limit: placesAllowed(message) };
+  const { data: files } = await supabase.from("chat_attachments").select("id,name,mime,kind,bytes").eq("message_id", message.id).order("created_at").order("id");
+  const metadata = (message.metadata ?? {}) as Record<string, unknown>;
+  const expected = Array.isArray(metadata.attachment_ids) ? metadata.attachment_ids.length : 0;
+  if ((files ?? []).length !== expected) return { ok: false as const, error: "An attachment is no longer available." };
+  const sources = (Array.isArray(metadata.sources) ? metadata.sources : []).filter((source): source is { url: string; title?: string } => Boolean(source && typeof source === "object" && typeof source.url === "string" && /^https?:\/\//i.test(source.url))).slice(0, 3).map((source) => ({ url: source.url.slice(0, 2048), title: typeof source.title === "string" ? source.title.slice(0, 160) : "" }));
+  const content = await shareSnapshot(supabase, message);
+  const preview = { ...content, files: (files ?? []) as AttachmentView[], location: LocationSchema.safeParse(metadata.shared_location).data, sources };
+  const revision = createHash("sha256").update(JSON.stringify({ ...preview, snapshot: preview.snapshot?.label, origin: nextForward(message) })).digest("hex");
+  return { ok: true as const, message, limit: placesAllowed(message), preview, revision };
 }
 
 /** Forwards a message you can see to up to 5 places (1 if it was forwarded many times). */
-export async function forwardMessage(userId: string, agent: AgentRow, messageId: string, keys: string[]): Promise<{ error: string } | { results: ForwardResult[] }> {
+export async function forwardMessage(userId: string, agent: AgentRow, messageId: string, keys: string[], revision?: string): Promise<{ error: string } | { results: ForwardResult[] }> {
   const check = await forwardable(userId, messageId);
   if (!check.ok) return { error: check.error };
-  const { message, limit } = check;
+  if (revision && revision !== check.revision) return { error: "This message changed. Close the preview and open Forward again to review it." };
+  const { message, limit, preview } = check;
   const wanted = [...new Set(keys)];
   if (!wanted.length) return { error: "Choose where to forward it." };
   if (wanted.length > limit) return { error: limit === 1 ? "This was forwarded many times: you can forward it to one chat at a time." : `You can forward to up to ${limit} chats at once.` };
 
   const forwarded = nextForward(message);
-  const text = forwardText(message).slice(0, 8000);
+  const text = preview.text.slice(0, 8000);
   const places = new Map((await forwardPlacesFor(userId, agent)).map((p) => [p.key, p]));
   const results: ForwardResult[] = [];
   for (const key of wanted) {
@@ -90,7 +106,9 @@ export async function forwardMessage(userId: string, agent: AgentRow, messageId:
       results.push({ key, name: "That chat", ok: false, error: "You can't post there." });
       continue;
     }
-    const sent = await postForward(userId, agent, place, text, forwarded);
+    let sent;
+    try { sent = await postForward(userId, agent, place, text, forwarded, check); }
+    catch (error) { sent = { ok: false, error: error instanceof Error ? error.message : "Couldn't forward to this chat." }; }
     results.push({ key, name: place.name, ...sent });
   }
   return { results };
@@ -102,6 +120,7 @@ async function postForward(
   place: ForwardPlace,
   text: string,
   forwarded: { count: number; from_ai: string | null },
+  source: Extract<Awaited<ReturnType<typeof forwardable>>, { ok: true }>,
 ): Promise<{ ok: boolean; error?: string; conversationId?: string }> {
   const db = adminClient();
   let conversationId: string;
@@ -120,16 +139,26 @@ async function postForward(
     if (!conv) return { ok: false, error: "That chat no longer exists." };
     const allowed = await canPost(conv as unknown as ConvRow, userId);
     if (!allowed.ok) return { ok: false, error: allowed.error };
+    await chatWriteAccess(conversationId, userId, agent.id);
     // Communities: the same checks as any post (slow mode, links, repeats, then the autopilot).
     if (conv.kind === "channel" && conv.community_id) {
-      const guard = await guardCommunityPost(conv.community_id, userId, text);
+      const { data: community } = await db.from("communities").select("house_rules").eq("id", conv.community_id).single();
+      if (community?.house_rules?.includes("no_media") && source.preview.files.some((file) => file.kind === "image" || file.kind === "video") && !isModerator((await communityMembership(conv.community_id, userId))?.role)) return { ok: false, error: "This community doesn't allow images or videos." };
+      const description = [text, ...source.preview.files.map((file) => `${file.kind}: ${file.name}`), ...source.preview.sources.map((item) => item.url), source.preview.location ? mapsUrl(source.preview.location) : ""].filter(Boolean).join("\n");
+      const guard = await guardCommunityPost(conv.community_id, userId, description);
       if (!guard.ok) return { ok: false, error: guard.error };
-      const auto = await autopilot({ communityId: conv.community_id, conversationId, userId, text, level: guard.level, confirmed: false });
+      const auto = await autopilot({ communityId: conv.community_id, conversationId, userId, text: description, level: guard.level, confirmed: false });
       if (auto.action === "refuse") return { ok: false, error: auto.message };
       if (auto.action === "nudge") return { ok: false, error: `${auto.message} Open the community to post it yourself if you still want to.` };
       flags = [...new Set([...guard.flags, ...auto.flags])];
     }
   }
-  await postMessage({ conversationId, from: "human", userId, content: text, metadata: { forwarded, ...(flags.length ? { flags } : {}) } });
+  await chatWriteAccess(conversationId, userId, agent.id);
+  const copies = await copyForwardAttachments(userId, conversationId, source.message.id, source.preview.files);
+  try {
+    const { preview } = source;
+    await chatWriteAccess(conversationId, userId, agent.id);
+    await postMessage({ conversationId, from: "human", userId, content: text, metadata: { forwarded, ...(preview.snapshot ? { kind: "forwarded_snapshot", snapshot: preview.snapshot } : preview.files.length || preview.location ? { kind: "rich_message" } : {}), attachment_ids: copies.ids, ...(preview.location ? { shared_location: preview.location } : {}), ...(preview.sources.length ? { sources: preview.sources } : {}), ...(flags.length ? { flags } : {}) } });
+  } catch (error) { await copies.discard(); throw error; }
   return { ok: true, conversationId };
 }

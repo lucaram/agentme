@@ -23,6 +23,96 @@ export type Database = {
           }
         },"public": {
           Tables: {
+            "managed_identity_sessions": {
+              Row: { session_id: string; business_user: string; person_user: string; created_at: string }
+              Insert: { session_id: string; business_user: string; person_user: string; created_at?: string }
+              Update: { person_user?: string }
+              Relationships: []
+            },
+            "account_access_versions": {
+              Row: { user_id: string; revision: number }
+              Insert: { user_id: string; revision?: number }
+              Update: { revision?: number }
+              Relationships: []
+            },
+            "platform_account_sanctions": {
+              Row: { id: string; case_id: string | null; event_id: string | null; user_id: string | null; user_key: string; subject_name: string; actor_id: string | null; action: string; justification: string; evidence_message_id: string | null; created_at: string; expires_at: string | null; revoked_at: string | null; revoked_by: string | null; revoke_reason: string | null }
+              Insert: { id?: string; case_id?: string | null; event_id?: string | null; user_id?: string | null; user_key: string; subject_name: string; actor_id?: string | null; action: string; justification: string; evidence_message_id?: string | null; created_at?: string; expires_at?: string | null; revoked_at?: string | null; revoked_by?: string | null; revoke_reason?: string | null }
+              Update: { expires_at?: string | null; revoked_at?: string | null; revoked_by?: string | null; revoke_reason?: string | null }
+              Relationships: []
+            },
+            "platform_account_appeals": {
+              Row: { id: string; sanction_id: string; user_key: string; reason: string; status: string; created_at: string; reviewed_at: string | null; reviewed_by: string | null; response: string | null }
+              Insert: { id?: string; sanction_id: string; user_key: string; reason: string; status?: string; created_at?: string; reviewed_at?: string | null; reviewed_by?: string | null; response?: string | null }
+              Update: { status?: string; reviewed_at?: string | null; reviewed_by?: string | null; response?: string | null }
+              Relationships: []
+            },
+            "platform_evidence_requests": {
+              Row: { id: string; case_id: string; report_id: string; requester_id: string | null; question: string; status: string; reply: string | null; evidence: Json; created_at: string; answered_at: string | null }
+              Insert: { id?: string; case_id: string; report_id: string; requester_id?: string | null; question: string; status?: string; reply?: string | null; evidence?: Json; created_at?: string; answered_at?: string | null }
+              Update: { status?: string; reply?: string | null; evidence?: Json; answered_at?: string | null }
+              Relationships: []
+            },
+            "platform_operators": {
+              Row: { user_id: string; enabled: boolean; granted_at: string }
+              Insert: { user_id: string; enabled?: boolean; granted_at?: string }
+              Update: { user_id?: string; enabled?: boolean; granted_at?: string }
+              Relationships: []
+            },
+            "platform_staff_events": {
+              Row: { id: string; actor_id: string | null; target_id: string | null; target_email: string; action: string; created_at: string }
+              Insert: { id?: string; actor_id?: string | null; target_id?: string | null; target_email: string; action: string; created_at?: string }
+              Update: { id?: string; actor_id?: string | null; target_id?: string | null; target_email?: string; action?: string; created_at?: string }
+              Relationships: []
+            },
+            "platform_moderators": {
+              Row: { user_id: string; enabled: boolean; granted_at: string }
+              Insert: { user_id: string; enabled?: boolean; granted_at?: string }
+              Update: { enabled?: boolean }
+              Relationships: []
+            },
+            "platform_cases": {
+              Row: { id: string; target_kind: string; target_key: string; group_id: string | null; community_id: string | null; source_conversation: string | null; message_id: string | null; subject_user_id: string | null; rules: string | null; title: string; description: string | null; status: string; outcome: string | null; response: string | null; revision: number; created_at: string; updated_at: string }
+              Insert: { id?: string; target_kind: string; target_key: string; group_id?: string | null; community_id?: string | null; title: string; description?: string | null; status?: string; outcome?: string | null; response?: string | null; revision?: number; created_at?: string; updated_at?: string }
+              Update: { status?: string; outcome?: string | null; response?: string | null; revision?: number; updated_at?: string }
+              Relationships: []
+            },
+            "platform_reports": {
+              Row: { id: string; case_id: string; reporter_id: string | null; category: string; reason: string; evidence: Json; created_at: string }
+              Insert: { id?: string; case_id: string; reporter_id?: string | null; category: string; reason: string; evidence?: Json; created_at?: string }
+              Update: { reason?: string }
+              Relationships: []
+            },
+            "platform_case_events": {
+              Row: { id: string; case_id: string; actor_id: string | null; action: string; public_response: string | null; internal_note: string | null; created_at: string }
+              Insert: { id?: string; case_id: string; actor_id?: string | null; action: string; public_response?: string | null; internal_note?: string | null; created_at?: string }
+              Update: { action?: string }
+              Relationships: []
+            },
+            "platform_notifications": {
+              Row: { id: string; user_id: string; event_id: string | null; text: string; link: string; seen_at: string | null; created_at: string }
+              Insert: { id?: string; user_id: string; event_id?: string | null; text: string; link: string; seen_at?: string | null; created_at?: string }
+              Update: { seen_at?: string | null }
+              Relationships: []
+            },
+            "message_reactions": {
+              Row: { message_id: string; user_id: string; reaction: string; reacted_at: string }
+              Insert: { message_id: string; user_id: string; reaction: string; reacted_at?: string }
+              Update: { message_id?: string; user_id?: string; reaction?: string; reacted_at?: string }
+              Relationships: []
+            },
+            "message_reaction_versions": {
+              Row: { conversation_id: string; revision: number }
+              Insert: { conversation_id: string; revision?: number }
+              Update: { conversation_id?: string; revision?: number }
+              Relationships: []
+            },
+            "group_message_access": {
+              Row: { conversation_id: string; user_id: string; message_id: string }
+              Insert: { conversation_id: string; user_id: string; message_id: string }
+              Update: { conversation_id?: string; user_id?: string; message_id?: string }
+              Relationships: []
+            },
             "agent_facts": {
                   Row: {
                     "agent_id": string,"category": string,"disclosure": Database["public"]['Enums']["disclosure_level"],"expires_at": string | null,"id": string,"label": string,"updated_at": string,"value": string
@@ -235,6 +325,46 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"receipt_preferences": {
+                  Row: { user_id: string; enabled: boolean }
+                  Insert: { user_id: string; enabled?: boolean }
+                  Update: { enabled?: boolean }
+                  Relationships: []
+                },"message_views": {
+                  Row: { message_id: string; user_id: string; delivered_at: string; viewed_at: string | null }
+                  Insert: { message_id: string; user_id: string; delivered_at?: string; viewed_at?: string | null }
+                  Update: { viewed_at?: string | null }
+                  Relationships: []
+                },"message_receipt_tracking": {
+                  Row: { message_id: string; kind: string; agent_id: string | null; received_at: string | null; a2a_task_id: string | null; inbox_id: string | null; owner_seen_at: string | null; started_at: string }
+                  Insert: { message_id: string; kind: string; agent_id?: string | null; received_at?: string | null; a2a_task_id?: string | null; inbox_id?: string | null; owner_seen_at?: string | null; started_at?: string }
+                  Update: { received_at?: string | null; a2a_task_id?: string | null; inbox_id?: string | null; owner_seen_at?: string | null }
+                  Relationships: []
+                },"message_receipts": {
+                  Row: { id: string; message_id: string; user_id: string | null; delivered_at: string | null; seen_at: string | null }
+                  Insert: { id?: string; message_id: string; user_id?: string | null; delivered_at?: string | null; seen_at?: string | null }
+                  Update: { delivered_at?: string | null; seen_at?: string | null }
+                  Relationships: []
+                },"message_receipt_versions": {
+                  Row: { conversation_id: string; revision: number }
+                  Insert: { conversation_id: string; revision?: number }
+                  Update: { revision?: number }
+                  Relationships: []
+                },"chat_attachments": {
+                  Row: { id:string; conversation_id:string; uploader_id:string; message_id:string|null; path:string; name:string; mime:string; kind:string; bytes:number; created_at:string }
+                  Insert: { id?:string; conversation_id:string; uploader_id:string; message_id?:string|null; path:string; name:string; mime:string; kind:string; bytes:number; created_at?:string }
+                  Update: { message_id?:string|null }
+                  Relationships: []
+                },"chat_attachment_gc": {
+                  Row: { path:string; created_at:string }
+                  Insert: { path:string; created_at?:string }
+                  Update: { path?:string }
+                  Relationships: []
+                },"chat_upload_usage": {
+                  Row: { user_id:string; day:string; bytes:number }
+                  Insert: { user_id:string; day:string; bytes:number }
+                  Update: { bytes?:number }
+                  Relationships: []
                 },"business_analytics_config": {
                   Row: { id: boolean; started_at: string }
                   Insert: { id?: boolean; started_at?: string }
@@ -291,14 +421,14 @@ isOneToOne: false
     }
                   ]
                 },"communities": {
-                  Row: {
+                  Row: { "platform_suspended": boolean, "approve_link_members": boolean,
                     "avatar": string,"created_at": string,"description": string | null,"digest_sent_at": string | null,"house_rules": (string)[],"id": string,"language": string | null,"mods_nudged_at": string | null,"name": string,"owner_id": string | null,"rules": string | null,"visibility": string
                   }
                   ComputedFields: never
-                  Insert: {
+                  Insert: { "platform_suspended"?: boolean, "approve_link_members"?: boolean,
                     "avatar"?: string,"created_at"?: string,"description"?: string | null,"digest_sent_at"?: string | null,"house_rules"?: (string)[],"id"?: string,"language"?: string | null,"mods_nudged_at"?: string | null,"name": string,"owner_id"?: string | null,"rules"?: string | null,"visibility"?: string
                   }
-                  Update: {
+                  Update: { "platform_suspended"?: boolean, "approve_link_members"?: boolean,
                     "avatar"?: string,"created_at"?: string,"description"?: string | null,"digest_sent_at"?: string | null,"house_rules"?: (string)[],"id"?: string,"language"?: string | null,"mods_nudged_at"?: string | null,"name"?: string,"owner_id"?: string | null,"rules"?: string | null,"visibility"?: string
                   }
                   Relationships: [
@@ -418,14 +548,14 @@ isOneToOne: false
                   ]
                 },"conversation_members": {
                   Row: {
-                    "conversation_id": string,"joined_at": string,"last_read_at": string,"muted": boolean,"role": string,"user_id": string
+                    "conversation_id": string,"history_from": string,"joined_at": string,"last_read_at": string,"muted": boolean,"role": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "conversation_id": string,"joined_at"?: string,"last_read_at"?: string,"muted"?: boolean,"role"?: string,"user_id": string
+                    "conversation_id": string,"history_from"?: string,"joined_at"?: string,"last_read_at"?: string,"muted"?: boolean,"role"?: string,"user_id": string
                   }
                   Update: {
-                    "conversation_id"?: string,"joined_at"?: string,"last_read_at"?: string,"muted"?: boolean,"role"?: string,"user_id"?: string
+                    "conversation_id"?: string,"history_from"?: string,"joined_at"?: string,"last_read_at"?: string,"muted"?: boolean,"role"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -437,14 +567,14 @@ isOneToOne: false
     }
                   ]
                 },"conversations": {
-                  Row: {
+                  Row: { "platform_suspended": boolean, "share_earlier_history": boolean,
                     "approve_new_members": boolean,"avatar": string | null,"channel": string | null,"community_id": string | null,"created_at": string,"created_by": string | null,"description": string | null,"id": string,"kind": Database["public"]['Enums']["conversation_kind"],"only_admins_edit": boolean,"only_admins_send": boolean,"target_agent": string | null,"title": string | null
                   }
                   ComputedFields: never
-                  Insert: {
+                  Insert: { "platform_suspended"?: boolean, "share_earlier_history"?: boolean,
                     "approve_new_members"?: boolean,"avatar"?: string | null,"channel"?: string | null,"community_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"description"?: string | null,"id"?: string,"kind": Database["public"]['Enums']["conversation_kind"],"only_admins_edit"?: boolean,"only_admins_send"?: boolean,"target_agent"?: string | null,"title"?: string | null
                   }
-                  Update: {
+                  Update: { "platform_suspended"?: boolean, "share_earlier_history"?: boolean,
                     "approve_new_members"?: boolean,"avatar"?: string | null,"channel"?: string | null,"community_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"description"?: string | null,"id"?: string,"kind"?: Database["public"]['Enums']["conversation_kind"],"only_admins_edit"?: boolean,"only_admins_send"?: boolean,"target_agent"?: string | null,"title"?: string | null
                   }
                   Relationships: [
@@ -650,13 +780,16 @@ isOneToOne: false
                   ]
                 },"messages": {
                   Row: {
+                    "deleted_at": string | null;
                     "content": string,"conversation_id": string,"created_at": string,"id": string,"is_ai_generated": boolean,"metadata": NonNullable<Json>,"removed_at": string | null,"removed_by": string | null,"reply_to": string | null,"sender_agent_id": string | null,"sender_user_id": string | null,"thread_id": string | null,"visible_to": string | null
                   }
                   ComputedFields: never
                   Insert: {
+                    "deleted_at"?: string | null;
                     "content": string,"conversation_id": string,"created_at"?: string,"id"?: string,"is_ai_generated": boolean,"metadata"?: NonNullable<Json>,"removed_at"?: string | null,"removed_by"?: string | null,"reply_to"?: string | null,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"thread_id"?: string | null,"visible_to"?: string | null
                   }
                   Update: {
+                    "deleted_at"?: string | null;
                     "content"?: string,"conversation_id"?: string,"created_at"?: string,"id"?: string,"is_ai_generated"?: boolean,"metadata"?: NonNullable<Json>,"removed_at"?: string | null,"removed_by"?: string | null,"reply_to"?: string | null,"sender_agent_id"?: string | null,"sender_user_id"?: string | null,"thread_id"?: string | null,"visible_to"?: string | null
                   }
                   Relationships: [
@@ -886,13 +1019,16 @@ isOneToOne: true
                   ]
                 },"reports": {
                   Row: {
+                    evidence: Json; category: string;
                     "community_id": string | null,"conversation_id": string | null,"created_at": string,"excerpt": string | null,"id": string,"message_id": string | null,"reason": string,"reporter_id": string | null,"resolved_by": string | null,"status": string
                   }
                   ComputedFields: never
                   Insert: {
+                    evidence?: Json; category?: string;
                     "community_id"?: string | null,"conversation_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"message_id"?: string | null,"reason": string,"reporter_id"?: string | null,"resolved_by"?: string | null,"status"?: string
                   }
                   Update: {
+                    evidence?: Json; category?: string;
                     "community_id"?: string | null,"conversation_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"message_id"?: string | null,"reason"?: string,"reporter_id"?: string | null,"resolved_by"?: string | null,"status"?: string
                   }
                   Relationships: [
@@ -1031,6 +1167,56 @@ isOneToOne: false
               "communities": number,"contacts": number,"groups": number
             }[]
                            },
+"acknowledge_messages": { Args: { p_ids: string[]; p_seen?: boolean }; Returns: string[] },
+"delete_own_message": { Args: { p_message: string }; Returns: string },
+"chat_history_page": { Args: { p_conversation: string; p_thread?: string | null; p_mode?: string; p_anchor?: string | null; p_ids?: string[] }; Returns: Json },
+"can_read_chat_message": { Args: { p_message: string; p_user: string }; Returns: boolean },
+"invite_group_person": { Args: { p_group: string; p_inviter: string; p_agent: string }; Returns: Json },
+"answer_group_invitation": { Args: { p_item: string; p_decision: string; p_actor?: string }; Returns: string | null },
+"cancel_group_invitation": { Args: { p_item: string }; Returns: undefined },
+"group_invite_previews": { Args: { p_ids: string[] }; Returns: Json },
+"read_member_context": { Args: { p_group: string; p_user: string }; Returns: Database["public"]["Tables"]["messages"]["Row"][] },
+"open_owner_requests": { Args: { p_kinds?: string[] | null; p_exclude?: string[] }; Returns: Database["public"]["Tables"]["inbox_items"]["Row"][] },
+"owner_attention_count": { Args: Record<string, never>; Returns: number },
+"open_group_invitation": { Args: { p_item: string }; Returns: boolean },
+"prune_group_invitations": { Args: Record<string, never>; Returns: undefined },
+"is_platform_moderator": { Args: Record<string, never>; Returns: boolean },
+"is_platform_operator": { Args: Record<string, never>; Returns: boolean },
+"platform_staff_directory": { Args: { p_offset?: number }; Returns: Json },
+"set_platform_reviewer": { Args: { p_enabled: boolean; p_email?: string; p_user?: string }; Returns: Json },
+"can_review_platform_target": { Args: { p_kind: string; p_target: string }; Returns: boolean },
+"submit_platform_report": { Args: { p_kind: string; p_target: string; p_category: string; p_reason: string; p_evidence?: string[]; p_actor?: string; p_versions?: Json }; Returns: Json },
+"submit_local_message_report": { Args: { p_message: string; p_reason: string; p_category?: string; p_evidence?: string[]; p_actor?: string; p_versions?: Json }; Returns: string },
+"request_report_evidence": { Args: { p_report: string; p_revision: number; p_question: string }; Returns: string },
+"answer_report_evidence": { Args: { p_request: string; p_reply: string; p_evidence?: string[]; p_versions?: Json }; Returns: undefined },
+"own_evidence_requests": { Args: Record<string, never>; Returns: Json },
+"review_platform_case": { Args: { p_case: string; p_revision: number; p_action: string; p_response?: string; p_note?: string; p_subject?: string; p_evidence?: string }; Returns: undefined },
+"account_is_restricted": { Args: { p_user: string }; Returns: boolean },
+"due_business_refreshes": { Args: { p_before: string; p_limit: number; p_site?: boolean }; Returns: { id: string }[] },
+"account_restriction": { Args: { p_user: string }; Returns: Json },
+"account_case_people": { Args: { p_case: string }; Returns: Json },
+"platform_reporting_history": { Args: { p_case: string; p_subject: string; p_offset?: number }; Returns: Json },
+"own_account_sanctions": { Args: { p_offset?: number }; Returns: Json },
+"submit_account_appeal": { Args: { p_sanction: string; p_reason: string }; Returns: string },
+"open_account_appeal_count": { Args: Record<string, never>; Returns: number },
+"account_appeal_queue": { Args: { p_state?: string; p_offset?: number }; Returns: Json },
+"review_account_appeal": { Args: { p_appeal: string; p_accept: boolean; p_response: string }; Returns: undefined },
+"lift_account_restriction": { Args: { p_sanction: string; p_reason: string }; Returns: undefined },
+"own_platform_reports": { Args: { p_report?: string | null; p_offset?: number }; Returns: Json },
+"platform_case_suspended": { Args: { p_case: string }; Returns: boolean },
+"platform_attention": { Args: Record<string, never>; Returns: Json },
+"platform_case_queue": { Args: { p_state?: string; p_offset?: number }; Returns: Json },
+"ack_platform_notifications": { Args: { p_ids: string[] }; Returns: undefined },
+"space_is_suspended": { Args: { p_conversation: string }; Returns: boolean },
+"set_message_reaction": { Args: { p_message: string; p_reaction?: string | null }; Returns: Json },
+"get_message_reactions": { Args: { p_ids: string[] }; Returns: Json },
+"get_message_reaction_details": { Args: { p_message: string; p_offset?: number }; Returns: Json },
+"pending_message_deliveries": { Args: Record<string, never>; Returns: Database["public"]["Tables"]["messages"]["Row"][] },
+"record_agent_receipt": { Args: { p_message: string; p_agent: string; p_task?: string | null }; Returns: undefined },
+"link_business_receipt": { Args: { p_inbox: string }; Returns: undefined },
+"acknowledge_business_question": { Args: { p_inbox: string }; Returns: boolean },
+"set_read_receipts": { Args: { p_enabled: boolean }; Returns: undefined },
+"get_message_receipts": { Args: { p_ids: string[]; p_details?: boolean }; Returns: Json },
 "add_plan_participant":
 { Args: { "p_handle": string,"p_max": number,"p_task": string }; Returns: string
                            },
@@ -1118,6 +1304,8 @@ isOneToOne: false
 "patch_business_info":
 { Args: { "p_agent": string,"p_patch": Json,"p_bio"?: string }; Returns: undefined },
 "business_dashboard": { Args: { "p_agent": string; "p_days"?: number }; Returns: Json },
+"register_chat_attachment": { Args: { p_id:string; p_conversation:string; p_user:string; p_path:string; p_name:string; p_mime:string; p_kind:string; p_bytes:number }; Returns: undefined },
+"create_chat_poll": { Args: { p_owner:string; p_agent:string; p_origin:string; p_group:string; p_thread:string|null; p_client:string; p_question:string; p_options:Json; p_voters:Json; p_caption?:string|null; p_reply?:string|null }; Returns: string },
 "business_activity":
 { Args: { "p_agent": string,"p_days"?: number }; Returns: { "received": number,"automatic": number,"team_answered": number,"unanswered": number,"awaiting_team": number }[] },
 "request_business_handoff":

@@ -32,7 +32,7 @@ jobs:
 
       - name: Start local Supabase
         run: |
-          npx supabase start -x storage-api,edge-runtime,logflare,vector,imgproxy
+          npx supabase start -x edge-runtime,logflare,vector,imgproxy
           npx supabase status -o env 2>/dev/null | tr -d '"' > /tmp/sb.env
           echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(grep '^ANON_KEY=' /tmp/sb.env | cut -d= -f2-)" >> "$GITHUB_ENV"
           echo "SUPABASE_SERVICE_ROLE_KEY=$(grep '^SERVICE_ROLE_KEY=' /tmp/sb.env | cut -d= -f2-)" >> "$GITHUB_ENV"

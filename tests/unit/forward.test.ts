@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MANY_TIMES, canForward, forwardLabel, forwardText, nextForward, placesAllowed } from "@/lib/social/forward";
 
-const msg = (over: Partial<{ content: string; is_ai_generated: boolean; removed_at: string | null; metadata: unknown; senderHandle: string | null; system: boolean }> = {}) => ({
+const msg = (over: Partial<{ content: string; is_ai_generated: boolean; removed_at: string | null; visible_to: string | null; metadata: unknown; senderHandle: string | null; senderName: string; created_at: string; system: boolean }> = {}) => ({
   content: "See you at 8",
   is_ai_generated: false,
   removed_at: null,
@@ -12,12 +12,13 @@ const msg = (over: Partial<{ content: string; is_ai_generated: boolean; removed_
 });
 
 describe("↪ Forward: always a person's action, labelled", () => {
-  it("messages can be forwarded; removed ones, app notes and plan cards can't", () => {
+  it("human/agent messages, attachments and cards can be forwarded; private and removed ones cannot", () => {
     expect(canForward(msg()).ok).toBe(true);
     expect(canForward(msg({ is_ai_generated: true, metadata: { kind: "business_answer", handle: "everyeye" } })).ok).toBe(true);
     expect(canForward(msg({ removed_at: "2026-11-09T10:00:00Z" })).ok).toBe(false);
     expect(canForward(msg({ system: true })).ok).toBe(false);
-    for (const kind of ["task_card", "proposal", "poll", "business_suggestion", "fact_suggestion"]) expect(canForward(msg({ metadata: { kind } })).ok, kind).toBe(false);
+    for (const kind of ["task_card", "proposal", "poll", "business_suggestion", "fact_suggestion", "rich_message", "draft"]) expect(canForward(msg({ metadata: { kind } })).ok, kind).toBe(true);
+    expect(canForward(msg({ visible_to: "owner" })).ok).toBe(false);
   });
 
   it("a business's answer is forwarded without your agent's “I asked” heading", () => {
@@ -30,11 +31,11 @@ describe("↪ Forward: always a person's action, labelled", () => {
     expect(nextForward(msg({ is_ai_generated: true, content: "🏪 I asked @everyeye: …", metadata: { kind: "business_answer", handle: "everyeye" } }))).toEqual({ count: 1, from_ai: "everyeye" });
     expect(nextForward(msg({ is_ai_generated: true, content: "👤 The team at Everyeye answered: yes", metadata: { kind: "business_answer", handle: "everyeye" } }))).toEqual({ count: 1, from_ai: null });
     expect(nextForward(msg({ is_ai_generated: true, senderHandle: "luca" }))).toEqual({ count: 1, from_ai: "luca" });
-    // Your own agent's reply in My Agent, or your private @agent answer in a chat.
+    // An answer from your own agent that isn't marked private.
     expect(nextForward(msg({ is_ai_generated: true, senderHandle: "luca", metadata: { kind: "agent_reply" } }))).toEqual({ count: 1, from_ai: "luca" });
     expect(canForward(msg({ is_ai_generated: true, metadata: { kind: "agent_reply" } })).ok).toBe(true);
-    // A draft is sent with "Send as me", not forwarded; your private command isn't a message to pass on.
-    expect(canForward(msg({ metadata: { kind: "draft" } })).ok).toBe(false);
+    // Drafts can be shared as read-only snapshots; private agent commands remain private.
+    expect(canForward(msg({ metadata: { kind: "draft" } })).ok).toBe(true);
     expect(canForward(msg({ metadata: { kind: "agent_command" } })).ok).toBe(false);
     expect(nextForward(msg())).toEqual({ count: 1, from_ai: null });
     // Forwarded again: one more, and the original AI stays named.
@@ -51,5 +52,11 @@ describe("↪ Forward: always a person's action, labelled", () => {
     expect(forwardLabel({ count: 1, from_ai: "everyeye" })).toBe("↪ Forwarded · from @everyeye's agent");
     expect(forwardLabel({ count: 2, from_ai: null })).toBe("↪ Forwarded");
     expect(forwardLabel({ count: MANY_TIMES, from_ai: null })).toBe("↪↪ Forwarded many times");
+  });
+  it("retains original human authorship and time through repeated forwards", () => {
+    const original = msg({ senderName: "Marco", created_at: "2026-11-15T10:00:00Z" });
+    const once = nextForward(original);
+    expect(once).toMatchObject({ origin_author: "Marco", origin_at: original.created_at, origin_ai: false });
+    expect(nextForward(msg({ metadata: { forwarded: once }, senderName: "Luca" }))).toEqual({ ...once, count: 2 });
   });
 });

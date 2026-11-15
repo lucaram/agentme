@@ -181,7 +181,9 @@ describe.skipIf(!dbUp)("finding people (live)", () => {
     const { a, b, d } = people;
     const db = admin();
     const own = await chat.getOrCreateMyAgentConversation(a.userId);
-    const group = await chat.createConversation({ kind: "group", title: "Picnic", createdBy: a.userId, memberIds: [b.userId] });
+    const group = await chat.createConversation({ kind: "group", title: "Picnic", createdBy: a.userId, memberIds: [] });
+    // B is already an established member for these plan-link permission tests.
+    expect((await db.from("conversation_members").insert({ conversation_id: group.id, user_id: b.userId })).error).toBeNull();
     // As for a plan’s own group (see ensurePlanGroup): the organiser’s link lets people straight in.
     await db.from("conversations").update({ approve_new_members: false }).eq("id", group.id);
     const { data: task } = await db
@@ -231,7 +233,8 @@ describe.skipIf(!dbUp)("finding people (live)", () => {
     const { a, b, c } = people;
     const db = admin();
     // A's group; B is a regular member and organises a plan inside it (what "@agent ..." in a group does).
-    const group = await chat.createConversation({ kind: "group", title: "Club", createdBy: a.userId, memberIds: [b.userId] });
+    const group = await chat.createConversation({ kind: "group", title: "Club", createdBy: a.userId, memberIds: [] });
+    expect((await db.from("conversation_members").insert({ conversation_id: group.id, user_id: b.userId })).error).toBeNull();
     const own = await chat.getOrCreateMyAgentConversation(b.userId);
     const { data: task } = await db
       .from("tasks")

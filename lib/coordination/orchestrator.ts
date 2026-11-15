@@ -24,6 +24,7 @@ import { stepWords } from "@/lib/plans/wording";
 import { describeRetry, hit } from "@/lib/limits";
 import { displayClock } from "./heuristics";
 import { threadFor } from "@/lib/agents/thread-context";
+import { recordAgentReceipt } from "@/lib/chat/receipts-server";
 import { askBusinessesFor, offerToAskBusiness } from "@/lib/agents/ask-business";
 import { asksToPassOn, claimsAction, honestReply, passOnReply } from "@/lib/agents/honesty";
 import { quoteContext, withReplyContext } from "@/lib/social/quote";
@@ -54,7 +55,8 @@ function errorText(error: unknown) {
  */
 export async function handleOwnerMessage(opts: { userId: string; agent: AgentRow; conversationId: string; text: string; reply?: ReplyInfo | null; /** "📍 Near me now": the town the owner is in, for this message only. */ here?: string | null }) {
   const { userId, agent, conversationId, text } = opts;
-  await postMessage({ conversationId, from: "human", userId, content: text, replyTo: opts.reply?.id });
+  const incoming = await postMessage({ conversationId, from: "human", userId, content: text, replyTo: opts.reply?.id });
+  await recordAgentReceipt(incoming.id, agent.id);
   // ↩ Reply: what the owner is replying to, for the agent (as data).
   const replyCtx = opts.reply ? quoteContext(opts.reply.author, opts.reply.text) : undefined;
 
@@ -401,7 +403,7 @@ async function replyToOwner(agent: AgentRow, userId: string, conversationId: str
   const db = adminClient();
   // Only this request's thread: a new request starts with a clean slate.
   const thread = threadFor(conversationId);
-  const historyQuery = db.from("messages").select("content, sender_agent_id").eq("conversation_id", conversationId);
+  const historyQuery = db.from("messages").select("content, sender_agent_id").eq("conversation_id", conversationId).is("removed_at", null);
   const [{ data: history }, recall, ownFacts] = await Promise.all([
     (thread ? historyQuery.eq("thread_id", thread) : historyQuery).order("created_at", { ascending: false }).limit(10),
     buildRecall(userId),
@@ -542,12 +544,13 @@ export async function askAgent(opts: { userId: string; agent: AgentRow; conversa
   const target = await getAgentById(conv.target_agent);
   if (!target) throw new Error("Agent not found");
 
-  await postMessage({ conversationId: conv.id, from: "human", userId: opts.userId, content: opts.text, replyTo: opts.reply?.id });
+  const incoming = await postMessage({ conversationId: conv.id, from: "human", userId: opts.userId, content: opts.text, replyTo: opts.reply?.id });
   const replyCtx = opts.reply ? quoteContext(opts.reply.author, opts.reply.text) : undefined;
   const result = await sendAgentMessage({ fromAgentId: opts.agent.id, toHandle: target.handle, text: withReplyContext(opts.text, replyCtx) });
   if (!result.ok) {
     await postMessage({ conversationId: conv.id, from: "system", content: `Message to @${target.handle} failed: ${result.error}`, metadata: { kind: "error" } });
     return;
   }
+  await recordAgentReceipt(incoming.id, target.id, result.taskId);
   await postMessage({ conversationId: conv.id, from: "agent", agentId: target.id, content: result.text || "(no answer)", metadata: handoffMetadata(result.data, result.taskId) });
 }

@@ -34,7 +34,8 @@ export async function planBusinessFixture() {
       const { data, error } = await db.from("conversations").insert({ kind, created_by: luca.userId, target_agent: target ?? null }).select("id").single();
       if (error) throw error;
       const members = kind === "group" ? [luca, marco, paul] : [luca];
-      const { error: memberError } = await db.from("conversation_members").insert(members.map((p) => ({ conversation_id: data!.id, user_id: p.userId, role: p === luca ? "owner" : "member" })));
+      // This fixture represents already-established memberships, including historical message tests.
+      const { error: memberError } = await db.from("conversation_members").insert(members.map((p) => ({ conversation_id: data!.id, user_id: p.userId, role: p === luca ? "owner" : "member", history_from: "-infinity" })));
       if (memberError) throw memberError;
       return data!.id;
     };

@@ -22,19 +22,27 @@ function Choice({ name, value, checked, title, hint, type = "radio" }: { name: s
 /** Settings → Privacy: who can reach your agent, add you to groups, find you, and ask you for tips. */
 export default async function PrivacySettingsPage({ searchParams }: PageProps<"/settings/privacy">) {
   const { user, agent } = await requireAgent();
-  const { saved } = await searchParams;
+  const { saved, error } = await searchParams;
   const supabase = await createClient();
   const { data: identifiers } = await supabase.from("agent_identifiers").select("kind, hint");
   const phone = identifiers?.find((i) => i.kind === "phone")?.hint ?? null;
   const managedBusiness = isManagedLogin(user.email);
+  const { data: receipts } = await supabase.from("receipt_preferences").select("enabled").eq("user_id", user.id).maybeSingle();
 
   return (
     <div className="space-y-6">
       <SettingsHeader title="Privacy" hint="Who can reach your agent, add you to groups, find you, and ask you for tips." />
       <SavedNote show={saved === "1"} />
+      <section className="card space-y-2"><h2 className="font-semibold">Reporting privacy</h2><p className="text-sm text-muted">Members can report shared messages to local moderators or directly to AGENTME. Reports may include selected surrounding messages, authors and timestamps. The reporter previews what is shared. Private agent exchanges, attachments and shared location data are excluded. AGENTME reviewers cannot browse the rest of your chat, and platform reports are private from local admins.</p></section>
+      {error === "receipts" && <p role="alert" className="text-sm text-danger">Couldn&apos;t save your read-receipt preference. Please try again.</p>}
 
       <form action={saveSettings} className="space-y-6">
         <input type="hidden" name="return_to" value="/settings/privacy" />
+        <section className="card space-y-3">
+          <h2 className="font-semibold">Read receipts</h2>
+          <Choice type="checkbox" name="read_receipts" value="on" checked={receipts?.enabled ?? true} title="Share when I've seen messages" hint="Others can see when their messages appear in your active chat. Delivery receipts still appear when this is off; your unread badges continue to work." />
+          <input type="hidden" name="receipts_form" value="1" />
+        </section>
         <section className="card space-y-3">
           <h2 className="font-semibold">Who can contact your agent</h2>
           <Choice name="contact_policy" value="contacts_only" checked={agent.contact_policy === "contacts_only"} title="Only my contacts" hint="Recommended for personal agents." />
@@ -43,9 +51,9 @@ export default async function PrivacySettingsPage({ searchParams }: PageProps<"/
         </section>
 
         <section className="card space-y-3">
-          <h2 className="font-semibold">Who can add you to groups</h2>
-          <Choice name="group_add_policy" value="contacts" checked={agent.group_add_policy === "contacts"} title="My contacts" hint="Contacts can add you to a group directly." />
-          <Choice name="group_add_policy" value="nobody" checked={agent.group_add_policy === "nobody"} title="Nobody: send me an invite" hint="Your agent asks you in My Agent and you decide whether to join." />
+          <h2 className="font-semibold">Group invitations</h2>
+          <Choice name="group_add_policy" value="nobody" checked={agent.group_add_policy === "nobody"} title="Ask me first" hint="Recommended. Join or decline invitations in My Agent." />
+          <Choice name="group_add_policy" value="contacts" checked={agent.group_add_policy === "contacts"} title="Allow my contacts to add me directly" hint="Applies to new groups, including groups created by agents." />
         </section>
 
         {agent.type === "personal" && (

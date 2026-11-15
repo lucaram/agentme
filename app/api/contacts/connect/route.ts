@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getUser } from "@/lib/auth";
+import { sessionRestriction } from "@/lib/moderation/session";
 import { getAgentForUser } from "@/lib/data/agents";
 import { randomToken } from "@/lib/people/crypto";
 import { registerAccountEmail } from "@/lib/people/matching";
@@ -19,6 +20,7 @@ export async function GET(request: NextRequest) {
   const user = await getUser();
   const agent = user ? await getAgentForUser(user.id) : null;
   if (!user || !agent) return NextResponse.redirect(new URL("/login?next=/discover", request.url));
+  if (await sessionRestriction(user.id)) return NextResponse.redirect(new URL("/account-status", request.url));
 
   const provider = await detectProvider(user.email);
   if (provider && providerMode(provider) === "real") {

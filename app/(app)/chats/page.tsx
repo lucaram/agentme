@@ -39,11 +39,7 @@ export default async function ChatsPage() {
     supabase.from("conversation_members").select("conversation_id, muted").eq("user_id", user.id),
   ]);
   const communityById = new Map((communities ?? []).map((c) => [c.id, c]));
-  const { count: needsAnswer } = await supabase
-    .from("inbox_items")
-    .select("*", { count: "exact", head: true })
-    .eq("status", "open")
-    .in("kind", ["info_request", "question"]);
+  const { data: needsAnswer } = await supabase.rpc("owner_attention_count");
   const muted = new Set((myMemberships ?? []).filter((m) => m.muted).map((m) => m.conversation_id));
   const byOwner = new Map((agents ?? []).map((a) => [a.owner_id, a]));
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));

@@ -3,10 +3,12 @@ import { CATEGORY_LABELS, isRequestableCategory } from "@/lib/policy/disclosure"
 import { inboxPayloadOf } from "@/lib/plans/inbox";
 import type { IntroductionPayload } from "@/lib/people/introductions";
 import { LocalTime } from "@/components/LocalTime";
+import { StaffQuestionRead } from "@/components/chat/StaffQuestionRead";
 import { InboxItemForm, type InboxField } from "./InboxItemForm";
 import { QuestionForm } from "./QuestionForm";
 import { IntroductionForm } from "./IntroductionForm";
 import { GroupInviteForm } from "./GroupInviteForm";
+import { z } from "zod";
 
 type Kind = "info_request" | "question" | "introduction" | "group_invite";
 
@@ -19,20 +21,23 @@ type Kind = "info_request" | "question" | "introduction" | "group_invite";
 export async function OpenRequests({ title, kinds, hint, excludeIds = [] }: { title: string; kinds?: Kind[]; hint?: string; excludeIds?: string[] }) {
   const supabase = await createClient();
   // RLS: only this user's own requests and own facts.
-  let query = supabase.from("inbox_items").select("*").eq("status", "open").order("created_at", { ascending: true }).limit(30);
-  if (kinds) query = query.in("kind", kinds);
   const excluded = excludeIds.filter((id) => /^[0-9a-f-]{36}$/i.test(id));
-  if (excluded.length) query = query.not("id", "in", `(${excluded.join(",")})`);
-  const [{ data: items }, { data: agents }, { data: facts }] = await Promise.all([
-    query,
+  const [{ data: rawItems }, { data: agents }, { data: facts }] = await Promise.all([
+    supabase.rpc("open_owner_requests", { p_kinds: kinds ?? null, p_exclude: excluded }),
     supabase.from("agents").select("id, handle, display_name, avatar"),
     supabase.from("agent_facts").select("category, value, disclosure"),
   ]);
-  if (!items?.length) return null;
+  const inviteIds = (rawItems ?? []).filter((item) => item.kind === "group_invite").map((item) => item.id);
+  const { data: previewData } = inviteIds.length ? await supabase.rpc("group_invite_previews", { p_ids: inviteIds }) : { data: [] };
+  const previews = z.array(z.object({ id: z.string(), title: z.string().nullable(), description: z.string().nullable(), members: z.number(), earlierHistory: z.boolean(), expires: z.string() })).safeParse(previewData).data ?? [];
+  const previewsById = new Map(previews.map((preview) => [preview.id, preview]));
+  const items = (rawItems ?? []).filter((item) => item.kind !== "group_invite" || previewsById.has(item.id));
+  if (!items.length) return null;
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));
 
   return (
     <section className="rounded-2xl border-2 border-accent bg-accent-soft/40 p-3" aria-label={title} data-testid="open-requests">
+      <StaffQuestionRead ids={items.filter((item) => { const payload = inboxPayloadOf(item); return payload.kind === "question" && payload.business; }).map((item) => item.id)} />
       <h2 className="mb-1 flex items-center gap-2 font-semibold">
         🔔 {title} <span className="rounded-full bg-accent px-2 text-xs text-white dark:text-black">{items.length}</span>
       </h2>
@@ -44,13 +49,15 @@ export async function OpenRequests({ title, kinds, hint, excludeIds = [] }: { ti
           const when = <LocalTime iso={item.created_at} />;
 
           if (item.kind === "group_invite") {
-            const invite = item.payload as { title?: string };
+            const invite = previewsById.get(item.id)!;
             return (
               <li key={item.id} className="card space-y-3" data-testid="inbox-item">
                 <p className="text-sm">
-                  👥 <b>{from?.display_name ?? "Someone"}</b> wants to add you to the group <b>“{invite.title ?? "a group"}”</b>.
+                  👥 <b>{from?.display_name ?? "Someone"}</b> invited you to <b>“{invite.title ?? "a group"}”</b>.
                 </p>
-                <p className="hint">{when} · You chose to approve group invites yourself (Settings).</p>
+                {invite.description && <p className="text-sm text-muted">{invite.description}</p>}
+                <p className="hint">{invite.members} {invite.members === 1 ? "member" : "members"} · {invite.earlierHistory ? "Earlier messages will be shared." : "Messages from joining, plus current shared plans and polls."}</p>
+                <p className="hint">Expires <LocalTime iso={invite.expires} /> · Joining does not RSVP to an event.</p>
                 <GroupInviteForm itemId={item.id} />
               </li>
             );
@@ -85,7 +92,7 @@ export async function OpenRequests({ title, kinds, hint, excludeIds = [] }: { ti
                   <p className="text-sm">
                     🏪 <b>{who}</b> asked your business:
                   </p>
-                  <p className="mt-1 rounded-lg bg-accent-soft px-3 py-2 text-sm">“{payload.question}”</p>
+                  <p className="mt-1 rounded-lg bg-accent-soft px-3 py-2 text-sm" data-staff-question={item.id}>“{payload.question}”</p>
                   <p className="hint mt-1">
                     {when} · Your agent didn&apos;t find this in your business info. Your answer goes back to them, from the team.
                   </p>

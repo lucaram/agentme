@@ -10,27 +10,9 @@ export const MAX_FORWARD_PLACES = 5;
 export const MANY_TIMES = 5;
 
 /** Stored on a forwarded message (metadata.forwarded). */
-export type Forwarded = { count: number; from_ai: string | null };
+export type Forwarded = { count: number; from_ai: string | null; origin_author?: string; origin_at?: string; origin_ai?: boolean };
 
-type Original = { content: string; is_ai_generated: boolean; removed_at?: string | null; metadata: unknown; senderHandle?: string | null };
-
-/** Plan cards, suggestions and system notes are part of the app, not messages to pass on. */
-const NOT_FORWARDABLE = new Set([
-  "task_card",
-  "proposal",
-  "info",
-  "error",
-  "poll",
-  "rsvp",
-  "assign",
-  "question",
-  "agent_command",
-  "fact_suggestion",
-  "business_suggestion",
-  "request_note",
-  "system",
-  "draft",
-]);
+type Original = { content: string; is_ai_generated: boolean; removed_at?: string | null; visible_to?: string | null; metadata: unknown; senderHandle?: string | null; senderName?: string; created_at?: string };
 
 const metaOf = (m: unknown) => (m ?? {}) as { kind?: string; forwarded?: Forwarded; handle?: string };
 
@@ -38,7 +20,7 @@ export function canForward(m: Original & { system?: boolean }): { ok: true } | {
   if (m.removed_at) return { ok: false, error: "This message was removed." };
   if (m.system) return { ok: false, error: "Notes from the app can't be forwarded." };
   const kind = metaOf(m.metadata).kind;
-  if (kind && NOT_FORWARDABLE.has(kind)) return { ok: false, error: "Plans and app cards can't be forwarded: share them from their group instead." };
+  if (m.visible_to || kind === "agent_command") return { ok: false, error: "Messages only visible to you can't be forwarded." };
   if (!m.content.trim()) return { ok: false, error: "There's nothing to forward." };
   return { ok: true };
 }
@@ -58,7 +40,13 @@ export function forwardText(m: Original): string {
 /** The label of the forwarded copy: one more forward, and which AI agent wrote the original (if any). */
 export function nextForward(m: Original): Forwarded {
   const meta = metaOf(m.metadata);
-  if (meta.forwarded) return { count: meta.forwarded.count + 1, from_ai: meta.forwarded.from_ai };
+  if (meta.forwarded) return { ...meta.forwarded, count: meta.forwarded.count + 1 };
+  const result = originalForward(m);
+  const author = meta.kind === "team_answer" ? `Team at ${m.senderHandle ? `@${m.senderHandle}` : m.senderName ?? "the business"}` : meta.kind === "business_answer" && meta.handle ? result.from_ai ? `@${meta.handle}'s agent` : `Team at @${meta.handle}` : m.senderName;
+  return { ...result, ...(m.senderName ? { origin_author: author } : {}), ...(m.created_at ? { origin_at: m.created_at, origin_ai: Boolean(result.from_ai || (m.is_ai_generated && meta.kind !== "team_answer" && !(meta.kind === "business_answer" && m.content.startsWith("👤")))) } : {}) };
+}
+function originalForward(m: Original): Forwarded {
+  const meta = metaOf(m.metadata);
   // A business's answer relayed by your agent: written by the business's agent. Its team's answers are people's.
   if (meta.kind === "business_answer" && meta.handle) return { count: 1, from_ai: m.content.startsWith("👤") ? null : meta.handle };
   if (meta.kind === "team_answer") return { count: 1, from_ai: null };

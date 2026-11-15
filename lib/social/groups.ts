@@ -1,9 +1,8 @@
 import "server-only";
 import { MAX_GROUP_NAME } from "./limits";
 import { adminClient } from "@/lib/supabase/admin";
-import { asJson } from "@/lib/data/json";
 import { getAgentById, getAgentForUser, getContactRow, type AgentRow } from "@/lib/data/agents";
-import { createConversation, postMessage } from "@/lib/data/chat";
+import { createConversation, getOrCreateMyAgentConversation, postMessage } from "@/lib/data/chat";
 import { enrolApproved } from "@/lib/plans/invites";
 import { GROUP_AVATARS, MAX_GROUP_PEOPLE, groupRole, isGroupAdmin, loadJoinLink, notify, type Result } from "./shared";
 
@@ -28,7 +27,7 @@ const listNames = (names: string[]) => (names.length <= 2 ? names.join(" and ") 
  * can add me to groups" get an invite in their Inbox instead; people who
  * blocked this group are skipped.
  */
-async function addPeople(groupId: string, groupTitle: string, me: Me, agentIds: string[]): Promise<{ added: AgentRow[]; invited: AgentRow[]; skipped: number }> {
+async function addPeople(groupId: string, me: Me, agentIds: string[]): Promise<{ added: AgentRow[]; invited: AgentRow[]; skipped: number }> {
   const db = adminClient();
   const added: AgentRow[] = [];
   const invited: AgentRow[] = [];
@@ -54,21 +53,12 @@ async function addPeople(groupId: string, groupTitle: string, me: Me, agentIds: 
       skipped++;
       continue;
     }
-    if (other.group_add_policy === "nobody") {
-      await db.from("inbox_items").insert({
-        owner_id: other.owner_id,
-        agent_id: other.id,
-        from_agent: me.agent.id,
-        kind: "group_invite",
-        payload: asJson({ kind: "group_invite", conversation_id: groupId, title: groupTitle }),
-      });
-      invited.push(other);
-      continue;
-    }
-    await db.from("conversation_members").insert({ conversation_id: groupId, user_id: other.owner_id, role: "member" });
-    inGroup.add(other.owner_id);
-    size++;
-    added.push(other);
+    const { data, error } = await db.rpc("invite_group_person", { p_group: groupId, p_inviter: me.userId, p_agent: other.id });
+    if (error) throw new Error("Couldn't send the group invitation. Try again shortly.");
+    const outcome = data as { status: string };
+    if (outcome.status === "invited") { await getOrCreateMyAgentConversation(other.owner_id); invited.push(other); }
+    else if (outcome.status === "added") { inGroup.add(other.owner_id); size++; added.push(other); }
+    else skipped++;
   }
   return { added, invited, skipped };
 }
@@ -83,7 +73,7 @@ export async function createGroup(me: Me, input: { title: string; description: s
     .from("conversations")
     .update({ description: input.description.trim().slice(0, 500) || null, avatar: GROUP_AVATARS.includes(input.avatar) ? input.avatar : "👥" })
     .eq("id", conv.id);
-  const { added, invited } = await addPeople(conv.id, title, me, input.memberAgentIds);
+  const { added, invited } = await addPeople(conv.id, me, input.memberAgentIds);
   await note(conv.id, `${me.agent.display_name} created the group.`);
   if (added.length) await note(conv.id, `${me.agent.display_name} added ${listNames(added.map((a) => a.display_name))}.`);
   if (!added.length && !invited.length) {
@@ -95,8 +85,9 @@ export async function createGroup(me: Me, input: { title: string; description: s
 
 export async function addMembers(groupId: string, me: Me, agentIds: string[]): Promise<Result<{ added: number; invited: number; skipped: number }>> {
   const group = await loadGroup(groupId);
+  if (group?.platform_suspended) return { ok: false, error: "Invitations are paused while AGENTME reviews this group." };
   if (!group || !isGroupAdmin(await groupRole(groupId, me.userId))) return { ok: false, error: "Only admins can add people." };
-  const { added, invited, skipped } = await addPeople(groupId, group.title ?? "Group", me, agentIds);
+  const { added, invited, skipped } = await addPeople(groupId, me, agentIds);
   if (added.length) await note(groupId, `${me.agent.display_name} added ${listNames(added.map((a) => a.display_name))}.`);
   return { ok: true, added: added.length, invited: invited.length, skipped };
 }
@@ -145,10 +136,11 @@ export async function updateGroupInfo(groupId: string, me: Me, input: { title: s
   return { ok: true };
 }
 
-export async function updateGroupSettings(groupId: string, me: Me, settings: { only_admins_send: boolean; only_admins_edit: boolean; approve_new_members: boolean }): Promise<Result> {
+export async function updateGroupSettings(groupId: string, me: Me, settings: { only_admins_send: boolean; only_admins_edit: boolean; approve_new_members: boolean; share_earlier_history?: boolean }): Promise<Result> {
   const group = await loadGroup(groupId);
   if (!group || !isGroupAdmin(await groupRole(groupId, me.userId))) return { ok: false, error: "Only admins can change settings." };
   await adminClient().from("conversations").update(settings).eq("id", groupId);
+  if (settings.share_earlier_history !== undefined && settings.share_earlier_history !== group.share_earlier_history) await note(groupId, `${me.agent.display_name} ${settings.share_earlier_history ? "enabled sharing earlier messages with future members" : "set future members to see messages from joining only"}. Existing members keep their history access.`);
   if (settings.only_admins_send !== group.only_admins_send) {
     await note(groupId, settings.only_admins_send ? "Only admins can send messages now." : "Everyone can send messages now.");
   }
@@ -188,7 +180,8 @@ export async function reportGroup(groupId: string, me: Me, reason: string): Prom
   if (!(await loadGroup(groupId)) || !(await groupRole(groupId, me.userId))) return { ok: false, error: "Not found." };
   const text = reason.trim().slice(0, 300);
   if (!text) return { ok: false, error: "Say briefly what's wrong." };
-  await adminClient().from("reports").insert({ reporter_id: me.userId, conversation_id: groupId, reason: text });
+  const { error } = await adminClient().rpc("submit_platform_report", { p_kind: "group", p_target: groupId, p_category: "other", p_reason: text, p_actor: me.userId });
+  if (error) return { ok: false, error: "Couldn't submit this report. Please try again later." };
   return { ok: true };
 }
 
@@ -210,6 +203,7 @@ export async function joinGroupWithLink(token: string, me: Me): Promise<Result<{
   if (!link?.conversation_id) return { ok: false, error: "This link doesn't work any more." };
   const group = await loadGroup(link.conversation_id);
   if (!group) return { ok: false, error: "This group no longer exists." };
+  if (group.platform_suspended) return { ok: false, error: "Joining is paused while AGENTME reviews this group." };
   const db = adminClient();
   if (await groupRole(group.id, me.userId)) return { ok: true, status: "member", id: group.id };
   if (me.agent.type === "business") return { ok: false, error: "Businesses can't join groups. A group admin can add your business instead." };
@@ -250,18 +244,23 @@ export async function decideGroupRequest(requestId: string, me: Me, approve: boo
 }
 
 /** "X wants to add you to a group" (you chose: nobody can add me directly). */
-export async function answerGroupInvite(itemId: string, me: Me, accept: boolean): Promise<Result<{ id?: string }>> {
+export async function answerGroupInvite(itemId: string, me: Me, accept: boolean, block = false): Promise<Result<{ id?: string }>> {
   const db = adminClient();
   const { data: item } = await db.from("inbox_items").select("*").eq("id", itemId).maybeSingle();
   if (!item || item.owner_id !== me.userId || item.kind !== "group_invite" || item.status !== "open") return { ok: false, error: "This invite is no longer open." };
-  const payload = item.payload as { conversation_id: string };
-  await db.from("inbox_items").update({ status: accept ? "answered" : "declined", answered_at: new Date().toISOString() }).eq("id", item.id);
-  if (!accept) return { ok: true };
-  const group = await loadGroup(payload.conversation_id);
-  if (!group) return { ok: false, error: "This group no longer exists." };
-  if ((await memberCount(group.id)) >= MAX_GROUP_PEOPLE) return { ok: false, error: "This group is full." };
-  await db.from("conversation_members").upsert({ conversation_id: group.id, user_id: me.userId, role: "member" }, { onConflict: "conversation_id,user_id", ignoreDuplicates: true });
-  await note(group.id, `${me.agent.display_name} joined.`);
-  return { ok: true, id: group.id };
+  const { data: groupId, error } = await db.rpc("answer_group_invitation", { p_item: itemId, p_decision: block ? "block" : accept ? "join" : "decline", p_actor: me.userId });
+  if (error) return { ok: false, error: "This invitation is unavailable, expired, or the group is full." };
+  if (groupId) await note(groupId, `${me.agent.display_name} joined.`);
+  return { ok: true, ...(groupId ? { id: groupId } : {}) };
+}
+
+export async function pendingGroupInvites(groupId: string, userId: string) {
+  if (!isGroupAdmin(await groupRole(groupId, userId))) return [];
+  const { data } = await adminClient().from("inbox_items").select("id,owner_id,created_at").eq("kind", "group_invite").eq("status", "open").eq("payload->>conversation_id", groupId).gt("created_at", new Date(Date.now() - 7 * 86400000).toISOString());
+  return data ?? [];
+}
+
+export async function expireGroupInvites() {
+  await adminClient().rpc("prune_group_invitations");
 }
 

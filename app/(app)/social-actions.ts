@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireAgent } from "@/lib/auth";
 import { adminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { deleteOwnMessageAction } from "./delete-message-action";
 import * as groups from "@/lib/social/groups";
 import * as communities from "@/lib/social/communities";
 import * as businesses from "@/lib/social/businesses";
@@ -75,8 +76,8 @@ export async function updateGroupInfoAction(groupId: string, _prev: Out | undefi
   return done([`/groups/${groupId}`, "/groups", "/chats"], result);
 }
 
-export async function updateGroupSettingsAction(groupId: string, settings: { only_admins_send: boolean; only_admins_edit: boolean; approve_new_members: boolean }) {
-  const clean = { only_admins_send: Boolean(settings.only_admins_send), only_admins_edit: Boolean(settings.only_admins_edit), approve_new_members: Boolean(settings.approve_new_members) };
+export async function updateGroupSettingsAction(groupId: string, settings: { only_admins_send: boolean; only_admins_edit: boolean; approve_new_members: boolean; share_earlier_history?: boolean }) {
+  const clean = { only_admins_send: Boolean(settings.only_admins_send), only_admins_edit: Boolean(settings.only_admins_edit), approve_new_members: Boolean(settings.approve_new_members), ...(settings.share_earlier_history !== undefined ? { share_earlier_history: Boolean(settings.share_earlier_history) } : {}) };
   return done([`/groups/${groupId}`], await groups.updateGroupSettings(groupId, await me(), clean));
 }
 
@@ -119,13 +120,22 @@ export async function revokeGroupLinkAction(groupId: string): Promise<Out> {
   return {};
 }
 
-export async function answerGroupInviteAction(itemId: string, accept: boolean): Promise<Out> {
+export async function answerGroupInviteAction(itemId: string, accept: boolean, block = false): Promise<Out> {
   const who = await me();
-  const result = await groups.answerGroupInvite(itemId, who, Boolean(accept));
+  const result = await groups.answerGroupInvite(itemId, who, Boolean(accept), Boolean(block));
   revalidatePath("/chats", "layout");
   revalidatePath("/groups");
   if (!result.ok) return { error: result.error };
   if (result.id) redirect(`/chats/${result.id}`);
+  return {};
+}
+
+export async function cancelGroupInviteAction(groupId: string, itemId: string): Promise<Out> {
+  await requireAgent();
+  if (!Id.safeParse(groupId).success || !Id.safeParse(itemId).success) return { error: "Invalid invitation." };
+  const { error } = await (await createClient()).rpc("cancel_group_invitation", { p_item: itemId });
+  if (error) return { error: "Couldn't withdraw this invitation." };
+  revalidatePath(`/groups/${groupId}`); revalidatePath("/chats", "layout");
   return {};
 }
 
@@ -148,6 +158,9 @@ export async function reportMessageAction(messageId: string, reason: string): Pr
 
 export async function removeMessageAction(messageId: string, conversationId: string): Promise<Out> {
   const { userId } = await me();
+  const { data: message } = await (await createClient()).from("messages").select("sender_user_id").eq("id", messageId).maybeSingle();
+  if (!message) return { error: "Message not found." };
+  if (message?.sender_user_id === userId) return deleteOwnMessageAction(messageId);
   return done([`/chats/${conversationId}`], await removeMessage(messageId, userId));
 }
 
@@ -159,6 +172,7 @@ export async function dismissReportAction(reportId: string, path: string): Promi
 // ------------------------------------------------------------- communities
 
 const communityInput = (form: FormData) => ({
+  approveLinkMembers: form.get("approve_link_members") === "on",
   name: String(form.get("name") ?? ""),
   description: String(form.get("description") ?? ""),
   // Picked from the list (the three core rules are always there).
@@ -245,6 +259,7 @@ export async function joinWithLinkAction(token: string, acceptRules: boolean): P
   }
   const result = await communities.joinCommunity(link.community_id!, who, { acceptRules: Boolean(acceptRules), viaLink: token });
   if (!result.ok) return { error: result.error };
+  if (result.status === "requested") return { status: "requested" };
   redirect(`/communities/${link.community_id}`);
 }
 

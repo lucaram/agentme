@@ -1,0 +1,21 @@
+import type { Database } from "@/lib/database.types";
+import type { Receipt } from "./receipts";
+import type { Way } from "@/lib/business/booking";
+import type { ReactionSummary } from "./reactions";
+type Row<T extends keyof Database["public"]["Tables"]> = Database["public"]["Tables"][T]["Row"];
+export type HistoryMessage = Row<"messages">;
+export type HistoryAgent = Pick<Row<"agents">, "id" | "owner_id" | "handle" | "display_name" | "avatar" | "type" | "verified_domain">;
+export type HistoryMode = "initial" | "latest" | "before" | "after" | "around" | "refresh";
+export type HistoryRequest = { mode: HistoryMode; anchor?: string; ids?: string[] };
+export type HistoryPage = { messages: HistoryMessage[]; firstUnread: string | null; latestId: string | null; unreadIds: string[]; unreadAfter: number; hasBefore: boolean; hasAfter: boolean };
+export type HistoryBundle = HistoryPage & {
+  revision: string;
+  userId: string; agent: Pick<HistoryAgent, "id" | "handle">; conversationId: string; threadId: string | null; kind: Row<"conversations">["kind"];
+  canReplyHere: boolean; canModerate: boolean; suspended: boolean;
+  reactions: ReactionSummary[];
+  agents: HistoryAgent[]; attachments: (Pick<Row<"chat_attachments">, "id" | "message_id" | "name" | "mime" | "kind" | "bytes">)[];
+  tasks: Row<"tasks">[]; exchanges: Row<"task_exchanges">[]; proposals: Row<"proposals">[]; steps: Row<"plan_steps">[];
+  responses: Row<"step_responses">[]; claims: Row<"item_claims">[]; facts: Row<"agent_facts">[];
+  quotes: HistoryMessage[]; receipts: Receipt[]; actions: [string, { all: Way[]; reservation: Way[] }][]; legacy: [string, string][];
+};
+export const EMPTY_HISTORY: HistoryPage = { messages: [], firstUnread: null, latestId: null, unreadIds: [], unreadAfter: 0, hasBefore: false, hasAfter: false };

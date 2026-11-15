@@ -9,6 +9,7 @@ import { signOut } from "../(auth)/actions";
 import { IdentitySwitcher } from "@/components/IdentitySwitcher";
 import { listIdentities } from "@/lib/identities";
 import { switchIdentityAction } from "./identity-actions";
+import { DeliveryTracker } from "@/components/chat/DeliveryTracker";
 
 // Requests that need your answer live in My Agent; Find people is inside Contacts; Activity inside Settings.
 const NAV = [
@@ -33,7 +34,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col">
-      <RealtimeRefresh channel={`badges-${user.id}`} tables={["inbox_items", "messages"]} />
+      <RealtimeRefresh channel={`badges-${user.id}`} tables={["inbox_items", "messages", "reports", "platform_cases", "platform_notifications", "platform_moderators", "platform_operators", "platform_evidence_requests", "platform_account_appeals", "account_access_versions"]} />
+      <DeliveryTracker key={user.id} userId={user.id} />
       <header className="sticky top-0 z-10 border-b border-border bg-background/90 px-4 pt-3 backdrop-blur">
         <div className="flex items-center justify-between">
           {/* Personal ⇄ businesses you manage: each its own chats, contacts and inbox. */}

@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   distDir: process.env.AGENTME_TEST_DIST_DIR ?? ".next",
   typescript: { tsconfigPath: process.env.AGENTME_TEST_DIST_DIR ? "tsconfig.case7.json" : "tsconfig.json" },
   // Realtime screens must not replay stale database reads after a development hot reload.
-  experimental: { serverComponentsHmrCache: false },
+  experimental: { serverComponentsHmrCache: false, proxyClientMaxBodySize: "20mb" },
   turbopack: {
     rules: {
       "*.css": {

@@ -20,7 +20,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
   if (!link) return gone;
 
   if (link.conversation_id) {
-    const { data: group } = await db.from("conversations").select("id, title, avatar, description, kind").eq("id", link.conversation_id).maybeSingle();
+    const { data: group } = await db.from("conversations").select("id, title, avatar, description, kind, share_earlier_history, approve_new_members").eq("id", link.conversation_id).maybeSingle();
     if (!group || group.kind !== "group") return gone;
     const { data: member } = await db.from("conversation_members").select("user_id").eq("conversation_id", group.id).eq("user_id", user.id).maybeSingle();
     if (member) redirect(`/chats/${group.id}`);
@@ -33,8 +33,9 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
           <h1 className="text-xl font-semibold">{group.title}</h1>
           {group.description && <p className="text-sm">{group.description}</p>}
           <p className="text-xs text-muted">{count} of {MAX_GROUP_PEOPLE} members</p>
+          <p className="text-xs text-muted">{group.share_earlier_history ? "Earlier messages will be shared." : "Messages from joining, plus current shared plans and polls."}</p>
         </section>
-        <JoinWithLink token={token} rules={false} label="Join group" />
+        <JoinWithLink token={token} rules={false} label={group.approve_new_members ? "Request to join" : "Join group"} />
         <Link href="/groups" className="block text-center text-sm text-muted underline">Not now</Link>
       </div>
     );
@@ -55,7 +56,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
         <p className="text-xs text-muted">{count} of {MAX_COMMUNITY_PEOPLE.toLocaleString("en-GB")} members</p>
         {community.rules && <p className="whitespace-pre-wrap rounded-lg bg-accent-soft px-3 py-2 text-left text-sm">{community.rules}</p>}
       </section>
-      <JoinWithLink token={token} rules={Boolean(community.rules)} label="Join community" />
+      <JoinWithLink token={token} rules={Boolean(community.rules)} label={community.visibility === "private" && community.approve_link_members ? "Request to join" : "Join community"} />
       <Link href="/communities" className="block text-center text-sm text-muted underline">Not now</Link>
     </div>
   );

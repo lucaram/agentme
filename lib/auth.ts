@@ -3,6 +3,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentForUser, type AgentRow } from "@/lib/data/agents";
+import { sessionRestriction } from "@/lib/moderation/session";
 
 export type SessionUser = { id: string; email: string | null; emailConfirmed: boolean; isAnonymous: boolean };
 
@@ -18,6 +19,7 @@ export const getUser = cache(async (): Promise<SessionUser | null> => {
 export async function requireUser(): Promise<SessionUser> {
   const user = await getUser();
   if (!user) redirect("/login");
+  if (await sessionRestriction(user.id)) redirect("/account-status");
   return user;
 }
 
