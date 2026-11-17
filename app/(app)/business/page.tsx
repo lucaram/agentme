@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { TeamDashboardData, TeamOptions } from "@/lib/business/team-types";
 import { TeamDashboardFilters } from "@/components/business/TeamDashboardFilters";
@@ -10,6 +11,12 @@ import { adminClient } from "@/lib/supabase/admin";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { Fold } from "@/components/Fold";
 import { Tabs } from "@/components/Tabs";
+import { SectionLink } from "@/components/SectionLink";
+import { ShareLink } from "../contacts/ShareLink";
+import { PublicPageEditor } from "./PublicPageEditor";
+import { pageSettings } from "@/lib/business/public-page";
+import { currentCover } from "@/lib/business/cover-server";
+import { permanentQr } from "@/lib/people/links";
 import { OpenFromHash } from "@/components/OpenFromHash";
 import { BusinessInfoForm, BusinessDetailsForm, SourcesManager } from "./BusinessForms";
 import { QuestionsAnswers } from "./QuestionsAnswers";
@@ -96,6 +103,13 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const changeList = changes ?? [];
   const siteSummary = siteError ? "Website status unavailable" : site ? `${site.domain} · ${site.live_at ? "Connected" : site.status === "reading" ? "Reading…" : site.status === "error" ? "Needs attention" : "Ready for review"}` : initialWebsite ? "Website saved · connection needed" : "No website connected";
   const documentsSummary = `${siteSummary}${sources.length ? ` · ${plural(sources.length, "additional document")}` : ""}`;
+  const publicPage = { settings: pageSettings(agent.business_info), cover: await currentCover(agent.id), qr: await permanentQr(agent.handle) };
+  const { page: _look, ...shownInfo } = (agent.business_info ?? {}) as Record<string, unknown>;
+  void _look;
+  const previewRevision = createHash("sha256")
+    .update(JSON.stringify([agent.display_name, agent.avatar, agent.verified_domain, agent.bio, shownInfo, site?.live_at ?? null, site?.learned ?? null, site?.hidden ?? null]))
+    .digest("hex")
+    .slice(0, 16);
   const knowsSummary = [about ? "About" : "", details.hours || details.address ? "Details" : "", ways.length ? plural(ways.length, "customer action") : "", documentsSummary, faqs.length ? plural(faqs.length, "answer") : ""].filter(Boolean).join(" · ");
 
   return (
@@ -170,11 +184,46 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
           </Tabs>
         </Fold>
         <Fold name={SECTIONS} id="staff-access" icon="👥" title="Staff & access" summary="Your team, invitations and permissions" testId="fold-staff"><div className={BODY}><StaffSection /></div></Fold>
-        <Fold name={SECTIONS} id="share" icon="📷" title="Share your business" testId="fold-qr" summary="Your public page, customer QR code and printable poster">
-          <section className={BODY} aria-label="Share your business">
-            <p className="hint">Share your page or display its QR code so customers can ask your agent questions.</p>
-            <p className="break-all text-sm text-muted">/u/{agent.handle}</p>
-            <div className="flex flex-wrap gap-2"><Link href={`/u/${agent.handle}`} className="btn-ghost" data-testid="see-your-page">See your page</Link><Link href="/print/qr" className="btn-primary">Print poster</Link></div>
+        <Fold name={SECTIONS} id="share" icon="📷" title="Public page & sharing" testId="fold-qr" summary={`${publicPage.cover ? "Cover · " : ""}${publicPage.settings.accent ? `${publicPage.settings.accent[0].toUpperCase()}${publicPage.settings.accent.slice(1)} · ` : ""}Your page, QR code and printable poster`}>
+          <section className={BODY} aria-label="Public page and sharing">
+            <p className="hint">
+              Every business has a public page: it&apos;s what your QR code and link open, and where customers ask your agent. It&apos;s built from what you&apos;ve already filled in.
+            </p>
+            <div className="space-y-3" data-testid="page-share">
+              <h3 className="font-medium">Share</h3>
+              <div className="flex flex-wrap items-start gap-4">
+                <div className="w-36 shrink-0 rounded-xl border border-border bg-white p-2" aria-label="QR code for your page" role="img" dangerouslySetInnerHTML={{ __html: publicPage.qr.svg }} />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p className="break-all font-mono text-sm" data-testid="page-url">{publicPage.qr.url}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Link href={`/u/${agent.handle}`} className="btn-primary" data-testid="see-your-page">See your page</Link>
+                    <ShareLink url={publicPage.qr.url} text={`Ask ${agent.display_name} anything`} label="Share link" variant="btn-ghost" />
+                    <Link href="/print/qr" className="btn-ghost">Print poster</Link>
+                  </div>
+                  <p className="hint">The QR code never changes, so a printed poster keeps working whatever you change here.</p>
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-border pt-4">
+              <PublicPageEditor
+                handle={agent.handle}
+                revision={previewRevision}
+                settings={publicPage.settings}
+                cover={publicPage.cover}
+                whereToChange={
+                  <div data-testid="page-sources">
+                    <h3 className="mb-2 text-sm font-medium">Where to change what&apos;s on it</h3>
+                    <ul className="space-y-1.5 text-sm">
+                      <li><Link href="/settings/profile" className="text-accent underline">Name and avatar</Link></li>
+                      <li><SectionLink id="about-business" className="text-accent underline">Description</SectionLink></li>
+                      <li><SectionLink id="business-information" className="text-accent underline">Opening hours and address</SectionLink></li>
+                      <li><SectionLink id="book-or-order" className="text-accent underline">Book, order and contact buttons</SectionLink></li>
+                      <li><SectionLink id="website-documents" className="text-accent underline">Website, documents and verified badge</SectionLink></li>
+                    </ul>
+                  </div>
+                }
+              />
+            </div>
           </section>
         </Fold>
         {places.length > 0 && (

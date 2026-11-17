@@ -266,6 +266,15 @@ body {
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition disabled:opacity-50 border border-border bg-surface hover:bg-accent-soft;
   }
+  /* A business page with its own colour: its customer action buttons take it as an outline and a light
+     tint (the text keeps its normal colour, so it stays readable in every colour, light and dark). */
+  .page-accented [data-page-part="actions"] .btn-ghost {
+    border-color: var(--accent);
+    background-color: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  }
+  .page-accented [data-page-part="actions"] .btn-ghost:hover {
+    background-color: color-mix(in srgb, var(--accent) 24%, var(--surface));
+  }
   .btn-danger {
     @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition disabled:opacity-50 border border-danger text-danger hover:bg-danger hover:text-white;
   }

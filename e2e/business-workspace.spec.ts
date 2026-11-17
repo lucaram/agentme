@@ -28,7 +28,7 @@ test("business workspace preserves agent information, custom actions, documents 
     await shop.goto("/business");
     const sectionTitles = await shop.getByTestId("business-sections").locator(":scope > details > summary").allTextContents();
     expect(sectionTitles).toHaveLength(4);
-    for (const [i, title] of ["Customer dashboard", "What your agent knows", "Staff & access", "Share your business"].entries()) expect(sectionTitles[i]).toContain(title);
+    for (const [i, title] of ["Customer dashboard", "What your agent knows", "Staff & access", "Public page & sharing"].entries()) expect(sectionTitles[i]).toContain(title);
     // Q&A is a tab of "What your agent knows": its count is a total (grey), and the section's summary names it.
     await expect(shop.getByTestId("fold-faqs-badge")).toHaveText("2");
     await expect(shop.getByTestId("fold-knows").locator("summary").first()).toContainText("2 answers");

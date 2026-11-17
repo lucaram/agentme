@@ -3,13 +3,13 @@
 import { useState } from "react";
 
 /** Copy, or the phone's own share sheet (WhatsApp, Messages, email…) when available. */
-export function ShareLink({ url, text, label = "Share" }: { url: string; text: string; label?: string }) {
+export function ShareLink({ url, text, label = "Share", variant = "btn-primary" }: { url: string; text: string; label?: string; variant?: "btn-primary" | "btn-ghost" }) {
   const [done, setDone] = useState<string | null>(null);
   return (
     <span className="flex items-center gap-2">
       <button
         type="button"
-        className="btn-primary"
+        className={variant}
         onClick={async () => {
           try {
             if (navigator.share) {

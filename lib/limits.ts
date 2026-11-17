@@ -7,6 +7,8 @@ import { adminClient } from "@/lib/supabase/admin";
  */
 export const LIMITS = {
   avatarUploadsPerUser: { windowSeconds: 60, max: 8 },
+  /** Cover images for a business's public page. */
+  coverUploadsPerUser: { windowSeconds: 60, max: 6 },
   chatUploadsPerUser: { windowSeconds: 60, max: 12 },
   richMessagesPerUser: { windowSeconds: 60, max: 30 },
   businessActionClicksPerIp: { windowSeconds: 60, max: 60 },

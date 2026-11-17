@@ -1,4 +1,7 @@
 import { Avatar } from "@/components/Avatar";
+import type { CSSProperties } from "react";
+import { PAGE_ACCENT_CLASSES, accentShades, pageSettings } from "@/lib/business/public-page";
+import { currentCover } from "@/lib/business/cover-server";
 import Link from "next/link";
 import { VerifiedBadge } from "@/components/business/VerifiedBadge";
 import { notFound } from "next/navigation";
@@ -35,19 +38,34 @@ export default async function PersonalLinkPage({ params, searchParams }: PagePro
     const { data: site } = await adminClient().from("business_sites").select("live_at, learned, hidden").eq("agent_id", other.id).not("live_at", "is", null).maybeSingle();
     const details = publicBusinessDetails(other.business_info, site);
     const ways = waysOf(other.business_info);
+    // What the business chose to show, its colour and cover (My Business → Public page & sharing).
+    const page = pageSettings(other.business_info);
+    const shades = accentShades(page.accent);
+    const cover = await currentCover(other.id);
+    const own = me?.id === other.id;
+    const part = (id: keyof typeof page.show) => (page.show[id] ? { "data-page-part": id } : own ? { "data-page-part": id, hidden: true } : null);
+    const accent = shades ? ({ "--page-accent-light": shades.light, "--page-accent-dark": shades.dark } as CSSProperties) : undefined;
     return (
-      <main className="mx-auto flex w-full max-w-sm flex-1 flex-col items-center justify-center gap-5 px-6 py-16 text-center">
+      <main
+        style={accent}
+        data-testid="business-page"
+        className={`mx-auto flex w-full max-w-sm flex-1 flex-col items-center justify-center gap-5 px-6 py-16 text-center ${shades ? PAGE_ACCENT_CLASSES : ""}`}
+      >
+        {cover && (
+          // eslint-disable-next-line @next/next/no-img-element -- served by our own route, already sized
+          <img src={cover} alt="" className="aspect-[3/1] w-full rounded-2xl object-cover" data-testid="page-cover-image" />
+        )}
         <div className="text-6xl"><Avatar value={other.avatar} /></div>
         <div>
           <h1 className="text-2xl font-semibold">{other.display_name}</h1>
           <p className="text-sm text-muted">@{other.handle} · Business</p>
           <VerifiedBadge domain={other.verified_domain} className="mt-1" />
-          {bio && <p className="mt-2 whitespace-pre-line text-sm">{bio}</p>}
-          {details.hours && <p className="mt-2 text-sm"><b>Opening hours:</b> {details.hours}</p>}
-          {details.address && <p className="mt-2 text-sm"><b>Address:</b> {details.address}</p>}
+          {part("description") && bio && <p {...part("description")} className="mt-2 whitespace-pre-line text-sm">{bio}</p>}
+          {part("hours") && details.hours && <p {...part("hours")} className="mt-2 text-sm"><b>Opening hours:</b> {details.hours}</p>}
+          {part("address") && details.address && <p {...part("address")} className="mt-2 text-sm"><b>Address:</b> {details.address}</p>}
         </div>
         {/* The business's own ways to book or order: open to anyone, no account needed. */}
-        <BusinessWays ways={ways} block primary={false} agentId={other.id} source="public_page" />
+        {part("actions") && <div {...part("actions")} className="w-full"><BusinessWays ways={ways} block primary={false} agentId={other.id} source="public_page" /></div>}
         {!me ? (
           <div className="flex w-full flex-col gap-2">
             <Link href={`/signup?next=${encodeURIComponent(here)}`} className="btn-primary">💬 Ask us anything</Link>
@@ -55,10 +73,14 @@ export default async function PersonalLinkPage({ params, searchParams }: PagePro
             <Link href={`/login?next=${encodeURIComponent(here)}`} className="btn-ghost">I already have an account</Link>
           </div>
         ) : me.id === other.id ? (
-          <p className="text-sm text-muted">
-            This is your business page, as customers see it: it&apos;s what your QR code opens. <Link className="text-accent underline" href="/print/qr">Print your poster</Link>{" "}
-            or <Link className="text-accent underline" href="/business">change what it shows</Link>.
-          </p>
+          <div className="w-full space-y-3">
+            {/* Your own page, as customers see it: the button is there, but you can't chat with your own agent. */}
+            <span className="btn-primary block w-full cursor-default text-center" aria-disabled="true" data-testid="ask-preview">💬 Ask us anything</span>
+            <p className="hint">Customers tap this to chat with your agent.</p>
+            <p className="text-sm text-muted">
+              This is your business page, as customers see it: it&apos;s what your QR code opens.
+            </p>
+          </div>
         ) : (
           <div className="w-full space-y-3">
             <ActionButton action={openAgentChat.bind(null, other.id)} label="💬 Ask us anything" variant="btn-primary" block />

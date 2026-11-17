@@ -27,6 +27,7 @@ export type Database = {
           Tables: {
             identity_appearance: BusinessTeamTable<{ user_id: string; agent_id: string; appearance: Json }, "user_id" | "agent_id" | "appearance">,
             profile_avatar_assets: BusinessTeamTable<{ id: string; agent_id: string; path: string; created_at: string }, "id" | "agent_id" | "path">,
+            business_page_covers: BusinessTeamTable<{ agent_id: string; id: string; path: string; created_at: string }, "agent_id" | "id" | "path">,
             profile_avatar_deletions: BusinessTeamTable<{ path: string; created_at: string }, "path">,
             business_team_settings: BusinessTeamTable<{ business_agent_id: string; default_owner: string | null; tracking_since: string }, "business_agent_id">,
             business_team_history: BusinessTeamTable<{ id: string; business_agent_id: string; staff_id: string; supervisor_id: string | null; staff_name: string; supervisor_name: string | null; started_at: string; ended_at: string | null }, "business_agent_id" | "staff_id" | "staff_name">,
