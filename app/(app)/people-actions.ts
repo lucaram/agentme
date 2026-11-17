@@ -3,7 +3,8 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireAgent } from "@/lib/auth";
+import { guardBusinessPermission } from "@/lib/business/access";
+const requireAgent = () => guardBusinessPermission("configure");
 import { adminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentByHandle, getAgentById } from "@/lib/data/agents";
@@ -15,6 +16,7 @@ import { verifyLiveConnectToken } from "@/lib/people/crypto";
 import { connectPeople, openDmWithNote } from "@/lib/people/connect";
 import { answerIntroduction, createIntroduction } from "@/lib/people/introductions";
 import { getOrCreateInvite, revokeInvites } from "@/lib/plans/invites";
+import { saveTip } from "@/lib/profile/tips";
 
 type Out = { error?: string };
 
@@ -169,14 +171,16 @@ export async function saveGuestAccountAction(_prev: Out | undefined, form: FormD
 // ------------------------------------------------------------- saved tips (ask around)
 
 /** A tip your agent may share by itself when a friend asks around about this topic. */
-export async function addTipAction(topic: string, tip: string): Promise<Out> {
-  const { agent } = await requireAgent();
-  const t = String(topic ?? "").trim().slice(0, 80);
-  const text = String(tip ?? "").trim().slice(0, 500);
-  if (t.length < 2 || !text) return { error: "Add a topic and your tip." };
-  const { count } = await adminClient().from("agent_tips").select("*", { count: "exact", head: true }).eq("agent_id", agent.id);
-  if ((count ?? 0) >= 100) return { error: "You can keep up to 100 tips." };
-  await adminClient().from("agent_tips").insert({ agent_id: agent.id, topic: t, tip: text });
+export async function addTipAction(topic: string, tip: string, share = false): Promise<Out> {
+  return saveTipAction({ topic, tip, share });
+}
+
+/** One atomic save for a tip's content and its visibility. */
+export async function saveTipAction(input: { id?: string; topic: string; tip: string; share: boolean }): Promise<Out> {
+  const { agent, user } = await requireAgent();
+  const result = await saveTip({ agentId: agent.id, userId: user.id }, input);
+  if (result.error) return result;
+  revalidatePath("/settings/about");
   revalidatePath("/settings");
   return {};
 }
@@ -184,6 +188,7 @@ export async function addTipAction(topic: string, tip: string): Promise<Out> {
 export async function removeTipAction(id: string): Promise<Out> {
   const { agent } = await requireAgent();
   await adminClient().from("agent_tips").delete().eq("id", String(id ?? "")).eq("agent_id", agent.id);
+  revalidatePath("/settings/about");
   revalidatePath("/settings");
   return {};
 }

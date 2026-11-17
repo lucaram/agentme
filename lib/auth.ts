@@ -4,16 +4,24 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentForUser, type AgentRow } from "@/lib/data/agents";
 import { sessionRestriction } from "@/lib/moderation/session";
+import { z } from "zod";
+import type { BusinessRole } from "@/lib/business/permissions";
+import { adminClient } from "@/lib/supabase/admin";
 
-export type SessionUser = { id: string; email: string | null; emailConfirmed: boolean; isAnonymous: boolean };
+export type SessionUser = { id: string; email: string | null; emailConfirmed: boolean; isAnonymous: boolean; actorId?: string; businessRole?: BusinessRole | null; working?: boolean };
 
 /** Verified current user (validates the JWT with Supabase Auth), or null. */
 export const getUser = cache(async (): Promise<SessionUser | null> => {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
-  return data.user
-    ? { id: data.user.id, email: data.user.email ?? null, emailConfirmed: Boolean(data.user.email_confirmed_at), isAnonymous: Boolean(data.user.is_anonymous) }
-    : null;
+  if (!data.user) return null;
+  const result = await supabase.rpc("workspace_context", {});
+  if (result.error) throw new Error("Couldn't verify workspace access.");
+  const context = z.object({ user_id: z.uuid().nullable(), actor_id: z.uuid(), role: z.enum(["owner", "manager", "staff"]).nullable(), working: z.boolean() }).safeParse(result.data);
+  if (!context.success || !context.data.user_id) return null;
+  const effective = context.data.user_id === data.user.id ? data.user : (await adminClient().auth.admin.getUserById(context.data.user_id)).data.user;
+  if (!effective) return null;
+  return { id: effective.id, email: effective.email ?? null, emailConfirmed: Boolean(effective.email_confirmed_at), isAnonymous: Boolean(data.user.is_anonymous), actorId: data.user.id, businessRole: context.data.role, working: context.data.working };
 });
 
 export async function requireUser(): Promise<SessionUser> {

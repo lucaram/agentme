@@ -1,4 +1,7 @@
+import { Avatar } from "@/components/Avatar";
+import { avatarText } from "@/lib/profile/avatar";
 import Link from "next/link";
+import { PresenceBadge } from "@/components/presence/PresenceBadge";
 import { notFound } from "next/navigation";
 import { historyPage, prepareHistory } from "@/lib/chat/history";
 import { EMPTY_HISTORY } from "@/lib/chat/history-types";
@@ -74,7 +77,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
   let examples: Idea[] | undefined;
   if (conv.kind === "my_agent") {
     if (agent.type === "business") {
-      examples = businessIdeas();
+      examples = user.businessRole === "staff" ? [{ label: "Opening hours", text: "What are our opening hours?" }, { label: "Customer answers", text: "What can we tell customers about our business?" }] : businessIdeas();
     } else {
       const [{ data: contacts }, { data: agentChats }, { data: myTasks }, { count: introductions }] = await Promise.all([
         supabase.from("contacts").select("requester_agent, addressee_agent").eq("status", "accepted"),
@@ -117,9 +120,9 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
     conv.kind === "my_agent"
       ? thread?.title ?? "New request"
       : conv.kind === "agent_chat"
-        ? `${target?.avatar ?? ""} ${target?.display_name ?? "Agent"} (@${target?.handle})`
+        ? `${target?.display_name ?? "Agent"} (@${target?.handle})`
         : conv.kind === "channel"
-          ? `${community?.avatar ?? ""} ${community?.name ?? "Community"} · ${conv.title}`
+          ? `${avatarText(community?.avatar ?? "")} ${community?.name ?? "Community"} · ${conv.title}`
           : conv.title ?? others.map((o) => o?.display_name).join(", ");
   const subtitle =
     conv.kind === "my_agent"
@@ -155,8 +158,10 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
       )}
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          {thread && thread.kind === "request" ? <ThreadTitle threadId={thread.id} title={title} /> : <h1 className="text-lg font-semibold">{title}</h1>}
+          {thread && thread.kind === "request" ? <ThreadTitle threadId={thread.id} title={title} /> : <h1 className="text-lg font-semibold">{conv.kind === "agent_chat" && <Avatar value={target?.avatar} className="mr-2" />}{title}</h1>}
           <p className="text-xs text-muted">{subtitle}</p>
+          {conv.kind === "dm" && others[0] && <PresenceBadge agentId={others[0].id} business={others[0].type === "business"} />}
+          {conv.kind === "agent_chat" && target?.type === "business" && <PresenceBadge agentId={target.id} business />}
         </div>
         {conv.kind === "group" ? (
           <Link href={`/groups/${id}`} className="text-xs text-accent hover:underline">Group info ›</Link>

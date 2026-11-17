@@ -1,3 +1,5 @@
+import { Avatar } from "@/components/Avatar";
+import { avatarText } from "@/lib/profile/avatar";
 import Link from "next/link";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -78,7 +80,7 @@ export default async function HistoryPage() {
                 <ul className="mt-2 space-y-1 text-xs">
                   {own.map((e) => (
                     <li key={e.id}>
-                      → {byId.get(e.to_agent ?? "")?.avatar} @{byId.get(e.to_agent ?? "")?.handle}: {e.status === "waiting_human" ? "waiting for them to answer" : e.status}{e.answered_by === "human" && " (answered personally)"}
+                      → <Avatar value={byId.get(e.to_agent ?? "")?.avatar} /> @{byId.get(e.to_agent ?? "")?.handle}: {e.status === "waiting_human" ? "waiting for them to answer" : e.status}{e.answered_by === "human" && " (answered personally)"}
                       {e.latency_ms ? ` · ${(e.latency_ms / 1000).toFixed(1)}s` : ""}
                       {e.disclosed_categories.length > 0 && ` · they shared: ${e.disclosed_categories.map(label).join(", ")}`}
                       {e.error && ` · ${e.error}`}
@@ -101,7 +103,7 @@ export default async function HistoryPage() {
             return (
               <li key={e.id} className="px-4 py-3 text-sm" data-testid="disclosure">
                 <div className="flex justify-between gap-2">
-                  <span>{from ? `${from.avatar} @${from.handle}'s agent` : "An external agent"} · {e.skill}</span>
+                  <span>{from ? `${avatarText(from.avatar)} @${from.handle}'s agent` : "An external agent"} · {e.skill}</span>
                   <span className="shrink-0 text-xs text-muted">{fmt(e.created_at)}</span>
                 </div>
                 <p className="text-xs text-muted">

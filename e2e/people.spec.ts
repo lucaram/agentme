@@ -196,6 +196,7 @@ test("ask around: a saved tip answers by itself, a friend answers personally, th
   await paul.page.goto("/settings/tips");
   await paul.page.getByLabel("Tip topic").fill("plumber");
   await paul.page.getByLabel("Tip", { exact: true }).fill("Joe's Plumbing, 020 7946 0000");
+  await paul.page.getByText("My contacts' agents", { exact: true }).click();
   await paul.page.getByRole("button", { name: "Add tip" }).click();
   await expect(paul.page.getByTestId("saved-tips")).toContainText("Joe's Plumbing");
 

@@ -1,6 +1,8 @@
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
+type BusinessTeamTable<Row, Required extends keyof Row> = { Row: Row; Insert: Pick<Row, Required> & Partial<Omit<Row, Required>>; Update: Partial<Row>; Relationships: [] };
+
 export type Database = {
   
   "graphql_public": {
@@ -23,6 +25,19 @@ export type Database = {
           }
         },"public": {
           Tables: {
+            profile_avatar_assets: BusinessTeamTable<{ id: string; agent_id: string; path: string; created_at: string }, "id" | "agent_id" | "path">,
+            profile_avatar_deletions: BusinessTeamTable<{ path: string; created_at: string }, "path">,
+            business_team_settings: BusinessTeamTable<{ business_agent_id: string; default_owner: string | null; tracking_since: string }, "business_agent_id">,
+            business_team_history: BusinessTeamTable<{ id: string; business_agent_id: string; staff_id: string; supervisor_id: string | null; staff_name: string; supervisor_name: string | null; started_at: string; ended_at: string | null }, "business_agent_id" | "staff_id" | "staff_name">,
+            business_team_transfers: BusinessTeamTable<{ id: string; business_agent_id: string; staff_id: string; from_supervisor: string; to_supervisor: string; requested_by: string; staff_name: string; from_name: string; to_name: string; requester_name: string; status: string; created_at: string; expires_at: string; decided_at: string | null; decided_by: string | null }, "business_agent_id" | "staff_id" | "from_supervisor" | "to_supervisor" | "requested_by" | "staff_name" | "from_name" | "to_name" | "requester_name">,
+            business_work_notices: BusinessTeamTable<{ id: string; business_agent_id: string; recipient_id: string; kind: string; text: string; transfer_id: string | null; created_at: string; seen_at: string | null }, "business_agent_id" | "recipient_id" | "kind" | "text">,
+            business_work_events: BusinessTeamTable<{ id: string; business_agent_id: string; kind: string; source_key: string; inbox_id: string | null; actor_id: string | null; actor_name: string; actor_handle: string | null; actor_role: string | null; supervisor_id: string | null; supervisor_name: string | null; supervisor_handle: string | null; occurred_at: string; received_at: string | null }, "business_agent_id" | "kind" | "source_key" | "actor_name" | "occurred_at">,
+            "identity_notification_versions": {
+              Row: { user_id: string; revision: number }
+              Insert: { user_id: string; revision?: number }
+              Update: { revision?: number }
+              Relationships: []
+            },
             "managed_identity_sessions": {
               Row: { session_id: string; business_user: string; person_user: string; created_at: string }
               Insert: { session_id: string; business_user: string; person_user: string; created_at?: string }
@@ -30,6 +45,90 @@ export type Database = {
               Relationships: []
             },
             "account_access_versions": {
+              Row: { user_id: string; revision: number }
+              Insert: { user_id: string; revision?: number }
+              Update: { revision?: number }
+              Relationships: []
+            },
+            "message_mentions": {
+              Row: { message_id: string; conversation_id: string; user_id: string; agent_id: string; handle: string }
+              Insert: { message_id: string; conversation_id: string; user_id: string; agent_id: string; handle: string }
+              Update: { handle?: string }
+              Relationships: []
+            },
+            "mention_alerts": {
+              Row: { message_id: string; user_id: string; conversation_id: string; created_at: string; seen_at: string | null; notified_at: string | null }
+              Insert: { message_id: string; user_id: string; conversation_id: string; created_at?: string; seen_at?: string | null; notified_at?: string | null }
+              Update: { seen_at?: string | null }
+              Relationships: []
+            },
+            "business_staff_invites": {
+              Row: { id: string; business_agent_id: string; email: string; recipient_user: string | null; role: string; token_hash: string; invited_by: string | null; status: string; created_at: string; expires_at: string; responded_at: string | null }
+              Insert: { business_agent_id: string; email: string; role: string; token_hash: string; recipient_user?: string | null; invited_by?: string | null; status?: string }
+              Update: { status?: string; token_hash?: string; expires_at?: string }
+              Relationships: []
+            },
+            "business_staff_audit": {
+              Row: { id: string; business_agent_id: string; actor_id: string | null; supervisor_id: string | null; actor_name: string; subject_name: string; action: string; created_at: string }
+              Insert: { business_agent_id: string; actor_id?: string | null; actor_name: string; subject_name: string; action: string }
+              Update: { action?: string }
+              Relationships: []
+            },
+            "business_staff_availability": {
+              Row: { business_agent_id: string; user_id: string; participating: boolean; mode: string; mode_until: string | null }
+              Insert: { business_agent_id: string; user_id: string; participating?: boolean; mode?: string; mode_until?: string | null }
+              Update: { participating?: boolean; mode?: string; mode_until?: string | null }
+              Relationships: []
+            },
+            "business_answer_drafts": {
+              Row: { source_inbox: string | null; id: string; business_agent_id: string; author_id: string | null; author_name: string; question: string; answer: string; status: string; reviewed_by: string | null; created_at: string; reviewed_at: string | null }
+              Insert: { source_inbox?: string | null; business_agent_id: string; author_id?: string | null; author_name: string; question: string; answer: string }
+              Update: { status?: string; reviewed_by?: string | null; reviewed_at?: string | null }
+              Relationships: []
+            },
+            "business_message_authors": {
+              Row: { message_id: string; business_agent_id: string; actor_id: string | null; actor_name: string; role: string; created_at: string }
+              Insert: { message_id: string; business_agent_id: string; actor_id?: string | null; actor_name: string; role: string }
+              Update: { role?: string }
+              Relationships: []
+            },
+            "business_question_claims": {
+              Row: { manager_assigned: boolean; inbox_id: string; business_agent_id: string; assigned_to: string | null; assigned_name: string | null; claimed_at: string | null; processing_token: string | null; processing_until: string | null; handled_by: string | null; handled_at: string | null }
+              Insert: { inbox_id: string; business_agent_id: string; assigned_to?: string | null }
+              Update: { assigned_to?: string | null; processing_token?: string | null; processing_until?: string | null; handled_by?: string | null; handled_at?: string | null }
+              Relationships: []
+            },
+            "business_queue_versions": {
+              Row: { agent_id: string; revision: number }
+              Insert: { agent_id: string; revision?: number }
+              Update: { revision?: number }
+              Relationships: []
+            },
+            "business_work_sessions": {
+              Row: { session_id: string; person_user: string; business_agent_id: string; created_at: string }
+              Insert: { session_id: string; person_user: string; business_agent_id: string; created_at?: string }
+              Update: { business_agent_id?: string }
+              Relationships: []
+            },
+            "business_membership_versions": {
+              Row: { user_id: string; revision: number }
+              Insert: { user_id: string; revision?: number }
+              Update: { revision?: number }
+              Relationships: []
+            },
+            "presence_preferences": {
+              Row: { agent_id: string; visibility: string; mode: string; mode_until: string | null; generation: string }
+              Insert: { agent_id: string; visibility?: string; mode?: string; mode_until?: string | null; generation?: string }
+              Update: { visibility?: string; mode?: string; mode_until?: string | null; generation?: string }
+              Relationships: []
+            },
+            "mention_preferences": {
+              Row: { user_id: string; enabled: boolean }
+              Insert: { user_id: string; enabled?: boolean }
+              Update: { enabled?: boolean }
+              Relationships: []
+            },
+            "mention_versions": {
               Row: { user_id: string; revision: number }
               Insert: { user_id: string; revision?: number }
               Update: { revision?: number }
@@ -199,16 +298,22 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"onboarding_state": {
+                  Row: { "user_id": string,"dismissed_at": string | null }
+                  ComputedFields: never
+                  Insert: { "user_id": string,"dismissed_at"?: string | null }
+                  Update: { "user_id"?: string,"dismissed_at"?: string | null }
+                  Relationships: []
                 },"agent_tips": {
                   Row: {
-                    "agent_id": string,"created_at": string,"id": string,"tip": string,"topic": string
+                    "agent_id": string,"created_at": string,"disclosure": Database["public"]['Enums']["disclosure_level"],"id": string,"tip": string,"topic": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "agent_id": string,"created_at"?: string,"id"?: string,"tip": string,"topic": string
+                    "agent_id": string,"created_at"?: string,"disclosure"?: Database["public"]['Enums']["disclosure_level"],"id"?: string,"tip": string,"topic": string
                   }
                   Update: {
-                    "agent_id"?: string,"created_at"?: string,"id"?: string,"tip"?: string,"topic"?: string
+                    "agent_id"?: string,"created_at"?: string,"disclosure"?: Database["public"]['Enums']["disclosure_level"],"id"?: string,"tip"?: string,"topic"?: string
                   }
                   Relationships: [
                     {
@@ -255,14 +360,14 @@ isOneToOne: false
                   ]
                 },"business_managers": {
                   Row: {
-                    "business_agent_id": string,"created_at": string,"role": string,"user_id": string
+                    "business_agent_id": string,"created_at": string,"role": string,"user_id": string,"require_assignment": boolean,"require_publication_approval": boolean,"supervisor_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "business_agent_id": string,"created_at"?: string,"role"?: string,"user_id": string
+                    "business_agent_id": string,"created_at"?: string,"role"?: string,"user_id": string,"require_assignment"?: boolean,"require_publication_approval"?: boolean,"supervisor_id"?: string | null
                   }
                   Update: {
-                    "business_agent_id"?: string,"created_at"?: string,"role"?: string,"user_id"?: string
+                    "business_agent_id"?: string,"created_at"?: string,"role"?: string,"user_id"?: string,"require_assignment"?: boolean,"require_publication_approval"?: boolean,"supervisor_id"?: string | null
                   }
                   Relationships: [
                     {
@@ -1162,6 +1267,8 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
+            commit_profile_avatar: { Args: { p_agent: string; p_actor: string; p_preset?: string | null; p_asset?: string | null; p_path?: string | null }; Returns: string },
+            queue_unused_avatar_files: { Args: Record<string, never>; Returns: undefined },
             "action_counts":
 { Args: Record<PropertyKey, never>; Returns: {
               "communities": number,"contacts": number,"groups": number
@@ -1193,6 +1300,9 @@ isOneToOne: false
 "review_platform_case": { Args: { p_case: string; p_revision: number; p_action: string; p_response?: string; p_note?: string; p_subject?: string; p_evidence?: string }; Returns: undefined },
 "account_is_restricted": { Args: { p_user: string }; Returns: boolean },
 "due_business_refreshes": { Args: { p_before: string; p_limit: number; p_site?: boolean }; Returns: { id: string }[] },
+"mention_state": { Args: { p_claim?: boolean; p_known?: string[] }; Returns: Json },
+"unread_mention_page": { Args: { p_before?: string | null; p_message?: string | null }; Returns: Json },
+"mention_suggestions": { Args: { p_conversation: string; p_query?: string }; Returns: Json },
 "account_restriction": { Args: { p_user: string }; Returns: Json },
 "account_case_people": { Args: { p_case: string }; Returns: Json },
 "platform_reporting_history": { Args: { p_case: string; p_subject: string; p_offset?: number }; Returns: Json },
@@ -1210,12 +1320,45 @@ isOneToOne: false
 "space_is_suspended": { Args: { p_conversation: string }; Returns: boolean },
 "set_message_reaction": { Args: { p_message: string; p_reaction?: string | null }; Returns: Json },
 "get_message_reactions": { Args: { p_ids: string[] }; Returns: Json },
-"get_message_reaction_details": { Args: { p_message: string; p_offset?: number }; Returns: Json },
+"get_message_reaction_details": { Args: { p_message: string; p_offset?: number; p_reaction?: string | null }; Returns: Json },
 "pending_message_deliveries": { Args: Record<string, never>; Returns: Database["public"]["Tables"]["messages"]["Row"][] },
 "record_agent_receipt": { Args: { p_message: string; p_agent: string; p_task?: string | null }; Returns: undefined },
 "link_business_receipt": { Args: { p_inbox: string }; Returns: undefined },
 "acknowledge_business_question": { Args: { p_inbox: string }; Returns: boolean },
 "set_read_receipts": { Args: { p_enabled: boolean }; Returns: undefined },
+"presence_channels": { Args: { p_ids: string[] }; Returns: Json },
+"workspace_context": { Args: Record<string, never>; Returns: Json },
+"identity_staff_badge": { Args: { p_user: string }; Returns: number },
+"set_business_default_owner": { Args: { p_owner: string }; Returns: undefined },
+"request_business_staff_transfer": { Args: { p_staff: string; p_target: string }; Returns: string },
+"respond_business_staff_transfer": { Args: { p_transfer: string; p_decision: string }; Returns: undefined },
+"business_team_state": { Args: Record<string, never>; Returns: Json },
+"business_work_inbox": { Args: Record<string, never>; Returns: Json },
+"acknowledge_business_work_notice": { Args: { p_notice: string }; Returns: undefined },
+"business_team_dashboard_options": { Args: Record<string, never>; Returns: Json },
+"business_team_dashboard": { Args: { p_days?: number; p_scope?: string; p_person?: string | null }; Returns: Json },
+"business_dashboard_as_owner": { Args: { p_business: string; p_actor: string; p_days?: number }; Returns: Json },
+"notification_accounts": { Args: { p_actor: string; p_current: string }; Returns: Json },
+"set_business_staff_controls": { Args: { p_user: string; p_require_assignment: boolean; p_require_publication_approval: boolean }; Returns: undefined },
+"review_business_answer_as": { Args: { p_business: string; p_actor: string; p_draft: string; p_approve: boolean; p_question: string; p_answer: string }; Returns: undefined },
+"publish_staff_business_answer": { Args: { p_business: string; p_actor: string; p_question: string; p_answer: string; p_inbox?: string | null; p_ticket?: string | null }; Returns: string },
+"notification_snapshot": { Args: { p_user: string; p_role: string | null; p_actor: string }; Returns: Json },
+"search_business_staff": { Args: { p_query: string }; Returns: { id: string; name: string; handle: string; avatar: string }[] },
+"issue_business_invite": { Args: { p_target: string; p_role: string; p_digest: string; p_existing?: string | null }; Returns: string },
+"cancel_business_invite": { Args: { p_invite: string }; Returns: undefined },
+"respond_business_invite": { Args: { p_invite: string; p_accept: boolean }; Returns: string },
+"change_business_member": { Args: { p_user: string; p_role: string; p_transfer?: boolean }; Returns: undefined },
+"claim_business_question": { Args: { p_item: string; p_assignee?: string | null; p_release?: boolean }; Returns: undefined },
+"reserve_business_answer": { Args: { p_item: string }; Returns: string },
+"set_work_participation": { Args: { p_available: boolean }; Returns: undefined },
+"post_business_authored_message": { Args: { p_actor: string; p_business: string; p_conversation: string; p_content: string; p_metadata: Json; p_user: string | null; p_agent: string | null; p_visible: string | null; p_thread: string | null; p_reply: string | null }; Returns: Database["public"]["Tables"]["messages"]["Row"][] },
+"suggest_business_answer": { Args: { p_question: string; p_answer: string }; Returns: string },
+"review_business_answer": { Args: { p_draft: string; p_approve: boolean; p_question: string; p_answer: string }; Returns: undefined },
+"business_permission": { Args: { p_permission: string }; Returns: boolean },
+"presence_channel_access": { Args: { p_topic: string; p_write: boolean }; Returns: boolean },
+"presence_self": { Args: Record<string, never>; Returns: Json },
+"set_presence_mode": { Args: { p_mode: string; p_minutes?: number | null }; Returns: undefined },
+"set_presence_visibility": { Args: { p_visibility: string }; Returns: undefined },
 "get_message_receipts": { Args: { p_ids: string[]; p_details?: boolean }; Returns: Json },
 "add_plan_participant":
 { Args: { "p_handle": string,"p_max": number,"p_task": string }; Returns: string
@@ -1292,6 +1435,9 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: {
               "id": string,"kind": string,"last_activity_at": string,"preview": string,"task_id": string,"task_status": string,"title": string,"unread": number
             }[]
+                           },
+"my_agent_topic_page":
+{ Args: { "p_conversation": string,"p_group"?: string,"p_before"?: string | null,"p_id"?: string | null,"p_query"?: string,"p_as_of"?: string }; Returns: Json
                            },
 "notice_is_muted":
 { Args: { "p_area": string,"p_ref": string,"p_user": string }; Returns: boolean

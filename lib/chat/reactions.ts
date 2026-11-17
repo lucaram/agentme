@@ -13,6 +13,13 @@ export type ReactionSummary = z.infer<typeof ReactionSummary>;
 export const ReactionDetails = z.object({ items: z.array(z.object({ user_id: z.uuid(), reaction: ReactionKey, reacted_at: z.string(), name: z.string().nullable(), handle: z.string().nullable(), avatar: z.string().nullable() })), hasMore: z.boolean() });
 export type ReactionDetails = z.infer<typeof ReactionDetails>;
 
+/** One reaction per person: the sum is the number of people, not emoji types. */
+export function reactionOverview(summary: ReactionSummary) {
+  const groups = REACTIONS.map((reaction) => ({ ...reaction, count: summary.counts[reaction.key] ?? 0 }))
+    .filter((reaction) => reaction.count > 0).sort((a, b) => b.count - a.count);
+  return { groups, total: groups.reduce((sum, reaction) => sum + reaction.count, 0) };
+}
+
 export function withReaction(summary: ReactionSummary, reaction: ReactionKey | null): ReactionSummary {
   const counts = { ...summary.counts };
   if (summary.mine) counts[summary.mine] = Math.max(0, (counts[summary.mine] ?? 0) - 1);

@@ -5,8 +5,8 @@ import type { AgentRow } from "@/lib/data/agents";
 import { suggestFact, type FactSuggestion } from "./suggest";
 import { appendToFact, saveFact } from "./save";
 
-/** Shared by default when saved from a suggestion (sensitive topics stay private). */
-const SHARE: Record<FactSuggestion["category"], boolean> = { food: true, interests: true, away: true, location: false, practical: false };
+/** New personal details are private; updating an existing topic preserves its permission. */
+const SHARE: Record<FactSuggestion["category"], boolean> = { food: false, interests: false, away: false, location: false, practical: false };
 
 /**
  * You told your agent something about yourself ("I'm vegetarian now"): it
@@ -41,11 +41,13 @@ export async function answerSuggestion(userId: string, agent: AgentRow, messageI
 
   if (accept) {
     const s = meta.suggestion;
+    const { data: current } = await db.from("agent_facts").select("disclosure").eq("agent_id", agent.id).eq("category", s.category).eq("label", "").maybeSingle();
+    const share = current ? current.disclosure === "contacts" : SHARE[s.category];
     const result =
       s.category === "away"
-        ? await saveFact(agent.id, { category: "away", value: s.value, share: SHARE.away, expiresAt: s.until ? `${s.until}T23:59:59Z` : null })
+        ? await saveFact(agent.id, { category: "away", value: s.value, share, expiresAt: s.until ? `${s.until}T23:59:59Z` : null })
         : s.category === "location"
-          ? await saveFact(agent.id, { category: "location", value: s.value, share: SHARE.location })
+          ? await saveFact(agent.id, { category: "location", value: s.value, share })
           : await appendToFact(agent.id, s.category, s.value, SHARE[s.category]);
     if (!result.ok) return result;
   }

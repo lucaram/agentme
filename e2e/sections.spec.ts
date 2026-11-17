@@ -35,7 +35,7 @@ test("sections start collapsed across the app; updates stay unread until opened"
     for (const result of setup) if (result.error) throw result.error;
 
     const page = await login(f.luca.email);
-    for (const path of ["/chats", `/chats/${f.myAgent}`, "/contacts", "/discover", "/groups", `/groups/${f.group}`, "/communities", `/communities/${communityId}`, "/settings", "/settings/profile", "/settings/about", "/settings/privacy", "/settings/personalise", "/settings/tips", "/history"]) {
+    for (const path of ["/chats", `/chats/${f.myAgent}`, "/contacts", "/discover", "/groups", `/groups/${f.group}`, "/communities", `/communities/${communityId}`, "/settings", "/settings/profile", "/settings/about", "/settings/about/lifestyle", "/settings/privacy", "/settings/personalise", "/history"]) {
       await test.step(path, async () => {
         const response = await page.goto(path);
         expect(response?.ok()).toBe(true);

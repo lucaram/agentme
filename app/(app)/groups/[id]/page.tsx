@@ -1,3 +1,4 @@
+import { Avatar } from "@/components/Avatar";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -78,7 +79,7 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
     <div className="space-y-6">
       <Link href="/groups" className="text-sm text-accent">‹ Groups</Link>
       <section className="card flex flex-wrap items-center gap-4">
-        <span className="text-5xl">{group.avatar ?? "👥"}</span>
+        <span className="text-5xl"><Avatar value={group.avatar ?? "👥"} /></span>
         <div className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold">{group.title ?? "Group"}</h1>
           {group.description && <p className="text-sm text-muted">{group.description}</p>}
@@ -113,7 +114,7 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
             const isMe = m.user_id === user.id;
             return (
               <li key={m.user_id} className="flex flex-wrap items-center gap-3 py-2" data-testid="group-member">
-                <span className="text-xl">{a?.avatar}</span>
+                <span className="text-xl"><Avatar value={a?.avatar} /></span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium">
                     {isMe ? "You" : a?.display_name}
@@ -159,7 +160,7 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
           <ul className="divide-y divide-border">
             {businesses.map((b) => (
               <li key={b.id} className="flex flex-wrap items-center gap-3 py-2" data-testid="group-business">
-                <AgentName agent={{ handle: b.handle, type: "business" }} className="text-xl">{b.avatar}</AgentName>
+                <AgentName agent={{ handle: b.handle, type: "business" }} className="text-xl"><Avatar value={b.avatar} /></AgentName>
                 <span className="min-w-0 flex-1">
                   <AgentName agent={{ handle: b.handle, type: "business" }} className="block text-sm font-medium">{b.display_name}</AgentName>
                   <span className="block text-xs text-muted">@{b.handle} · Business</span>
@@ -200,7 +201,7 @@ export default async function GroupPage({ params }: PageProps<"/groups/[id]">) {
                   const a = byOwner.get(r.user_id);
                   return (
                     <li key={r.id} className="flex flex-wrap items-center gap-2 py-2" data-testid="join-request">
-                      <span className="flex-1 text-sm">{a?.avatar} {a?.display_name} <span className="text-muted">@{a?.handle}</span></span>
+                      <span className="flex-1 text-sm"><Avatar value={a?.avatar} /> {a?.display_name} <span className="text-muted">@{a?.handle}</span></span>
                       <ActionButton action={decideRequestAction.bind(null, r.id, true)} label="Let in" variant="btn-primary" />
                       <ActionButton action={decideRequestAction.bind(null, r.id, false)} label="Decline" />
                     </li>

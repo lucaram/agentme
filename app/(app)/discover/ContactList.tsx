@@ -1,9 +1,12 @@
 "use client";
+import { Avatar } from "@/components/Avatar";
+
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addFromListAction, discardListAction } from "../people-actions";
 import type { ContactListView } from "@/lib/people/imports";
+import { PresenceBadge } from "@/components/presence/PresenceBadge";
 
 const label = (p: { name: string | null; address: string }) => (p.name ? `${p.name} (${p.address})` : p.address);
 
@@ -82,10 +85,11 @@ export function ContactList({ list, myLink, myName }: { list: ContactListView; m
                   ) : (
                     <span className="w-4" />
                   )}
-                  <span className="text-xl">{p.avatar}</span>
+                  <span className="text-xl"><Avatar value={p.avatar} /></span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{label(p)}</span>
                     <span className="block text-xs text-muted">@{p.handle} on AGENTME</span>
+                    <PresenceBadge agentId={p.agentId} />
                   </span>
                   {p.status === "accepted" && <span className="text-xs text-accent">✓ Contact</span>}
                   {p.status === "pending" && <span className="text-xs text-muted">Requested</span>}

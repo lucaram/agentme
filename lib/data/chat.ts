@@ -3,6 +3,7 @@ import { threadFor } from "@/lib/agents/thread-context";
 import { adminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/database.types";
 import { asJson } from "./json";
+import { currentBusinessActor } from "@/lib/business/actor-context";
 
 export type ConversationKind = Database["public"]["Enums"]["conversation_kind"];
 export type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
@@ -104,6 +105,15 @@ type NewMessage = {
 );
 
 export async function postMessage(msg: NewMessage): Promise<MessageRow> {
+  if (msg.from === "agent" && msg.metadata?.team_inbox_id) {
+    const { data: existing } = await adminClient().from("messages").select("*").eq("metadata->>team_inbox_id", String(msg.metadata.team_inbox_id)).eq("is_ai_generated", true).maybeSingle();
+    if (existing) return existing;
+  }
+  const actor = currentBusinessActor();
+  if (actor && (msg.from === "human" && msg.userId === actor.owner || msg.from === "agent" && msg.metadata?.team_inbox_id && (msg.agentId === actor.business || msg.metadata.business_id === actor.business))) {
+    const { data, error } = await adminClient().rpc("post_business_authored_message", { p_actor: actor.id, p_business: actor.business, p_conversation: msg.conversationId, p_content: msg.content.slice(0, 8000), p_metadata: asJson(msg.metadata ?? {}), p_user: msg.from === "human" ? msg.userId : null, p_agent: msg.from === "agent" ? msg.agentId : null, p_visible: msg.visibleTo ?? null, p_thread: msg.threadId ?? threadFor(msg.conversationId) ?? null, p_reply: msg.replyTo ?? null }).single();
+    if (error) throw error; return data;
+  }
   const { data, error } = await adminClient()
     .from("messages")
     .insert({

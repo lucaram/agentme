@@ -8,6 +8,7 @@ import { setReply, useReply } from "@/lib/client/reply";
 import { summonsAgent } from "@/lib/agents/commands";
 import { useComposerExtras } from "@/components/chat/useComposerExtras";
 import { notifyChatSent } from "@/lib/client/chat-position";
+import { useMentionPicker } from "@/components/chat/useMentionPicker";
 
 const MAX_HEIGHT = 200; // about 8 lines
 
@@ -40,6 +41,7 @@ export function Composer({
   const [summoned, setSummoned] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const messageId = useId();
+  const mentions = useMentionPicker(conversationId, () => ref.current, fit);
   const router = useRouter();
   const [showExamples, setShowExamples] = useState(!collapseExamples);
   /** Community autopilot: "This might break …" before posting; the author decides. */
@@ -94,6 +96,7 @@ export function Composer({
     const text = (confirmed ? nudge?.text : ref.current?.value)?.trim() ?? "";
     if ((!text && !extras.hasDraft) || pending || extras.busy) return;
     setNudge(null);
+    mentions.close();
     setAppeal(null);
     ref.current!.value = "";
     fit();
@@ -223,6 +226,7 @@ export function Composer({
         </div>
       )}
       {extras.hasDraft && <label htmlFor={messageId} className="mb-1 ml-3 block text-xs font-medium text-muted">Add a message (optional)</label>}
+      {mentions.panel}
       <form
         className="flex items-end gap-1 rounded-3xl border border-border bg-surface p-2 shadow-sm transition-colors focus-within:border-accent"
         onSubmit={(e) => {
@@ -235,11 +239,16 @@ export function Composer({
           id={messageId}
           ref={ref}
           aria-label="Message"
+          aria-autocomplete="list"
+          aria-controls={mentions.controls}
+          aria-activedescendant={mentions.activeId}
           rows={1}
           className="thin-scrollbar block min-h-10 min-w-0 flex-1 resize-none overflow-hidden bg-transparent py-2 text-[15px] leading-6 outline-none placeholder:text-muted"
           placeholder={extras.hasDraft ? "Add a message…" : placeholder}
-          onInput={fit}
+          onInput={() => { fit(); mentions.detect(); }}
+          onClick={mentions.detect}
           onKeyDown={(e) => {
+            if (mentions.keyDown(e)) return;
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               submit();

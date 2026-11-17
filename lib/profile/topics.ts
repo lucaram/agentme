@@ -1,6 +1,6 @@
 /**
  * "What your agent knows about you": the topics, their quick chips and who
- * sees them by default. Sensitive topics (budget, practical needs) start private.
+ * sees them by default. New personal details start private; existing choices stay unchanged.
  * Pure (no server code): used by the profile page and the save actions.
  */
 import type { FactCategory } from "@/lib/policy/disclosure";
@@ -29,7 +29,7 @@ export const TOPICS: Topic[] = [
     hint: "Used to find times for plans.",
     placeholder: "e.g. Weekday evenings after 6:30 PM; Saturdays after 6 PM",
     chips: ["Weekday evenings", "Weekends", "Saturday afternoons", "Mornings before 9am", "Lunchtimes"],
-    shareByDefault: true,
+    shareByDefault: false,
   },
   {
     key: "food",
@@ -38,7 +38,7 @@ export const TOPICS: Topic[] = [
     hint: "Used to pick a cuisine or a place for meals and drinks.",
     placeholder: "e.g. Loves Italian and Japanese, vegetarian",
     chips: ["Italian", "Japanese", "Indian", "Thai", "Vegetarian", "Vegan", "Halal", "Gluten-free"],
-    shareByDefault: true,
+    shareByDefault: false,
   },
   {
     key: "interests",
@@ -47,7 +47,7 @@ export const TOPICS: Topic[] = [
     hint: "Used to suggest activities, and for introductions and asking around.",
     placeholder: "e.g. Climbing, cinema, five-a-side",
     chips: ["Climbing", "Running", "Football", "Cinema", "Live music", "Board games", "Cooking", "Travel", "Reading"],
-    shareByDefault: true,
+    shareByDefault: false,
   },
   {
     key: "location",
@@ -87,6 +87,9 @@ export const TOPICS: Topic[] = [
     alwaysPrivate: true,
   },
 ];
+
+/** Navigation only: each lifestyle field keeps its own stored category and permission. */
+export const LIFESTYLE_TOPICS = TOPICS.filter((topic) => ["food", "interests", "location", "budget", "practical"].includes(topic.key));
 
 export const MAX_CUSTOM_TOPICS = 5;
 

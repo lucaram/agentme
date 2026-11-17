@@ -3,7 +3,6 @@
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireAgent } from "@/lib/auth";
 import { adminClient } from "@/lib/supabase/admin";
 import { checkUrl, linksIn } from "@/lib/business/extract";
 import { businessSources, readSource } from "@/lib/business/sources";
@@ -14,12 +13,13 @@ import { withUsageContext } from "@/lib/usage/context";
 import { describeRetry, hit } from "@/lib/limits";
 import { normaliseWay, waysOf, type Way } from "@/lib/business/booking";
 import { patchBusinessInfo } from "@/lib/business/profile";
+import { requireBusinessPermission } from "@/lib/business/access";
 
 type Out = { error?: string };
 const MAX_LINKS = 20;
 
 async function requireBusiness() {
-  const { user, agent } = await requireAgent();
+  const { user, agent } = await requireBusinessPermission("configure");
   if (agent.type !== "business") throw new Error("Not a business account");
   return { user, agent };
 }

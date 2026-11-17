@@ -533,13 +533,17 @@ test("what your agent knows: topics with quick picks, your own topic, a preview,
   await page.getByTestId("about-you-link").click();
   await expect(page.getByRole("heading", { name: "What your agent knows about you" })).toBeVisible();
 
-  // Hobbies from quick picks, shared by default.
+  await page.getByTestId("topic-lifestyle").click();
+  await expect(page.getByRole("heading", { name: "Lifestyle", exact: true })).toBeVisible();
+
+  // Hobbies start private; sharing is an explicit choice.
   const hobbies = page.getByTestId("topic-interests");
   await hobbies.locator("summary").click();
   await hobbies.getByRole("button", { name: "＋ Climbing" }).click();
   await hobbies.getByRole("button", { name: "＋ Cinema" }).click();
   await expect(hobbies.getByRole("textbox", { name: "Hobbies & interests", exact: true })).toHaveValue("Climbing, Cinema");
-  await expect(hobbies.getByRole("radio", { name: /My contacts' agents/ })).toBeChecked();
+  await expect(hobbies.getByRole("radio", { name: /Only my agent/ })).toBeChecked();
+  await hobbies.getByText("My contacts' agents", { exact: true }).click();
   await hobbies.getByRole("button", { name: "Save" }).click();
   await expect(hobbies.getByRole("status")).toContainText("Saved");
 
@@ -551,11 +555,14 @@ test("what your agent knows: topics with quick picks, your own topic, a preview,
   await budget.getByRole("button", { name: "Save" }).click();
   await expect(budget.getByRole("status")).toContainText("Saved");
 
+  await page.getByTestId("back-to-about").click();
+
   // A topic of your own.
   const own = page.getByTestId("add-own-topic");
   await own.locator("summary").click();
   await own.getByLabel("Topic name").fill("Music I like");
   await own.getByLabel("Topic details").fill("Jazz");
+  await own.getByText("My contacts' agents", { exact: true }).click();
   await own.getByRole("button", { name: "Add topic" }).click();
   await expect(page.getByTestId("topic-custom")).toContainText("Music I like");
 
@@ -563,7 +570,7 @@ test("what your agent knows: topics with quick picks, your own topic, a preview,
   const preview = page.getByTestId("profile-preview");
   await preview.locator("summary").click();
   await expect(preview).toContainText("Climbing, Cinema; Music I like: Jazz");
-  await expect(preview).toContainText("Never shared: 💸 Budget for going out");
+  await expect(preview.getByRole("list", { name: "Only my agent", exact: true })).toContainText("💸 Budget for going out");
 
   // Telling the agent: it offers to remember, and saves only on Save.
   await page.goto("/chats");
@@ -573,7 +580,7 @@ test("what your agent knows: topics with quick picks, your own topic, a preview,
   await expect(offer).toBeVisible();
   await offer.getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("fact-saved")).toBeVisible();
-  await page.goto("/settings/about");
+  await page.goto("/settings/about/lifestyle");
   await expect(page.getByTestId("topic-food")).toContainText("vegetarian");
   await context.close();
 });

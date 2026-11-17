@@ -18,6 +18,7 @@ export async function saveTopicAction(input: { category: string; label?: string;
   if (input.category === "away") return { error: "Use “Away until” for time away." };
   const result = await saveFact(agent.id, { category: String(input.category), label: input.label, value: String(input.value ?? ""), share: Boolean(input.share) });
   revalidatePath("/settings/about");
+  revalidatePath("/settings/about/lifestyle");
   return result.ok ? {} : { error: result.error };
 }
 

@@ -13,6 +13,9 @@ export type HistoryBundle = HistoryPage & {
   userId: string; agent: Pick<HistoryAgent, "id" | "handle">; conversationId: string; threadId: string | null; kind: Row<"conversations">["kind"];
   canReplyHere: boolean; canModerate: boolean; suspended: boolean;
   reactions: ReactionSummary[];
+  deletableMessageIds?: string[];
+  canManageBusiness?: boolean;
+  mentions?: import("./mentions").Mention[];
   agents: HistoryAgent[]; attachments: (Pick<Row<"chat_attachments">, "id" | "message_id" | "name" | "mime" | "kind" | "bytes">)[];
   tasks: Row<"tasks">[]; exchanges: Row<"task_exchanges">[]; proposals: Row<"proposals">[]; steps: Row<"plan_steps">[];
   responses: Row<"step_responses">[]; claims: Row<"item_claims">[]; facts: Row<"agent_facts">[];

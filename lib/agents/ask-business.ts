@@ -107,7 +107,7 @@ export async function answerBusinessSuggestion(userId: string, agent: AgentRow, 
  * the answer goes into that same thread. Returns false when the question
  * wasn't asked from My Agent (it then goes to the chat with the business).
  */
-export async function relayToMyAgent(a2aTaskId: string | null, business: Business, answer: string | null): Promise<boolean> {
+export async function relayToMyAgent(a2aTaskId: string | null, business: Business, answer: string | null, inboxId?: string): Promise<boolean> {
   if (!a2aTaskId) return false;
   const { data: asked } = await adminClient()
     .from("messages")
@@ -125,7 +125,7 @@ export async function relayToMyAgent(a2aTaskId: string | null, business: Busines
     content: answer
       ? `👤 The team at ${business.display_name} answered: ${answer}`
       : `The team at ${business.display_name} couldn't answer this one. You can contact them directly.`,
-    metadata: { kind: "business_answer", business_id: business.id, handle: business.handle },
+    metadata: { kind: "business_answer", business_id: business.id, handle: business.handle, ...(inboxId ? { team_inbox_id: inboxId } : {}) },
   });
   return true;
 }

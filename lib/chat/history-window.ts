@@ -24,8 +24,10 @@ export function mergeHistory(base: HistoryBundle, pages: HistoryBundle[], mode: 
   const claims = union(groups.map((p) => p.claims), (r) => `${r.step_id}:${r.item}`).filter((r) => stepIds.has(r.step_id));
   const exchanges = union(groups.map((p) => p.exchanges), (e) => e.id).filter((e) => e.task_id && taskIds.has(e.task_id));
   const quotes = union(groups.map((p) => p.quotes), (m) => m.id).filter((m) => quoteIds.has(m.id));
+  const mentions = union(groups.map((p) => p.mentions ?? []), (m) => `${m.message_id}:${m.user_id}`).filter((m) => available.has(m.message_id));
   const owners = new Set([base.userId, ...messages.map((m) => m.sender_user_id), ...quotes.map((m) => m.sender_user_id)]);
   const actors = new Set([base.agent.id, ...messages.map((m) => m.sender_agent_id), ...quotes.map((m) => m.sender_agent_id), ...responses.map((r) => r.agent_id), ...claims.map((r) => r.agent_id), ...exchanges.flatMap((e) => [e.from_agent, e.to_agent])]);
+  mentions.forEach((m) => actors.add(m.agent_id));
   const handles = new Set([...tasks.map((t) => t.parsed), ...proposals.map((p) => p.content), ...steps.map((s) => s.config)].flatMap((value) => { const v = value as { participants?: string[]; voters?: string[] }; return [...(v.participants ?? []), ...(v.voters ?? [])]; }));
   const actionIds = new Set([...metas.map((m) => m.booking_business_id), ...proposals.map((p) => (p.content as { venue?: { agent_id?: string } }).venue?.agent_id)]);
   const legacy = union(groups.map((p) => p.legacy), (entry) => entry[0]).filter(([id]) => ids.has(id)); legacy.forEach(([, id]) => actionIds.add(id));
@@ -34,7 +36,7 @@ export function mergeHistory(base: HistoryBundle, pages: HistoryBundle[], mode: 
   const lastPage = [...groups].reverse().find((p) => p.messages.some((m) => m.id === messages.at(-1)?.id));
   const unreadIds = union(groups.map((p) => p.unreadIds), (id) => id).filter((id) => ids.has(id));
   const tailPruned = all.filter((m) => !ids.has(m.id) && compareMessages(m, messages.at(-1)!) > 0);
-  return { ...newest, messages, firstUnread: base.firstUnread ?? newest.firstUnread, unreadIds,
+  return { ...newest, ...(newest.deletableMessageIds ? { deletableMessageIds: [...new Set(groups.flatMap((group) => group.deletableMessageIds ?? []))].filter((id) => ids.has(id)) } : {}), mentions, messages, firstUnread: base.firstUnread ?? newest.firstUnread, unreadIds,
     hasBefore: Boolean(firstPage?.hasBefore || (all[0] && messages[0] && compareMessages(all[0], messages[0]) < 0)),
     hasAfter: Boolean(lastPage?.hasAfter || tailPruned.length), unreadAfter: (lastPage?.unreadAfter ?? 0) + tailPruned.filter((m) => groups.some((p) => p.unreadIds.includes(m.id))).length,
     agents: union(groups.map((p) => p.agents), (a) => a.id).filter((a) => owners.has(a.owner_id) || actors.has(a.id) || handles.has(a.handle)),

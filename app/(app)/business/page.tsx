@@ -1,3 +1,8 @@
+import { z } from "zod";
+import { TeamDashboardData, TeamOptions } from "@/lib/business/team-types";
+import { TeamDashboardFilters } from "@/components/business/TeamDashboardFilters";
+import { TeamPerformance } from "@/components/business/TeamPerformance";
+import { staffControls } from "@/lib/business/staff-controls";
 import Link from "next/link";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -25,6 +30,9 @@ import { clearSiteChangesAction } from "./website-actions";
 
 import { businessDashboard, dashboardDays } from "@/lib/business/dashboard";
 import { CustomerDashboard } from "./CustomerDashboard";
+import { StaffSection } from "@/components/business/StaffSection";
+import { BusinessAnswerSuggestion } from "@/components/business/StaffForms";
+import { openMyAgent } from "../actions";
 
 type Info = { about?: string; customers?: string; description?: string; hours?: string; address?: string; website?: string | null; faqs?: { q: string; a: string }[] };
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -34,11 +42,18 @@ const BODY = "space-y-4 px-5 py-5 sm:px-6";
 export default async function MyBusinessPage({ searchParams }: PageProps<"/business">) {
   const { user, agent } = await requireAgent();
   if (agent.type !== "business") return <AddBusinessIntro guest={agent.guest} />;
-  const { welcome, live, website, website_error, days } = await searchParams;
+  const { welcome, live, website, website_error, days, scope: requestedScope, person: requestedPerson } = await searchParams;
   const period = dashboardDays(days);
   const supabase = await createClient();
   const info = (agent.business_info ?? {}) as Info;
   const about = businessDescription(info);
+  const requiresPublicationApproval = user.businessRole === "staff" ? (await staffControls(user, agent)).require_publication_approval : true;
+  if (user.businessRole === "staff") return <div className="space-y-5"><RealtimeRefresh channel={`staff-business-${user.id}`} tables={["business_queue_versions", "presence_preferences"]} /><OpenFromHash /><h1 className="text-lg font-semibold">My Business</h1><p className="text-sm text-muted">Handle customer requests in My Agent. {requiresPublicationApproval ? "Suggest reusable answers for an Owner or Manager to approve." : "Add eligible general answers to Questions & Answers after the publication check."}</p><form action={openMyAgent}><button className="btn-primary">Go to My Agent</button></form><Fold name={SECTIONS} id="about-business" icon="✍️" title="About your business" summary={about.slice(0, 120)}><div className={BODY}><p className="whitespace-pre-wrap text-sm">{about}</p>{info.hours && <p className="text-sm">{info.hours}</p>}</div></Fold><Fold name={SECTIONS} id="questions-answers" icon="💬" title="Questions & Answers" summary={`${info.faqs?.length ?? 0} approved answers`} testId="fold-faqs"><div className={`${BODY} space-y-4`}>{info.faqs?.map((faq, index) => <div key={index} className="text-sm"><p className="font-medium">{faq.q}</p><p className="text-muted">{faq.a}</p></div>)}<BusinessAnswerSuggestion approvalRequired={requiresPublicationApproval} /></div></Fold><Fold name={SECTIONS} id="staff-access" icon="👥" title="Staff & access" summary="Your team, work availability and permissions" testId="fold-staff"><div className={BODY}><StaffSection /></div></Fold></div>;
+  const ownerView = user.businessRole === "owner";
+  const scope = typeof requestedScope === "string" && ["all", "team", "person"].includes(requestedScope) ? requestedScope : ownerView ? "all" : "team";
+  const personId = typeof requestedPerson === "string" && z.uuid().safeParse(requestedPerson).success ? requestedPerson : !ownerView && scope === "team" ? user.actorId ?? user.id : null;
+  const [teamResult, optionsResult] = await Promise.all([supabase.rpc("business_team_dashboard", { p_days: period, p_scope: scope, p_person: personId }), supabase.rpc("business_team_dashboard_options")]);
+  const teamData = TeamDashboardData.safeParse(teamResult.data); const teamOptions = TeamOptions.safeParse(optionsResult.data);
   // Older failed-signup redirects still work; an explicit removal (null) clears their fallback too.
   const savedWebsite = typeof info.website === "string" ? info.website : "";
   const initialWebsite = savedWebsite || (info.website === undefined && typeof website === "string" ? website.slice(0, 300) : "");
@@ -48,7 +63,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
     supabase.from("business_sites").select("*").maybeSingle(),
     realPerson(user, agent),
     supabase.from("notices").select("id, text, created_at").eq("area", "business").eq("kind", "site_change").is("dismissed_at", null).gte("created_at", daysAgo(30)).order("created_at", { ascending: false }).limit(10),
-    businessDashboard(agent.id, period),
+    ownerView && scope === "all" ? businessDashboard(agent.id, period, user) : Promise.resolve(null),
     supabase.rpc("mark_notices_seen", { p_area: "business" }),
   ]);
   const personEmail = person && person !== user.id ? (await adminClient().auth.admin.getUserById(person)).data.user : null;
@@ -83,7 +98,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
 
   return (
     <div className="space-y-6">
-      <RealtimeRefresh channel={`business-${user.id}`} tables={["business_sources", "business_sites", "business_action_events", "inbox_items", "task_exchanges"]} />
+      <RealtimeRefresh channel={`business-${user.id}`} tables={["business_sources", "business_sites", "business_action_events", "inbox_items", "task_exchanges", "business_queue_versions", "presence_preferences"]} />
       <OpenFromHash />
       {welcome && <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status" data-testid="business-welcome">🎉 {agent.display_name} is live at @{agent.handle}. You are now acting as your business. Manage its information below, then share its page with customers.</p>}
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -92,9 +107,13 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
       </div>
       {live && <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status" data-testid="site-live">Your website information is published. Automatic checks are available approximately daily, and changes appear in Website &amp; documents.</p>}
       <div className="space-y-3" data-testid="business-sections">
-        <Fold name={SECTIONS} id="customer-dashboard" icon="📊" title="Customer dashboard" testId="fold-activity" summary={dashboard ? `${period} days · ${plural(dashboard.totals.received, "recorded question")} · agent answered ${dashboard.totals.automatic}` : "Analytics temporarily unavailable"}>
+        <Fold name={SECTIONS} id="customer-dashboard" icon="📊" title="Customer dashboard" testId="fold-activity" summary={dashboard ? `${period} days · ${plural(dashboard.totals.received, "recorded question")} · agent answered ${dashboard.totals.automatic}` : "Team performance and activity"}>
           <span id="customer-inbox" /><span id="customer-activity" />
-          <CustomerDashboard data={dashboard} approvedAnswers={faqs.length} />
+          <div className="space-y-5 p-5 sm:p-6">
+            {teamOptions.success && <TeamDashboardFilters key={`${scope}:${personId}:${period}`} owner={ownerView} actorId={user.actorId ?? user.id} scope={scope} person={personId} days={period} teams={teamOptions.data.teams} people={teamOptions.data.people} />}
+            {teamData.success ? <TeamPerformance data={teamData.data} /> : <p role="alert" className="text-sm text-danger">This dashboard view is unavailable. Choose a team or Staff member you can access.</p>}
+          </div>
+          {ownerView && scope === "all" && <CustomerDashboard data={dashboard} approvedAnswers={faqs.length} />}
         </Fold>
         <Fold name={SECTIONS} id="about-business" icon="✍️" title="About your business" testId="fold-own-words" summary={about ? about.replace(/\s+/g, " ").slice(0, 120) : "Introduce your business to customers"}>
           <section className={BODY} aria-label="About your business">
@@ -144,6 +163,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
             <QuestionsAnswers faqs={faqs} />
           </section>
         </Fold>
+        <Fold name={SECTIONS} id="staff-access" icon="👥" title="Staff & access" summary="Your team, invitations and permissions" testId="fold-staff"><div className={BODY}><StaffSection /></div></Fold>
         <Fold name={SECTIONS} id="share" icon="📷" title="Share your business" testId="fold-qr" summary="Your public page, customer QR code and printable poster">
           <section className={BODY} aria-label="Share your business">
             <p className="hint">Share your page or display its QR code so customers can ask your agent questions.</p>

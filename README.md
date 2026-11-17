@@ -72,19 +72,35 @@ official A2A client, so the protocol path is always exercised, and external A2A 
 | RLS on every table. Browsers can only read their own data and can't write directly. | `supabase/migrations` |
 | Deleting an account cascades: agent, facts, contacts, private chats, tasks, audit. | `app/(app)/actions.ts` |
 
+### Signup and optional setup
+
+Signup starts with account type, name, a suggested available @address and a default picture. **Add details now · Optional** starts collapsed, with concise field labels and no storage-destination hints. Personal details start private, with the same visibility controls used in Settings. Existing saved permissions are preserved.
+
+Direct business signup and **Add a business** share the form and optional-detail validation. A website is saved once, read in the background and reused in **My Business → Website & documents**. The owner can review now or later; website findings remain unpublished until **Go live**. Signup preserves invitation destinations. A dismissible setup invitation is stored privately per new identity in `onboarding_state`; existing accounts receive no new invitation.
+
+### Online status
+
+The account menu offers **Online (automatic)**, **Busy** (1 hour, 4 hours or until changed), **Away** and **Appear offline**. Automatic status becomes Away in a background tab or after five minutes without activity. Any active device keeps the identity online; the final connection leaving produces Offline after a brief grace period. Appear offline publishes no presence payload. Hidden status shows no badge, rather than Offline.
+
+**Settings → Privacy → Online status** defaults personal visibility to accepted contacts. Business owners can opt into **Show team availability to customers**. Business badges explicitly say **Team online/busy/away/offline**, independent of agent responses and opening hours. Switching identities publishes only the identity in use. Availability does not change read receipts or mute notifications.
+
+Badges appear in Contacts, search, direct chat headers and chat lists. Supabase Realtime Presence uses private, identity-scoped channels; only authorized, available work participants can publish for a business, and only the person can publish personal status. The existing Next.js API supplies permitted channel addresses, with server-side checks for contacts, blocks, restrictions and revoked sessions. Private preferences have owner-only RLS, and channel generations rotate after status/audience/contact changes. Clients recheck access every ten seconds and after presence leaves; only visible rows subscribe. No last-seen timestamp is retained or displayed. Apply migrations `20261116000800` and `20261116000900` before using this feature.
+
 ### What your agent knows about you
 
 **Settings → 🧠 What your agent knows about you** (`/settings/about`) is a short list of topics. Each one opens to edit and has quick-pick chips.
 
+**Lifestyle → ＋ Add** opens `/settings/about/lifestyle` with Food & drink, Hobbies & interests, Where you usually are, Budget for going out and Practical. Each starts collapsed and keeps its own values and visibility controls. The back link returns to the main knowledge page, where availability, time away, saved tips, private notes and custom topics remain. Moving these fields does not change the facts used by agents or the sharing preview.
+
 | Topic | Default | Answers a contact's plan that asks for |
 | --- | --- | --- |
-| 🗓️ When you're free, with **✈️ Away until** (forgotten by itself after that day) | 👥 shared | `availability` |
-| 🍽️ Food & drink | 👥 shared | `food` |
-| 🎯 Hobbies & interests | 👥 shared | `interests` |
+| 🗓️ When you're free, with **✈️ Away until** (forgotten by itself after that day) | 🔒 private | `availability` |
+| 🍽️ Food & drink | 🔒 private | `food` |
+| 🎯 Hobbies & interests | 🔒 private | `interests` |
 | 📍 Where you usually are | 🔒 private | `location` |
 | 💸 Budget for going out | 🔒 private | `budget` |
 | 🏠 Practical (kids, a dog, step-free access, no car…) | 🔒 private | `practical` |
-| ✨ Your own topics (up to 5, you name them) | your choice | `interests` |
+| ✨ Your own topics (up to 5, you name them) | 🔒 private | `interests` |
 | 🔒 Private notes | always private (also a DB check) | never |
 
 - **Your own agent** (My Agent) knows all of it, private items included, to help *you*.
@@ -180,7 +196,7 @@ Limits: 6 files and 32 MiB per message, 16 MiB per file, 100 MiB of uploads per 
 
 Chat participation cards show each person's display name and saved action date/time in the viewer's time zone. Poll votes, plan RSVPs and sign-up claims use the latest saved response; changed votes, RSVPs, claims, give-backs, plan edits and manual poll closures also leave dated system activity in the shared chat and the organiser's request. My Agent includes live poll and sign-up cards. Approvals are recorded privately; actions are never presented as messages sent by the person. Historical response times are shown only where they were saved.
 
-Shared human and agent messages support eight human-selected reactions through a smiley icon (no duplicate menu item). Each person has one reaction per message: selecting it again removes it, and choosing another replaces it. Compact chips show up to three reaction types plus an overflow button; tapping opens names and local reaction timestamps, fetched in pages of 50. Your own reaction is highlighted. Reaction summaries follow the bounded chat history and update via a metadata-only Supabase Realtime signal, without new chat messages, unread notifications or changes to receipts. Private-only, removed and deleted messages cannot receive reactions. Current membership, closed DMs and community mutes are enforced in the database; owner/moderator removal clears reactions. Apply migration `20261115001200_message_reactions.sql`.
+Shared human and agent messages support eight human-selected reactions through a smiley icon (no duplicate menu item). Each person has one reaction per message: selecting it again removes it, and choosing another replaces it. One compact badge shows up to three most-used emojis and the total number of people who reacted. Tapping opens a mobile bottom sheet or desktop dialog with an All filter and per-emoji counts; names, avatars and full local reaction timestamps load in pages of 50, with filtering performed before pagination. Your own reaction is highlighted and can be removed inside the details. The selected filter stays open through live updates. Reaction summaries follow the bounded chat history and update via a metadata-only Supabase Realtime signal, without new chat messages, unread notifications or changes to receipts. Private-only, removed and deleted messages cannot receive reactions. Current membership, closed DMs and community mutes are enforced in the database; owner/moderator removal clears reactions. Apply migrations `20261115001200_message_reactions.sql` and `20261116000100_grouped_reaction_details.sql`.
 
 All chat messages show their sent timestamp in the viewer's time zone. Outgoing public messages add a small status button after it: an up arrow for Sent, a tray arrow for Delivered, and an eye for Seen. Delivery requires the recipient's app to acknowledge the message payload; it is separate from saving the message. Seen requires 500 ms in a focused, visible chat, excluding content covered by navigation, the composer or a dialog. Audio/file Seen means displayed, not played/opened. Group status shows "Seen by N of M" with names and viewing/delivery times on tap. The recipient audience is captured when sending; later joiners do not change it.
 
@@ -233,17 +249,52 @@ There are two visibility levels, not an "internal" one: anything given to the AI
 ### One person, several identities
 
 From a personal account, **＋ Add a business** (in the switcher at the top, or `/business/new`) creates the business as a **separate identity**, with its own chats, contacts, inbox and badges. Nothing is mixed with the person's own.
-- **Switcher:** the header shows who you're acting as (🦊 Personal ⇄ 🍝 Business). Other identities show a badge when something is waiting (`identity_badge()`, server-only: unread messages from others plus open requests).
+- **Switcher:** the header badge belongs to the selected account. Expanding the menu shows each personal/business identity's own total, including the selected identity. Totals combine unread chats/topics and pending actions, counting a request once when it appears on multiple surfaces. Individually viewed, deleted and removed messages are excluded; muted chats keep their own counters but do not increase the total. Linked request notes are historical records, not additional alerts. Staff see customer work rather than Owner/Manager approvals. My Agent's **Needs you** includes pending inbox requests alongside plan approvals.
+- **Live notification isolation:** `notification_accounts()` returns one authorized snapshot for the actual signed-in person's accessible identities. Its private helpers also serve `unread_counts()`, `action_counts()` and `owner_attention_count()`. A metadata-only `identity_notification_versions` row invalidates that person's counts when a personal or managed-business item changes, even while a different identity is selected. Clients reset on identity switches, abort old requests and reject responses for a different actor/workspace. Apply migrations `20261116002100_identity_notifications.sql` through `20261116002400_notification_invalidation.sql`.
 - **How it works** (`lib/identities.ts`):
   - Each added business has its own internal login (`…@business.agentme.app`) that nobody types.
-  - `business_managers` links the business to the people who manage it. The role is `owner` for now; `staff` comes later.
-  - Switching signs the browser in as that identity on the server (admin magic-link token, verified immediately, no email sent). A signed, httpOnly `agentme_person` cookie remembers the person, so they can switch back. Every switch re-checks `business_managers`.
+  - `business_managers` links the business to the people who manage it. Roles are `owner`, `manager` and `staff`, checked against the live membership.
+  - Switching creates a fresh session for the same real person, with a service-created `business_work_sessions` binding. The Auth JWT always identifies that person; `workspace_user_id()` resolves the effective business tenant for RLS and existing chats. This avoids giving staff the business owner?s Auth credentials. No impersonation cookie is trusted. Every switch and database access checks current membership.
   - Logging in or out clears the cookie.
-- **Limits:** up to 5 businesses per person, and 10 creation attempts a day.
+- **Limits:** up to 5 owned businesses per person (staff memberships do not consume this allowance), and 10 creation attempts a day.
 - **Deleting:**
   - Deleting a business you switched into deletes only the business and switches you back to yourself.
   - Deleting your personal account also deletes the businesses you're the only owner of.
 - **Business-only sign-ups** still work as before: that login is the business's own manager.
+
+### Business staff
+
+**My Business ? Staff & access** shows roles, work availability, pending invitations and a private dated audit. Search by name or @address, then select a verified personal account. Email invitations are not supported. Existing users receive a My Agent invitation; a recipient-bound private link also works after personal login. Invitations expire after seven days. Renewing replaces the old link. Acceptance adds access to the existing business in the account switcher.
+
+- **Owner:** all business settings, elevated roles, ownership transfer and business deletion. At least one owner must remain.
+- **Manager:** business settings, approved answers, customer requests and ordinary staff. Cannot appoint elevated roles, remove owners/managers or delete the business.
+- **Staff:** customer replies, work availability and reusable-answer suggestions. Q&A approval is required by default. Owners/Managers can open a Staff member's **Reply & Q&A permissions** in **Staff & access** and change two independent switches: **Require assignment before replying** (default off) and **Require approval before publishing to Q&A** (default on). These do not add customer-reply approval. Staff cannot change these permissions, other business settings, launch company plans or gain platform moderation powers.
+- **Assignment:** when required, self-claiming cannot substitute for an Owner/Manager assignment, including claims made before the setting changed. Only assigned requests appear in that Staff member's action inbox and attention count. With the switch off, Staff can take unassigned requests. Other people's active claims remain protected.
+- **Q&A publication:** Staff always choose explicitly whether to add an answer. With approval required, the suggestion waits in My Agent for an Owner/Manager to edit and approve. With approval off, the customer-reply checkbox and standalone FAQ form can publish general answers after the same privacy/coherence check. Changing the setting does not publish existing pending suggestions. Roles, controls, source eligibility and reply leases are rechecked in service-only database commits; browser RPCs cannot bypass the publication review. Retries do not add duplicate FAQs for the same customer request.
+- **Clear publication feedback:** reviews distinguish private/customer-specific information, an answer that does not address the question, uncertainty and a temporarily unavailable check. Failed reviews leave the text editable and record the reason code in the private team audit. Approved drafts retain the edited question and answer. Apply migrations `20261116002500_staff_reply_controls.sql` and `20261116002600_staff_controls_attention.sql`.
+- **Requests:** claim a customer question before answering, or let an owner/manager assign it. A database lease and conditional completion prevent two people answering the same request. Replies still come from the business; internal authorship records the actual person. Removed staff?s unhandled claims return to the team.
+- **Availability:** each person explicitly enables **Available for customer requests** while acting for that business. New staff start off duty. Personal presence remains separate. Customers see only aggregate Team availability when enabled in Privacy; colleagues see coarse work status on private team-only channels.
+- **Receipts:** **Agent received** remains separate from **Seen by team**, which requires a human to actually display the question in an active, visible chat.
+- **Revocation:** membership removal ends that person?s work sessions and invalidates presence channels, without deleting their personal account or unrelated sessions. Role changes take effect on subsequent permission checks. Outstanding invitations lose authority when their inviter is removed or demoted.
+
+Apply migrations `20261116001000` through `20261116002000` locally or in deployment before using staff features. The workspace migration retires older impersonated business sessions; those users must sign in again. This uses the existing Next.js and Supabase services.
+
+
+**Reporting lines and transfers**
+
+- Each Staff member reports to one Owner or Manager. New Staff report to the inviting supervisor. Existing memberships use a valid accepted inviter where available, otherwise the default receiving Owner.
+- In **My Business > Staff & access**, expand **Move Staff to another supervisor** below a Staff member. Managers can request moves for their own Staff; Owners can request any move. Search a receiving Owner/Manager by name or @address. One pending request per Staff member; requests expire after seven days and can be cancelled by their requester or an Owner.
+- The receiver opens **My Agent > Work updates** while acting for that business and accepts or declines. Only that actual person can decide. Reporting lines, assignments and pending Q&A oversight change on acceptance, never on request. The requester, previous supervisor and Staff member receive private business-work updates on completion. These updates are not posted in shared customer conversations or personal inboxes.
+- Removing or demoting a supervisor automatically moves their Staff to **Default receiving Owner**, configurable by Owners in Staff & access. Assigned questions stay with Staff. Stale transfer requests close automatically. Personal accounts and unrelated logins remain intact.
+- Managers can manage permissions, assignments and pending Q&A suggestions only for their own Staff. Linked customer notes and inbox records follow the same database-enforced boundaries.
+
+**Dashboard filters and historical attribution**
+
+- Open **My Business > Customer dashboard**. Owners can choose the entire business, a supervisor's team or an individual Staff member; Managers can choose their own team or its current Staff. People can be searched by name or @address. Filters are enforced by database RPCs, including manually modified URLs.
+- People & teams shows assignments, human replies, current pending requests, median handoff-to-reply time, approved Q&A contributions, daily activity and per-person totals. Shared business-agent analytics and customer-action clicks remain in the Owner's entire-business view.
+- Completed work records the actual person and reporting team at the time. Transfers do not rewrite historical totals; pending work follows the current reporting line. Older work without reliable team attribution is labelled Unattributed, never assigned to today's roster.
+- Apply migrations `20261116002700` through `20261116003400` before using reporting lines and team dashboards. No additional server is required.
+
 
 ### Businesses in groups and communities
 
@@ -271,7 +322,7 @@ How it works in each place:
 
 In My Agent, type *"ask around: does anyone know a good plumber in Camden?"* (also *"Does anyone know…"*, *"Can anyone recommend…"*, *"Any tips for…"*, *"Who can lend me…"*). Add @mentions to ask only those people.
 - **Who is asked:** contacts who allow it (Settings → *Friends can ask me for recommendations*, on by default), up to 25, with a daily limit. Guests and non-contacts are never asked. You approve the card before anything is sent.
-- **How each friend's agent answers:** with a **saved tip** whose topic matches (Settings → *Saved tips*, shared only with contacts). Otherwise the friend is asked in *Needs your answer* and can **Share tip** (optionally saving it as a tip) or say **I don't know**. The asker is never told who passed, and private facts are never used.
+- **How each friend's agent answers:** with a matching **saved tip** explicitly set to **My contacts' agents** (Settings → *What your agent knows about you* → *Saved tips*, below Lifestyle). Each tip has the same visibility tiles as the other profile fields, with **Edit → Save tip** for existing entries. New tips default to **Only my agent** and remain available in the owner's private agent context. Private tips are excluded before A2A replies and checked again by the reply policy. Existing tips keep their previous contact-sharing permission; an inbox answer saved with the explicit “share next time” choice is also marked for contacts. Apply `20261116000600_saved_tip_visibility.sql`. Otherwise the friend is asked in *Needs your answer* and can **Share tip** (optionally saving it as a tip) or say **I don't know**. The asker is never told who passed, and private facts are never used.
 - **What you get back:** tips arrive one by one in My Agent. The card shows "Asked N friends · M tips so far". When everyone has answered, or you tap **✨ Summarise now**, your agent writes one short summary of who recommends what.
 
 ## Navigation
@@ -289,13 +340,14 @@ The tab bar is **Chats · Contacts · Groups · Communities · Settings**.
 
 ### My Agent: one thread per request
 
-My Agent opens on a list of your requests, one line each, like a list of recent chats.
-- **Groups:**
+My Agent has a desktop topic sidebar and a mobile **Topics** drawer. Its centre shows requests needing attention and a compact overview of ongoing work; selecting a topic opens its conversation in the centre.
+- **Topic views:**
   - **Needs you:** plan waiting for approval, or plan ready.
   - **In progress:** working, or waiting for answers.
   - **Recent:** done, shared, cancelled, or no plan.
-  - **Older:** inactive for 7+ days, collapsed.
-- **Inside a group:** newest activity first. Each line shows the title, a status from its latest plan, a preview of the last message, and its own unread badge.
+  - **History:** inactive for 7+ days, searchable alongside newer topics.
+- Each view fetches **10 topics at a time**, newest activity first, with a stable activity-time/ID cursor. Scrolling near the bottom fetches the next ten; **Load more** and retry controls remain available. Titles, latest plan status, previews, timestamps and unread badges stay current. Topic selection, loaded page counts and scroll anchors are preserved when returning; device storage contains navigation metadata rather than message previews.
+- **Search topics** searches topic titles across all statuses and history, without fetching the entire archive. Topic lists and previews never mark messages read; visibility-based message tracking does that inside the conversation. Apply `20261116000500_agent_topic_pages.sql`.
 - **Needs your answer** stays at the top.
 - **＋ New request**, or typing in the box below the list, starts a new thread and opens it. A thread shows only that request's messages, and follow-ups typed in it stay there. The agent's chat memory is that thread only.
 - **Titles** come from the plan (*"Dinner with @marco, @paul · Saturday evening"*, no AI call). Until a plan exists, the title is the first words you typed. You can rename a thread.
@@ -303,7 +355,7 @@ My Agent opens on a list of your requests, one line each, like a list of recent 
   - **A plan's messages** (`metadata.task_id`) go to that plan's thread. A plan started elsewhere (e.g. `@agent` in a group) gets its own thread.
   - **Messages sent in a thread** stay there.
   - **Everything else** goes to **📬 From your agent**: notes and others' requests, including notes about someone else's plan.
-- **Badges:** My Agent's badge in Chats counts **requests with something new**, not messages, and opening a thread clears its badge.
+- **Badges:** My Agent's badge in Chats counts **requests with something new**, not messages. A thread's unread badge clears as its messages are visibly viewed.
 - **Existing history:** each past plan became a thread, together with the request that started it; anything else went to *Earlier messages*.
 
 ## Groups and communities
@@ -377,6 +429,16 @@ My Agent opens on a list of your requests, one line each, like a list of recent 
   - **Mute:** updates about a group (or a community's General chat) you muted still show, but don't add to the tab badge.
     - **Tests** use a predictable mock model, never the real one.
 - **Enforced in code:** posting rules (`canPost`) and every permission check (`lib/social/*`). The browser only reads through RLS. Membership, requests, reports and links are server-written, and reports are visible only to the admins or moderators who handle them.
+
+## People mentions and private agent requests
+
+Typing `@` in the message composer offers current chat members, your own agent, and eligible business agents. Accepted contacts have separate **Mention [name]** and **Ask [name]'s agent** actions. In My Agent, contacts can be used in a request without notifying them. A human mention never invokes their agent; both **Ask @marco whether…** and **Ask @marco's agent whether…** prepare the same approval card. In a shared chat, **@agent ask @marco…** prepares that card privately. Only the explicit question is sent after approval, through the existing question workflow; the recipient's agent can ask its owner to answer. Ordinary planning requests keep their existing behaviour. The handle `agent` is reserved for private assistance.
+
+Newly posted shared human messages capture eligible mention recipients as stable account IDs. Recipients must already belong to the conversation and be able to read that message. Private instructions, My Agent messages, AI output, quoted lines, code, emails and forwarded mentions do not generate alerts. Mentions never add anyone to a chat or grant access to its history. Changing a handle does not retarget old mentions.
+
+Unread mentions appear beside each chat and in a persistent **@ Mentions** button beside Chats. The button opens unread mentions grouped by chat, with sender, preview, timestamp and exact-message links; older entries load in pages of 50. Opening the list never marks messages read. Mentions stay semibold and use your accent colour after reading, with contrasting styling inside your outgoing bubbles.
+
+While the app is open elsewhere, a small **ten-second** banner offers **View** and **Dismiss**. Arrivals from separate updates accumulate in one banner, grouped across chats and deduplicated by message ID. New arrivals restart its timer; hovering, keyboard focus and hidden tabs pause it. View opens a single source message or the grouped list for several mentions. Dismissal and timeout leave unread counts intact. Mobile banners sit below the header and desktop banners appear at the top right. Active-chat mentions are highlighted instead. Muted chats and **Settings → Privacy → Mentions** control banners; unread lists and badges remain available. Alerts are claimed once across sessions and clear only through the existing visibility-based message tracking, even when read-receipt sharing is disabled. This uses Supabase Realtime and does not send agent messages or background push notifications. Apply migrations `20261116000200_people_mentions.sql`, `20261116000300_mention_fast_path.sql` and `20261116000400_mention_inbox.sql`.
 
 ## Platform reports and moderation
 
@@ -469,3 +531,11 @@ E2E_BASE_URL=http://localhost:3100 npm run test:e2e
 
 Payments, bookings, calendar integrations, voice, public feeds, federation with external agent
 providers, and per-user deployments.
+
+### Custom profile avatars
+
+Signup (personal or business), Add a business and Settings > Profile & account share the same avatar editor. Presets remain available. Choose Upload photo or logo, drag to reposition, zoom, rotate, reset or fit the whole logo; the circular preview matches the published crop. Position sliders also support keyboard input. Use image prepares a local preview; Cancel preserves the previous selection. Nothing uploads or changes publicly until the signup/profile form is saved.
+
+Images accept JPG, PNG or WebP sources up to 10 MB. The browser prepares a 512px crop, then the server verifies and re-encodes it as WebP, removes EXIF/GPS metadata and rejects animated/active formats and oversized inputs. The original is not retained. Stored avatars use a private Supabase bucket and a current-image-only public profile endpoint. Old URLs stop working after replacement, switching to a preset or account deletion. Durable cleanup and the existing maintenance sweep remove obsolete files.
+
+Personal and business images stay separate. Business changes require a live Owner/Manager role; Staff cannot change the business profile. AI badges remain distinct from human authorship. Emoji and image avatars use the same renderer throughout chat, contact, search, mention, staff and account-switching views. Apply migrations `20261116003500_custom_avatars.sql` and `20261116003600_avatar_preset_cleanup.sql` before using uploads.

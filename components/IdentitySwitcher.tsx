@@ -1,15 +1,20 @@
 "use client";
+import { Avatar } from "@/components/Avatar";
+
 
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname } from "next/navigation";
+import { OwnPresenceBadge } from "@/components/presence/PresenceBadge";
+import { PresenceControl } from "@/components/presence/PresenceControl";
+import { AccountNotificationBadge, useNotificationState } from "@/components/notifications/NotificationProvider";
 
 type Identity = { agentId: string; handle: string; displayName: string; avatar: string; type: "personal" | "business"; current: boolean; badge: number };
 
 /**
  * The header's "who am I acting as": your personal identity and the businesses
- * you manage, each with its own chats, contacts and inbox. A badge shows when
- * another identity has something waiting.
+ * you manage, each with its own chats, contacts and inbox. The header and each
+ * menu row show that identity's own notifications.
  */
 export function IdentitySwitcher({
   identities,
@@ -25,8 +30,9 @@ export function IdentitySwitcher({
   const [pending, start] = useTransition();
   const pathname = usePathname();
   const ref = useRef<HTMLDivElement>(null);
-  const current = identities.find((i) => i.current) ?? identities[0];
-  const waiting = identities.filter((i) => !i.current).reduce((n, i) => n + i.badge, 0);
+  const notifications = useNotificationState();
+  const accounts = notifications?.state.accounts.map((account) => ({ ...account, badge: account.notifications.total })) ?? identities;
+  const current = accounts.find((i) => i.current) ?? accounts[0];
 
   // Close after navigating (e.g. after a switch) and when clicking elsewhere.
   const [lastPath, setLastPath] = useState(pathname);
@@ -52,22 +58,18 @@ export function IdentitySwitcher({
         aria-expanded={open}
         aria-haspopup="menu"
         data-testid="identity-switcher"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => { if (!open) notifications?.refresh(); setOpen((o) => !o); }}
       >
-        <span className="text-2xl">{current.avatar}</span>
-        <span>@{current.handle}</span>
+        <span className="text-2xl"><Avatar value={current.avatar} /></span>
+        <span className="flex min-w-0 flex-col items-start"><span>@{current.handle}</span><OwnPresenceBadge /></span>
         <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-normal text-accent">{current.type === "business" ? "Business" : "Personal"}</span>
-        {waiting > 0 && (
-          <span className="rounded-full bg-accent px-1.5 text-xs font-semibold text-white" aria-label={`${waiting} waiting in your other accounts`} data-testid="identity-waiting">
-            {waiting > 99 ? "99+" : waiting}
-          </span>
-        )}
+        <AccountNotificationBadge count={current.badge} testId="identity-waiting" label={`notifications for ${current.displayName}`} />
         <span className="text-xs text-muted" aria-hidden>▾</span>
       </button>
       {open && (
-        <div role="menu" className="absolute left-0 z-20 mt-2 w-72 rounded-2xl border border-border bg-surface p-2 shadow-lg">
+        <div role="menu" className="absolute left-0 z-20 mt-2 max-h-[75dvh] w-72 overflow-y-auto rounded-2xl border border-border bg-surface p-2 shadow-lg">
           <p className="px-2 pb-1 text-xs text-muted">Acting as</p>
-          {identities.map((i) => (
+          {accounts.map((i) => (
             <button
               key={i.agentId}
               type="button"
@@ -83,18 +85,16 @@ export function IdentitySwitcher({
               }
               className={`flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left ${i.current ? "bg-accent-soft" : "hover:bg-accent-soft"}`}
             >
-              <span className="text-xl">{i.avatar}</span>
+              <span className="text-xl"><Avatar value={i.avatar} /></span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{i.displayName}</span>
                 <span className="block text-xs text-muted">@{i.handle} · {i.type === "business" ? "Business" : "Personal"}</span>
               </span>
-              {i.current ? (
-                <span className="text-accent" aria-label="Current">✓</span>
-              ) : (
-                i.badge > 0 && <span className="rounded-full bg-accent px-1.5 text-xs font-semibold text-white">{i.badge > 99 ? "99+" : i.badge}</span>
-              )}
+              <AccountNotificationBadge count={i.badge} testId={`identity-count-${i.handle}`} label={`notifications for ${i.displayName}`} />
+              {i.current && <span className="text-accent" aria-label="Current">✓</span>}
             </button>
           ))}
+          <div role="none"><PresenceControl /></div>
           {pending && <p className="px-2 py-1 text-xs text-muted" role="status">Switching…</p>}
           {error && <p className="px-2 py-1 text-xs text-danger" role="alert">{error}</p>}
           {canAddBusiness && (

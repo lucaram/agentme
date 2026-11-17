@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { searchBusinesses } from "@/lib/social/businesses";
 
 /** One result: a page to open, or a contact to start a chat with. */
-export type SearchHit = { key: string; name: string; icon: string; detail: string; href?: string; openDmWith?: string };
+export type SearchHit = { key: string; name: string; icon: string; detail: string; href?: string; openDmWith?: string; presenceAgent?: string; business?: boolean };
 export type SearchSection = { title: string; hits: SearchHit[] };
 export type SearchScope = "chats" | "contacts" | "groups" | "communities";
 
@@ -80,9 +80,9 @@ export async function searchAction(scope: SearchScope, raw: string): Promise<Sea
       .slice(0, LIMIT)
       .map<SearchHit>((o) => {
         // A business opens its page (booking buttons, "Ask us anything"); a person opens your chat.
-        if (o.type === "business") return { key: o.id, name: o.display_name, icon: o.avatar, detail: `@${o.handle} · Business`, href: `/u/${o.handle}` };
+        if (o.type === "business") return { key: o.id, name: o.display_name, icon: o.avatar, detail: `@${o.handle} · Business`, href: `/u/${o.handle}`, presenceAgent: o.id, business: true };
         const chatId = dmWith.get(o.id);
-        return { key: o.id, name: o.display_name, icon: o.avatar, detail: `@${o.handle}`, ...(chatId ? { href: `/chats/${chatId}` } : { openDmWith: o.id }) };
+        return { key: o.id, name: o.display_name, icon: o.avatar, detail: `@${o.handle}`, presenceAgent: o.id, ...(chatId ? { href: `/chats/${chatId}` } : { openDmWith: o.id }) };
       });
 
   // Any business that answers anyone (not only ones you know): tap to open its page.
@@ -91,6 +91,7 @@ export async function searchAction(scope: SearchScope, raw: string): Promise<Sea
     title: "Businesses",
     hits: (await searchBusinesses(q, alreadyListed)).map((b) => ({
       key: `business-${b.id}`,
+      presenceAgent: b.id, business: true,
       name: b.display_name,
       icon: b.avatar,
       detail: `@${b.handle}${b.bio ? ` · ${b.bio}` : ""} · Page ›`,
@@ -133,7 +134,7 @@ export async function searchAction(scope: SearchScope, raw: string): Promise<Sea
     } else if (c.kind === "agent_chat") {
       const target = c.target_agent ? byId.get(c.target_agent) : undefined;
       if (has(target?.display_name, target?.handle)) {
-        chats.push({ key: c.id, name: `${target?.display_name ?? "Agent"} · agent`, icon: target?.avatar ?? "🤖", detail: "Agent chat", href: `/chats/${c.id}`, order: 2 });
+        chats.push({ key: c.id, name: `${target?.display_name ?? "Agent"} · agent`, icon: target?.avatar ?? "🤖", detail: "Agent chat", href: `/chats/${c.id}`, order: 2, ...(target?.type === "business" ? { presenceAgent: target.id, business: true } : {}) });
       }
     } else if (c.kind === "channel") {
       const community = communityById.get(c.community_id ?? "");
@@ -150,6 +151,7 @@ export async function searchAction(scope: SearchScope, raw: string): Promise<Sea
         name: c.title ?? others.map((o) => o.display_name).join(", "),
         icon: others[0]?.avatar ?? "💬",
         detail: others[0] ? `@${others[0].handle}` : "Direct message",
+        ...(others[0] ? { presenceAgent: others[0].id, business: others[0].type === "business" } : {}),
         href: `/chats/${c.id}`,
         order: 0,
       });
@@ -161,7 +163,7 @@ export async function searchAction(scope: SearchScope, raw: string): Promise<Sea
   const listedDms = new Set([...dmWith.entries()].filter(([, chatId]) => shown.some((c) => c.key === chatId)).map(([agentId]) => agentId));
   const contactsFound = contactHits(listedDms);
   return [
-    { title: "Chats", hits: shown.map((h) => ({ key: h.key, name: h.name, icon: h.icon, detail: h.detail, href: h.href })) },
+    { title: "Chats", hits: shown.map((h) => ({ key: h.key, name: h.name, icon: h.icon, detail: h.detail, href: h.href, presenceAgent: h.presenceAgent, business: h.business })) },
     { title: "Contacts", hits: contactsFound.map((h) => ({ ...h, detail: `${h.detail} · Contact` })) },
     await businessSection(contactsFound.map((h) => h.key)),
   ].filter((s) => s.hits.length);

@@ -1,4 +1,6 @@
 "use client";
+import { Avatar } from "@/components/Avatar";
+
 
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
@@ -140,7 +142,7 @@ export function ForwardPicker({ messageId, onClose }: { messageId: string; onClo
                             <li key={p.key}>
                               <label className={`flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm ${on ? "bg-accent-soft" : "hover:bg-accent-soft"} ${full ? "opacity-50" : ""}`}>
                                 <input type="checkbox" checked={on} disabled={full} onChange={() => toggle(p.key)} aria-label={p.name} />
-                                <span aria-hidden>{p.avatar}</span>
+                                <span aria-hidden><Avatar value={p.avatar} /></span>
                                 <span className="min-w-0 flex-1 truncate">{p.name}</span>
                                 <span className="shrink-0 text-xs text-muted">{p.detail}</span>
                               </label>

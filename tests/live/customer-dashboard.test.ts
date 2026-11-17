@@ -10,6 +10,7 @@ vi.mock("@/lib/auth", () => ({ getUser: async () => auth.owner ? { id: auth.user
 
 describe.skipIf(!dbUp)("customer dashboard data and tracking", () => {
   let f: Awaited<ReturnType<typeof planBusinessFixture>>;
+  const dashboard = (id: string, days: number) => businessDashboard(id, days, { id: f.business.userId, businessRole: "owner" });
   const day = (ago: number) => { const d=new Date(); d.setUTCHours(0,0,0,0); d.setUTCDate(d.getUTCDate()-ago); return d.toISOString(); };
   beforeAll(async () => {
     f=await planBusinessFixture(); auth.userId=f.business.userId;
@@ -33,7 +34,7 @@ describe.skipIf(!dbUp)("customer dashboard data and tracking", () => {
   afterAll(async () => { await f?.cleanup(); });
 
   it("aggregates real outcomes, complete daily buckets, repeated questions and prior periods without double counting",async()=>{
-    const data=await businessDashboard(f.business.agent.id,7);
+    const data=await dashboard(f.business.agent.id,7);
     expect(data?.totals).toMatchObject({received:4,automatic:1,team:1,unanswered:0,closed:1,redirected:0,previous:1});
     expect(data?.pending).toBe(1);
     expect(data?.daily).toHaveLength(7);
@@ -41,9 +42,9 @@ describe.skipIf(!dbUp)("customer dashboard data and tracking", () => {
     expect(data!.daily.reduce((n,d)=>n+d.pending,0)).toBe(1);
     expect(data!.questions.find(q=>q.question.toLowerCase().startsWith("opening"))).toMatchObject({asked:2,automatic:1,needed_team:1});
     expect(data!.gaps.find(q=>q.question.includes("kayaks"))).toMatchObject({asked:2,needed_team:2,unresolved:1});
-    expect((await businessDashboard(f.business.agent.id,30))?.totals.received).toBe(6);
-    expect((await businessDashboard(f.business.agent.id,123))?.days).toBe(30);
-    expect((await businessDashboard(f.marco.agent.id,7))?.totals.received).toBe(0);
+    expect((await dashboard(f.business.agent.id,30))?.totals.received).toBe(6);
+    expect((await dashboard(f.business.agent.id,123))?.days).toBe(30);
+    expect(await dashboard(f.marco.agent.id,7)).toBeNull();
   });
 
   it("separates genuine missing answers, closures and redirects for both old and new records",async()=>{
@@ -58,7 +59,7 @@ describe.skipIf(!dbUp)("customer dashboard data and tracking", () => {
     if(error)throw error;
     const {error:withdrawn}=await f.db.from("inbox_items").insert({owner_id:f.business.userId,agent_id:f.business.agent.id,from_agent:f.luca.agent.id,exchange_id:rows![4].id,kind:"question",status:"withdrawn",payload:{kind:"question",business:true,question:"Cancelled request"}});
     if(withdrawn)throw withdrawn;
-    const data=(await businessDashboard(f.business.agent.id,7))!;
+    const data=(await dashboard(f.business.agent.id,7))!;
     expect(data.totals).toMatchObject({received:10,automatic:1,team:1,unanswered:2,closed:3,redirected:2});
     const daily=data.daily.reduce((a,d)=>({total:a.total+d.total,automatic:a.automatic+d.automatic,team:a.team+d.team,pending:a.pending+d.pending,unanswered:a.unanswered+d.unanswered,closed:a.closed+d.closed,redirected:a.redirected+d.redirected}),{total:0,automatic:0,team:0,pending:0,unanswered:0,closed:0,redirected:0});
     expect(daily).toEqual({total:10,automatic:1,team:1,pending:1,unanswered:2,closed:3,redirected:2});
@@ -75,7 +76,7 @@ describe.skipIf(!dbUp)("customer dashboard data and tracking", () => {
     auth.owner=true;
     expect((await POST(click())).status).toBe(204);
     auth.owner=false;
-    const data=await businessDashboard(f.business.agent.id,7);
+    const data=await dashboard(f.business.agent.id,7);
     expect(data?.clicks).toHaveLength(1);
     expect(data!.clicks[0]).toMatchObject({kind:"book",clicks:1});
     expect(data?.tracking_since).toBeTruthy();

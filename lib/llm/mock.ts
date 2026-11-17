@@ -13,7 +13,7 @@ import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest, typ
 import { mockResearch } from "@/lib/research/mock";
 import { mockRoute, overlapPick } from "@/lib/research/answer";
 import { mockRecallRoute } from "@/lib/agents/recall-route";
-import { mockBusinessScope, mockPublication } from "@/lib/business/question-scope";
+import { mockBusinessScope, mockPublicationDecision } from "@/lib/business/question-scope";
 
 type Faq = { q: string; a: string };
 type BusinessInfo = { description?: string; hours?: string; faqs?: Faq[] };
@@ -112,7 +112,7 @@ export class MockProvider implements LLMProvider {
         value = { scope: mockBusinessScope(String(ctx.question ?? "")) };
         break;
       case "business_publication":
-        value = { reusable: mockPublication(String(ctx.question ?? ""), String(ctx.answer ?? "")) };
+        value = { decision: mockPublicationDecision(String(ctx.question ?? ""), String(ctx.answer ?? "")) };
         break;
       case "compose":
         value = heuristicCompose(withQuoted(String(ctx.text ?? ""), String(ctx.quoted ?? "")), (ctx.chatMembers ?? []) as string[]);

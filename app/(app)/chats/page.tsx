@@ -1,8 +1,13 @@
+import { Avatar } from "@/components/Avatar";
 import Link from "next/link";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { openMyAgent } from "../actions";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
+import { MentionBadge } from "@/components/chat/MentionNotifications";
+import { MentionState } from "@/lib/chat/mentions";
+import { PresenceBadge } from "@/components/presence/PresenceBadge";
+import { AgentNotificationSubtitle, ConversationNotificationBadge } from "@/components/notifications/ConversationNotifications";
 
 const KIND_LABEL = { my_agent: "Your agent", dm: "Direct message", group: "Group", agent_chat: "Agent chat", channel: "Community" } as const;
 
@@ -28,7 +33,7 @@ export default async function ChatsPage() {
     .order("created_at", { ascending: false, referencedTable: "messages" })
     .limit(1, { referencedTable: "messages" });
 
-  const { data: agents } = await supabase.from("agents").select("id, owner_id, handle, display_name, avatar");
+  const { data: agents } = await supabase.from("agents").select("id, owner_id, handle, display_name, avatar, type");
   // Unread messages per chat (RLS: only the user's own memberships).
   const { data: unreadRows } = await supabase.rpc("unread_counts");
   const unread = new Map((unreadRows ?? []).map((r) => [r.conversation_id, Number(r.unread)]));
@@ -40,6 +45,7 @@ export default async function ChatsPage() {
   ]);
   const communityById = new Map((communities ?? []).map((c) => [c.id, c]));
   const { data: needsAnswer } = await supabase.rpc("owner_attention_count");
+  const mentionState = MentionState.safeParse((await supabase.rpc("mention_state")).data).data;
   const muted = new Set((myMemberships ?? []).filter((m) => m.muted).map((m) => m.conversation_id));
   const byOwner = new Map((agents ?? []).map((a) => [a.owner_id, a]));
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));
@@ -76,7 +82,8 @@ export default async function ChatsPage() {
             : last.sender_user_id
               ? `${byOwner.get(last.sender_user_id)?.display_name ?? "Someone"}: `
               : "";
-      return { id: c.id, kind: c.kind, name, icon, last, author, at: last?.created_at ?? "", unread: unread.get(c.id) ?? 0, muted: muted.has(c.id) };
+      const presence = c.kind === "dm" ? others[0] : c.kind === "agent_chat" && target?.type === "business" ? target : null;
+      return { id: c.id, kind: c.kind, name, icon, last, author, presence, at: last?.created_at ?? "", unread: unread.get(c.id) ?? 0, muted: muted.has(c.id) };
     })
     .sort((a, b) => b.at.localeCompare(a.at));
   const myAgentRow = rows.find((r) => r.kind === "my_agent");
@@ -96,28 +103,18 @@ export default async function ChatsPage() {
             className="flex items-center gap-3 rounded-2xl border-2 border-agent-border bg-agent px-4 py-3.5 shadow-sm transition hover:border-accent"
             data-testid="my-agent-card"
           >
-            <span className="text-3xl">{myAgentRow.icon}</span>
+            <span className="text-3xl"><Avatar value={myAgentRow.icon} /></span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2">
                 <span className={`truncate ${myAgentRow.unread ? "font-semibold" : "font-medium"}`}>My Agent</span>
                 <span className="rounded bg-agent-border px-1 text-[10px] font-semibold uppercase text-foreground" title="Your AI agent">AI</span>
                 <span className="truncate text-xs text-muted">@{agent.handle}</span>
               </span>
-              <span className={`block truncate text-sm ${myAgentRow.unread || needsAnswer ? "text-foreground" : "text-muted"}`} data-testid="my-agent-subtitle">
-                {needsAnswer
-                  ? `🔔 ${needsAnswer} ${needsAnswer === 1 ? "thing needs" : "things need"} your answer`
-                  : myAgentRow.last
-                    ? `${myAgentRow.author === "🤖 " ? "" : myAgentRow.author}${myAgentRow.last.content}`
-                    : "Ask me to organise something with your contacts"}
-              </span>
+              <AgentNotificationSubtitle initial={Number(needsAnswer ?? 0)} fallback={myAgentRow.last ? `${myAgentRow.author === "🤖 " ? "" : myAgentRow.author}${myAgentRow.last.content}` : "Ask me to organise something with your contacts"} />
             </span>
             <span className="flex shrink-0 flex-col items-end gap-1">
               <span className={`text-xs ${myAgentRow.unread ? "text-accent" : "text-muted"}`}>{formatWhen(myAgentRow.at)}</span>
-              {myAgentRow.unread > 0 && (
-                <span className="min-w-5 rounded-full bg-accent px-1.5 text-center text-xs font-semibold leading-5 text-white dark:text-black" data-testid="unread-badge" aria-label={`${myAgentRow.unread} unread`}>
-                  {myAgentRow.unread > 99 ? "99+" : myAgentRow.unread}
-                </span>
-              )}
+              <ConversationNotificationBadge conversationId={myAgentRow.id} initial={myAgentRow.unread} muted={myAgentRow.muted} />
             </span>
           </Link>
         </section>
@@ -126,13 +123,14 @@ export default async function ChatsPage() {
       {chatRows.length > 0 ? (
         <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface" aria-label="Chats">
           {chatRows.map((r) => (
-            <li key={r.id}>
-              <Link href={`/chats/${r.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-accent-soft">
-                <span className="text-2xl">{r.icon}</span>
+            <li key={r.id} className="flex items-center">
+              <Link href={`/chats/${r.id}`} className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 hover:bg-accent-soft">
+                <span className="text-2xl"><Avatar value={r.icon} /></span>
                 <span className="min-w-0 flex-1">
                   <span className={`block truncate ${r.unread && !r.muted ? "font-semibold" : "font-medium"}`}>
                     {r.name}
                     {r.muted && <span className="ml-1 text-xs" title="Muted" aria-label="muted">🔕</span>}
+                    {r.presence && <span className="ml-2"><PresenceBadge agentId={r.presence.id} business={r.presence.type === "business"} /></span>}
                   </span>
                   <span className={`block truncate text-sm ${r.unread ? "text-foreground" : "text-muted"}`}>
                     {r.last ? `${r.author}${r.last.content}` : KIND_LABEL[r.kind]}
@@ -140,17 +138,10 @@ export default async function ChatsPage() {
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1">
                   <span className={`text-xs ${r.unread ? "text-accent" : "text-muted"}`}>{formatWhen(r.at)}</span>
-                  {r.unread > 0 && (
-                    <span
-                      className={`min-w-5 rounded-full px-1.5 text-center text-xs font-semibold leading-5 ${r.muted ? "bg-border text-muted" : "bg-accent text-white dark:text-black"}`}
-                      data-testid="unread-badge"
-                      aria-label={`${r.unread} unread`}
-                    >
-                      {r.unread > 99 ? "99+" : r.unread}
-                    </span>
-                  )}
+                  <ConversationNotificationBadge conversationId={r.id} initial={r.unread} muted={r.muted} />
                 </span>
               </Link>
+              <MentionBadge conversationId={r.id} initial={mentionState?.chats.find((c) => c.conversation_id === r.id)} />
             </li>
           ))}
         </ul>

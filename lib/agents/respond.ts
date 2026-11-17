@@ -16,7 +16,7 @@ import { citation } from "@/lib/business/learn";
 import { waysOf, withWays } from "@/lib/business/booking";
 import { BusinessScopeSchema, isPersonalPlanQuestion } from "@/lib/business/question-scope";
 
-export type Tip = { topic: string; tip: string };
+export type Tip = { topic: string; tip: string; disclosure: "private" | "contacts" };
 
 export type RecipientAgent = {
   id: string;
@@ -118,7 +118,7 @@ export async function respondAsAgent(
   if (isAskAround.success) {
     if (incoming.relationship !== "accepted") return refuse(skill, "not_a_contact", "Only contacts can ask around.");
     if (recipient.recommendations_ok === false) return refuse(skill, "not_taking_requests", "Not taking recommendation requests.");
-    const matching = matchTips(isAskAround.data.question, [...tips]).slice(0, 3);
+    const matching = matchTips(isAskAround.data.question, tips.filter((tip) => tip.disclosure === "contacts")).slice(0, 3);
     if (matching.length) {
       const answer = matching.map((t) => t.tip).join(" · ");
       return {

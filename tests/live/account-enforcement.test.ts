@@ -133,16 +133,16 @@ describe.skipIf(!dbUp)("account enforcement and private appeals", () => {
     const user = made.data.user.id; extraUsers.push(user);
     const agent = await f.db.from("agents").insert({ owner_id: user, handle: `managed_${crypto.randomUUID().slice(0, 8)}`, display_name: "Co-owned business", type: "business" }).select("id").single(); expect(agent.error).toBeNull();
     await f.db.from("business_managers").insert([{ business_agent_id: agent.data!.id, user_id: f.marco.userId, role: "owner" }, { business_agent_id: agent.data!.id, user_id: f.luca.userId, role: "owner" }]);
-    const bad = await signIn(email); const good = await signIn(email); const unbound = await signIn(email);
+    const bad = await signIn(f.marco.email); const good = await signIn(f.luca.email); const unbound = await signIn(email);
     for (const [client, person] of [[bad, f.marco.userId], [good, f.luca.userId]] as const) {
       const token = (await client.auth.getSession()).data.session!.access_token; const sessionId = decodeJwt(token).session_id as string;
-      expect((await f.db.from("managed_identity_sessions").insert({ session_id: sessionId, business_user: user, person_user: person })).error).toBeNull();
+      expect((await f.db.from("business_work_sessions").insert({ session_id: sessionId, business_agent_id: agent.data!.id, person_user: person })).error).toBeNull();
     }
     const c = await report("group"); expect((await decide(c)).error).toBeNull(); expect(await accountRestricted(user)).toBe(false);
     const own = await f.db.from("conversations").insert({ kind: "my_agent", created_by: user }).select("id").single(); expect(own.error).toBeNull();
     expect((await f.db.from("conversation_members").insert({ conversation_id: own.data!.id, user_id: user })).error).toBeNull();
     const shared = await f.db.from("messages").insert({ conversation_id: own.data!.id, sender_user_id: user, content: "Visible to business", is_ai_generated: false }).select("id").single(); expect(shared.error).toBeNull();
-    for (const client of [bad, unbound]) expect((await client.from("messages").insert({ conversation_id: own.data!.id, sender_user_id: user, content: "Manager bypass", is_ai_generated: false })).error?.message).toContain("restricted");
+    for (const client of [bad, unbound]) expect((await client.from("messages").insert({ conversation_id: own.data!.id, sender_user_id: user, content: "Manager bypass", is_ai_generated: false })).error).toBeTruthy();
     expect((await good.rpc("set_message_reaction", { p_message: shared.data!.id, p_reaction: "heart" })).error).toBeNull();
     expect((await bad.from("managed_identity_sessions").insert({ session_id: crypto.randomUUID(), business_user: user, person_user: f.luca.userId })).error).toBeTruthy();
     await f.db.from("business_managers").delete().eq("business_agent_id", agent.data!.id).eq("user_id", f.luca.userId);

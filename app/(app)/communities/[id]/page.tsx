@@ -1,3 +1,5 @@
+import { Avatar } from "@/components/Avatar";
+import { avatarText } from "@/lib/profile/avatar";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAgent } from "@/lib/auth";
@@ -71,7 +73,7 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
   const header = (
     <section className="card space-y-3">
       <div className="flex flex-wrap items-center gap-4">
-        <span className="text-5xl">{community.avatar}</span>
+        <span className="text-5xl"><Avatar value={community.avatar} /></span>
         <div className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold">{community.name}</h1>
           <p className="text-xs text-muted">
@@ -88,7 +90,7 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
           <div className="flex flex-wrap gap-2">
             {activePartners.map((p) => (
               <Link key={p.id} href={`/u/${p.agent.handle}`} className="rounded-full bg-accent-soft px-3 py-1 text-sm hover:underline">
-                {p.agent.avatar} {p.agent.display_name} <span className="text-muted">@{p.agent.handle}</span>
+                <Avatar value={p.agent.avatar} /> {p.agent.display_name} <span className="text-muted">@{p.agent.handle}</span>
               </Link>
             ))}
           </div>
@@ -162,7 +164,7 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
   const autopilotRecent = (autopilotRows ?? []).filter((e) => e.action !== "nudged").slice(0, 20);
   const who = (userId: string) => {
     const a = byOwner.get(userId);
-    return a ? `${a.avatar} ${a.display_name} @${a.handle}` : "Someone";
+    return a ? `${avatarText(a.avatar)} ${a.display_name} @${a.handle}` : "Someone";
   };
 
   return (
@@ -344,7 +346,7 @@ export default async function CommunityPage({ params }: PageProps<"/communities/
                 {partners.map((p) => (
                   <li key={p.id} className="flex flex-wrap items-center gap-2 py-2" data-testid="partner">
                     <span className="min-w-0 flex-1 text-sm">
-                      {p.agent.avatar} {p.agent.display_name} <span className="text-muted">@{p.agent.handle}</span>
+                      <Avatar value={p.agent.avatar} /> {p.agent.display_name} <span className="text-muted">@{p.agent.handle}</span>
                       {p.status === "invited" && <span className="ml-2 text-xs text-muted">invited, waiting for them to accept</span>}
                     </span>
                     <ActionButton action={removePartnerAction.bind(null, id, p.agent.id)} label={p.status === "invited" ? "Cancel invitation" : "Remove"} />

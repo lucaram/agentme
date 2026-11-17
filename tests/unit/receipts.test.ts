@@ -12,7 +12,7 @@ describe("receipt presentation", () => {
   it("does not equate agent acceptance with human viewing, including when sharing is disabled", () => {
     const agent: Receipt = { ...receipt, kind: "agent", group: false, total: 0, agent_business: true, agent_received_at: receipt.sent_at };
     expect(receiptDisplay(agent)).toMatchObject({ state: "agent", text: "Agent received", green: false });
-    expect(receiptDisplay({ ...agent, owner_seen_at: receipt.sent_at })).toMatchObject({ state: "seen", text: "Seen by business owner", green: true });
+    expect(receiptDisplay({ ...agent, owner_seen_at: receipt.sent_at })).toMatchObject({ state: "seen", text: "Seen by team", green: true });
     expect(receiptDisplay({ ...agent, owner_seen_at: receipt.sent_at, owner_seen_shared: false })).toMatchObject({ state: "agent", green: false });
     expect(receiptDisplay()).toMatchObject({ state: "sent", green: false });
   });

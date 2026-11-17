@@ -1,13 +1,15 @@
 import "server-only";
 import { adminClient } from "@/lib/supabase/admin";
 import { canQuote, quoteAttribution } from "./quote";
+import { currentBusinessActor } from "@/lib/business/actor-context";
+import { createClient } from "@/lib/supabase/server";
 
 /** The message being replied to, checked: same chat, visible to everyone there, not removed. */
 export type ReplyInfo = { id: string; author: string; text: string; fromAgentHandle: string | null };
 
 export async function resolveReply(conversationId: string, replyTo: string | null | undefined, userId: string): Promise<ReplyInfo | null> {
   if (!replyTo || !/^[0-9a-f-]{36}$/.test(replyTo)) return null;
-  const db = adminClient();
+  const db = currentBusinessActor() ? await createClient() : adminClient();
   const { data: visible } = await db.rpc("can_read_chat_message", { p_message: replyTo, p_user: userId });
   if (!visible) return null;
   const { data: m } = await db

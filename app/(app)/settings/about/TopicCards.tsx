@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { ShareTiles } from "@/components/profile/ShareTiles";
 import { useRouter } from "next/navigation";
 import { addChip, MAX_CUSTOM_TOPICS, type Topic } from "@/lib/profile/topics";
 import { saveAwayAction, saveTopicAction } from "./actions";
@@ -85,34 +86,6 @@ function CardFooter({ pending, message, onSave, saveLabel = "Save", onRemove, re
       <button type="button" className="btn-primary px-6" disabled={pending || saveDisabled} onClick={onSave}>
         {pending ? "Saving…" : saveLabel}
       </button>
-    </div>
-  );
-}
-
-/** Sharing as two choice tiles (side by side; stacked on a phone). */
-function ShareTiles({ share, onChange, name }: { share: boolean; onChange: (share: boolean) => void; name: string }) {
-  const options: [boolean, string, string, string][] = [
-    [false, "🔒", "Only my agent", "Used for your own plans, never given to anyone."],
-    [true, "👥", "My contacts' agents", "Only when a contact's plan asks for this kind of thing."],
-  ];
-  return (
-    <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Who can see this">
-      {options.map(([value, icon, title, hint]) => (
-        <label
-          key={String(value)}
-          className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition ${
-            share === value ? "border-accent bg-accent-soft" : "border-border bg-background hover:border-muted"
-          }`}
-        >
-          <input type="radio" name={name} className="sr-only" checked={share === value} onChange={() => onChange(value)} />
-          <span className="text-lg" aria-hidden>{icon}</span>
-          <span className="min-w-0">
-            <span className="block text-sm font-medium">{title}</span>
-            <span className="block text-xs text-muted">{hint}</span>
-          </span>
-          <span className={`ml-auto mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 ${share === value ? "border-accent bg-accent" : "border-border"}`} aria-hidden />
-        </label>
-      ))}
     </div>
   );
 }
@@ -205,7 +178,7 @@ export function TopicCard({
 export function AwayCard({ current, currentShare, minDate }: { current: { until: string; text: string } | null; currentShare: boolean; minDate: string }) {
   const [until, setUntil] = useState(current?.until ?? "");
   const [note, setNote] = useState(current?.text.match(/\(([^)]*)\)/)?.[1] ?? "");
-  const [share, setShare] = useState(current ? currentShare : true);
+  const [share, setShare] = useState(current ? currentShare : false);
   const { message, pending, run } = useSaver();
   const summary = current?.text.split(":")[0] ?? "";
   return (
@@ -249,14 +222,14 @@ export function AwayCard({ current, currentShare, minDate }: { current: { until:
 export function CustomTopics({ topics }: { topics: { label: string; value: string; share: boolean }[] }) {
   const [label, setLabel] = useState("");
   const [value, setValue] = useState("");
-  const [share, setShare] = useState(true);
+  const [share, setShare] = useState(false);
   const { message, pending, run } = useSaver();
   return (
     <div className="space-y-2">
       {topics.map((t) => (
         <TopicCard
           key={t.label}
-          topic={{ key: "interests", icon: "✨", title: t.label, hint: "Your own topic. Shared, it's given when a contact's plan asks about your interests.", placeholder: "", chips: [], shareByDefault: true }}
+          topic={{ key: "interests", icon: "✨", title: t.label, hint: "Your own topic. Shared, it's given when a contact's plan asks about your interests.", placeholder: "", chips: [], shareByDefault: false }}
           label={t.label}
           initialValue={t.value}
           initialShare={t.share}

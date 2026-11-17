@@ -9,18 +9,29 @@ import { getAgentForUser } from "@/lib/data/agents";
 import { getOrCreateMyAgentConversation, postMessage } from "@/lib/data/chat";
 import { validateHandle } from "@/lib/policy/handles";
 import { asJson } from "@/lib/data/json";
+import { prepareAvatar, commitAvatar, pruneAvatarFiles } from "@/lib/profile/avatar-server";
+import { after } from "next/server";
 import { avatarsFor } from "@/lib/avatars";
 import { normaliseSite } from "@/lib/business/site";
 import { allowLocal } from "@/lib/business/fetch";
 import { attachWebsite } from "@/lib/business/site-setup";
 import { safeNext } from "@/lib/next-path";
 import { registerAccountEmail } from "@/lib/people/matching";
+import { businessSignupDetails, handleCandidates } from "@/lib/onboarding/details";
+
+export async function suggestAvailableHandle(name: string): Promise<{ ok: boolean; handle: string; message: string }> {
+  await requireUser(); const candidates = handleCandidates(typeof name === "string" ? name.slice(0, 80) : "user");
+  const { data, error } = await adminClient().from("agents").select("handle").in("handle", candidates);
+  const handle = candidates.find((candidate) => !data?.some((row) => row.handle === candidate));
+  return error || !handle ? { ok: false, handle: candidates[0], message: "Choose an address and check its availability." } : { ok: true, handle, message: `@${handle} is available.` };
+}
 
 export async function checkHandle(input: string): Promise<{ ok: boolean; handle: string; message: string }> {
   await requireUser();
   const check = validateHandle(input);
   if (!check.ok) return { ok: false, handle: check.handle, message: check.reason };
-  const { data } = await adminClient().from("agents").select("id").eq("handle", check.handle).maybeSingle();
+  const { data, error } = await adminClient().from("agents").select("id").eq("handle", check.handle).maybeSingle();
+  if (error) return { ok: false, handle: check.handle, message: "Couldn't check this address. Please try again." };
   return data
     ? { ok: false, handle: check.handle, message: `@${check.handle} is taken.` }
     : { ok: true, handle: check.handle, message: `@${check.handle} is available.` };
@@ -47,17 +58,7 @@ function checkDetails(form: FormData, isBusiness: boolean): string | null {
     }
     return null;
   }
-  if (tooLong("description", SIGNUP_LIMITS.description)) return `Keep the description to ${SIGNUP_LIMITS.description} characters. You can add more later in Business.`;
-  if (tooLong("hours", SIGNUP_LIMITS.hours)) return `Keep opening hours to ${SIGNUP_LIMITS.hours} characters.`;
-  for (const i of [1, 2, 3]) {
-    const q = optional(form.get(`faq_q_${i}`));
-    const a = optional(form.get(`faq_a_${i}`));
-    if (q && !a) return `FAQ ${i}: add an answer, or clear the question.`;
-    if (a && !q) return `FAQ ${i}: add the question, or clear the answer.`;
-    if ((q?.length ?? 0) > SIGNUP_LIMITS.faqQuestion) return `FAQ ${i}: keep the question to ${SIGNUP_LIMITS.faqQuestion} characters.`;
-    if ((a?.length ?? 0) > SIGNUP_LIMITS.faqAnswer) return `FAQ ${i}: keep the answer to ${SIGNUP_LIMITS.faqAnswer} characters.`;
-  }
-  return null;
+  const details = businessSignupDetails(form); return details.ok ? null : details.error;
 }
 
 export type OnboardingState = { error?: string } | undefined;
@@ -81,6 +82,8 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
   const isBusiness = parsed.data.type === "business";
   const detailsError = checkDetails(form, isBusiness);
   if (detailsError) return { error: detailsError };
+  const business = businessSignupDetails(form);
+  if (isBusiness && !business.ok) return { error: business.error };
   // "Have a website?": checked before anything is created; read once the agent exists.
   const website = isBusiness ? optional(form.get("website")) : null;
   let websiteUrl: string | null = null;
@@ -89,12 +92,10 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
     if (!site.ok) return { error: `Website: ${site.error}` };
     websiteUrl = site.url.toString();
   }
-  const faqs = isBusiness
-    ? [1, 2, 3]
-        .map((i) => ({ q: optional(form.get(`faq_q_${i}`)), a: optional(form.get(`faq_a_${i}`)) }))
-        .filter((f): f is { q: string; a: string } => Boolean(f.q && f.a))
-    : [];
+  const details = isBusiness && business.ok ? business.details : null;
 
+  let image: Buffer | null;
+  try { image = await prepareAvatar(form, user.actorId ?? user.id); } catch (error) { return { error: error instanceof Error ? error.message : "Couldn't prepare your avatar." }; }
   const db = adminClient();
   const { data: agent, error } = await db
     .from("agents")
@@ -106,9 +107,9 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
       type: parsed.data.type,
       // Businesses answer anyone's questions; people only hear from contacts.
       contact_policy: isBusiness ? "anyone" : "contacts_only",
-      bio: isBusiness ? optional(form.get("description"))?.slice(0, 280) ?? null : null,
+      bio: details?.description?.slice(0, 280) ?? null,
       business_info: isBusiness
-        ? asJson({ description: optional(form.get("description")), hours: optional(form.get("hours")), faqs, ...(websiteUrl ? { website: websiteUrl } : {}) })
+        ? asJson({ about: details?.description ?? "", description: details?.description, hours: details?.hours, faqs: details?.faqs ?? [], ...(websiteUrl ? { website: websiteUrl } : {}) })
         : asJson({}),
     })
     .select("id")
@@ -118,7 +119,14 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
   }
 
   // A business that signed up on its own manages itself (staff can be added later).
-  if (isBusiness) await db.from("business_managers").insert({ business_agent_id: agent.id, user_id: user.id, role: "owner" });
+  if (isBusiness) {
+    const manager = await db.from("business_managers").insert({ business_agent_id: agent.id, user_id: user.id, role: "owner" });
+    if (manager.error) { await db.from("agents").delete().eq("id", agent.id); return { error: "Couldn't finish creating your business. Please try again." }; }
+  }
+  if (image) {
+    try { await commitAvatar(agent.id, user.actorId ?? user.id, image, parsed.data.avatar); }
+    catch (error) { await db.from("agents").delete().eq("id", agent.id); after(pruneAvatarFiles); return { error: error instanceof Error ? error.message : "Couldn't save your avatar." }; }
+  }
   if (!isBusiness) {
     const facts = (["availability", "food", "notes"] as const)
       .map((category) => ({
@@ -129,8 +137,13 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
         disclosure: category === "notes" ? ("private" as const) : shareFlag(form.get(`share_${category}`)),
       }))
       .filter((f): f is typeof f & { value: string } => f.value !== null);
-    if (facts.length) await db.from("agent_facts").insert(facts);
+    if (facts.length) {
+      const saved = await db.from("agent_facts").insert(facts);
+      if (saved.error) { await db.from("agents").delete().eq("id", agent.id); return { error: "Couldn't save your optional details. Please try again." }; }
+    }
   }
+  after(pruneAvatarFiles);
+  await db.from("onboarding_state").insert({ user_id: user.id });
 
   await registerAccountEmail(agent.id, user);
   const conv = await getOrCreateMyAgentConversation(user.id);
@@ -143,11 +156,11 @@ export async function createAgent(_prev: OnboardingState, form: FormData): Promi
       ? `Hi! I'm @${handle.handle}, your business agent. I answer visitors' questions using only the information you gave me, and I never take bookings or payments.`
       : `Hi ${parsed.data.display_name}! I'm @${handle.handle}, your agent. Connect with friends, then ask me something like "Arrange dinner with @marco on Saturday evening".`,
   });
-  // A website: read it all now, then review what the agent learned (step by step) before going live.
+  // Read in the background; the owner can review and publish later in My Business.
   if (website) {
     const attached = await attachWebsite(agent.id, website, user);
-    if (attached.ok) redirect("/business/setup");
-    redirect(`/business?website=${encodeURIComponent(website)}&website_error=1`);
+    if (attached.ok) redirect(next || `/chats/${conv.id}`);
+    redirect(next || `/business?website=${encodeURIComponent(website)}&website_error=1`);
   }
   // Came from an invite or personal link: go back there to finish joining/connecting.
   redirect(next || `/chats/${conv.id}`);
