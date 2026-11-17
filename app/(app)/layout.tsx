@@ -48,10 +48,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <header className="sticky top-0 z-10 border-b border-border bg-background/90 px-4 pt-3 backdrop-blur">
         <div className="flex items-center justify-between">
           {/* Personal ⇄ businesses you manage: each its own chats, contacts and inbox. */}
-          <IdentitySwitcher key={`switcher-${user.id}`} identities={identities} canAddBusiness={!agent.guest && !user.isAnonymous && identities.some((i) => i.type === "personal")} switchAction={switchIdentityAction} />
-          <form action={signOut} className="shrink-0">
-            <button className="btn-ghost whitespace-nowrap">Log out</button>
-          </form>
+          <IdentitySwitcher key={`switcher-${user.id}`} identities={identities} canAddBusiness={!agent.guest && !user.isAnonymous && identities.some((i) => i.type === "personal")} switchAction={switchIdentityAction} signOutAction={signOut} signedInAs={user.signInEmail ?? null} />
         </div>
         <ChatSearch />
         <nav className="-mx-1 mt-2 flex gap-1 overflow-x-auto pb-2 text-sm">

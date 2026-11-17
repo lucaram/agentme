@@ -82,8 +82,9 @@ test("Manager and Staff can customise the same business independently", async ({
     await expect(owner.locator("html")).toHaveAttribute("data-accent", "green");
     await switchTo(staff, f.paul.agent.handle); await expect(staff.locator("html")).toHaveAttribute("data-accent", "green");
     await switchTo(staff, f.business.agent.handle); await expect(staff.locator("html")).toHaveAttribute("data-accent", "teal");
-    await expect(staff.getByRole("button", { name: "Log out", exact: true })).toBeVisible();
-    await staff.getByRole("button", { name: "Log out", exact: true }).click(); await expect(staff).toHaveURL(/\/login/);
+    // Working for the business, the menu still names the person who signed in.
+    await staff.getByTestId("identity-switcher").click(); await expect(staff.getByTestId("signed-in-as")).toHaveText(f.paul.email);
+    await staff.getByRole("menuitem", { name: "Log out", exact: true }).click(); await expect(staff).toHaveURL(/\/login/);
     await login(staff, f.paul.email, f.password); await expect(staff.locator("html")).toHaveAttribute("data-accent", "green");
   } finally { await managerContext.close(); await staffContext.close(); await ownerContext.close(); await f.cleanup(); }
 });

@@ -3,7 +3,7 @@ import { Avatar } from "@/components/Avatar";
 
 
 import Link from "next/link";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { usePathname } from "next/navigation";
 import { OwnPresenceBadge } from "@/components/presence/PresenceBadge";
 import { PresenceControl } from "@/components/presence/PresenceControl";
@@ -20,11 +20,18 @@ export function IdentitySwitcher({
   identities,
   canAddBusiness,
   switchAction,
+  signOutAction,
+  signedInAs,
 }: {
   identities: Identity[];
   canAddBusiness: boolean;
   switchAction: (agentId: string) => Promise<{ error?: string }>;
+  /** Ends the whole session (also any work for a business). */
+  signOutAction: () => Promise<void>;
+  /** The email the person signed in with: theirs, even while acting as a business. */
+  signedInAs: string | null;
 }) {
+  const logOutId = useId();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -49,7 +56,8 @@ export function IdentitySwitcher({
     return () => document.removeEventListener("click", close);
   }, [open]);
 
-  if (!current) return null;
+  // No identity to show: still a way out.
+  if (!current) return <form action={signOutAction}><button className="btn-ghost whitespace-nowrap">Log out</button></form>;
   return (
     <div className="relative" ref={ref}>
       <button
@@ -102,6 +110,25 @@ export function IdentitySwitcher({
               ＋ Add a business
             </Link>
           )}
+          <form action={signOutAction} role="none" className="mt-1 border-t border-border pt-1">
+            <button
+              role="menuitem"
+              aria-labelledby={`${logOutId}-label`}
+              aria-describedby={signedInAs ? `${logOutId}-email` : undefined}
+              className="flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left text-sm hover:bg-accent-soft"
+              data-testid="log-out"
+            >
+              <svg aria-hidden viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <path d="M16 17l5-5-5-5" />
+                <path d="M21 12H9" />
+              </svg>
+              <span className="min-w-0">
+                <span id={`${logOutId}-label`} className="block">Log out</span>
+                {signedInAs && <span id={`${logOutId}-email`} className="block truncate text-xs text-muted" data-testid="signed-in-as">{signedInAs}</span>}
+              </span>
+            </button>
+          </form>
         </div>
       )}
     </div>
