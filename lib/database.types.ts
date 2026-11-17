@@ -361,14 +361,14 @@ isOneToOne: false
                   ]
                 },"business_managers": {
                   Row: {
-                    "business_agent_id": string,"created_at": string,"role": string,"user_id": string,"require_assignment": boolean,"require_publication_approval": boolean,"supervisor_id": string | null
+                    "business_agent_id": string,"created_at": string,"role": string,"user_id": string,"require_assignment": boolean,"require_publication_approval": boolean,"supervisor_id": string | null,"notify_departures": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "business_agent_id": string,"created_at"?: string,"role"?: string,"user_id": string,"require_assignment"?: boolean,"require_publication_approval"?: boolean,"supervisor_id"?: string | null
+                    "business_agent_id": string,"created_at"?: string,"role"?: string,"user_id": string,"require_assignment"?: boolean,"require_publication_approval"?: boolean,"supervisor_id"?: string | null,"notify_departures"?: boolean
                   }
                   Update: {
-                    "business_agent_id"?: string,"created_at"?: string,"role"?: string,"user_id"?: string,"require_assignment"?: boolean,"require_publication_approval"?: boolean,"supervisor_id"?: string | null
+                    "business_agent_id"?: string,"created_at"?: string,"role"?: string,"user_id"?: string,"require_assignment"?: boolean,"require_publication_approval"?: boolean,"supervisor_id"?: string | null,"notify_departures"?: boolean
                   }
                   Relationships: [
                     {
@@ -1333,6 +1333,8 @@ isOneToOne: false
 "workspace_context": { Args: Record<string, never>; Returns: Json },
 "identity_staff_badge": { Args: { p_user: string }; Returns: number },
 "set_business_default_owner": { Args: { p_owner: string }; Returns: undefined },
+"leave_business": { Args: { p_business: string; p_person: string; p_dry_run?: boolean }; Returns: Json },
+"set_business_departure_notices": { Args: { p_enabled: boolean }; Returns: undefined },
 "request_business_staff_transfer": { Args: { p_staff: string; p_target: string }; Returns: string },
 "respond_business_staff_transfer": { Args: { p_transfer: string; p_decision: string }; Returns: undefined },
 "business_team_state": { Args: Record<string, never>; Returns: Json },

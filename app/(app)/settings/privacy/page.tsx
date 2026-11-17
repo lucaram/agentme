@@ -5,7 +5,9 @@ import { PhoneVerify } from "../PhoneVerify";
 import { DiscoverableToggle } from "../DiscoverableToggle";
 import { SavedNote, SettingsHeader } from "../SettingsHeader";
 import { maskEmail } from "@/lib/people/normalise";
-import { isManagedLogin } from "@/lib/identities";
+import { isManagedLogin, realPerson } from "@/lib/identities";
+import { adminClient } from "@/lib/supabase/admin";
+import { saveDepartureNoticesAction } from "../team-actions";
 
 function Choice({ name, value, checked, title, hint, type = "radio" }: { name: string; value: string; checked: boolean; title: string; hint: string; type?: "radio" | "checkbox" }) {
   return (
@@ -31,11 +33,31 @@ export default async function PrivacySettingsPage({ searchParams }: PageProps<"/
   const { data: receipts } = await supabase.from("receipt_preferences").select("enabled").eq("user_id", user.id).maybeSingle();
   const { data: mentions } = await supabase.from("mention_preferences").select("enabled").eq("user_id", user.id).maybeSingle();
   const { data: presence } = await supabase.from("presence_preferences").select("visibility").eq("agent_id", agent.id).maybeSingle();
+  // An Owner working in the business: told in My Agent when a Manager or Staff member leaves (or not).
+  const person = user.businessRole === "owner" && user.working ? await realPerson(user, agent) : null;
+  const departures = person
+    ? (await adminClient().from("business_managers").select("notify_departures").eq("business_agent_id", agent.id).eq("user_id", person).maybeSingle()).data
+    : null;
 
   return (
     <div className="space-y-6">
       <SettingsHeader title="Privacy" hint="Who can reach your agent, add you to groups, find you, and ask you for tips." />
       <SavedNote show={saved === "1"} />
+      {error === "departures" && <p role="alert" className="text-sm text-danger">Couldn&apos;t save your team departures choice. Please try again.</p>}
+      {departures && (
+        <form action={saveDepartureNoticesAction} className="card space-y-3" data-testid="departure-notices">
+          <h2 className="font-semibold">Team departures</h2>
+          <Choice
+            type="checkbox"
+            name="notify_departures"
+            value="on"
+            checked={departures.notify_departures}
+            title={`Tell me in My Agent when a Manager or Staff member leaves ${agent.display_name}`}
+            hint="Only for you. Staff are always told when the Manager they report to leaves, and Managers when one of their Staff leaves."
+          />
+          <div className="flex justify-end"><button className="btn-primary px-6">Save</button></div>
+        </form>
+      )}
       {error === "mentions" && <p role="alert" className="text-sm text-danger">Couldn&apos;t save your mention preference. Please try again.</p>}
       <section className="card space-y-2"><h2 className="font-semibold">Reporting privacy</h2><p className="text-sm text-muted">Members can report shared messages to local moderators or directly to AGENTME. Reports may include selected surrounding messages, authors and timestamps. The reporter previews what is shared. Private agent exchanges, attachments and shared location data are excluded. AGENTME reviewers cannot browse the rest of your chat, and platform reports are private from local admins.</p></section>
       {error === "receipts" && <p role="alert" className="text-sm text-danger">Couldn&apos;t save your read-receipt preference. Please try again.</p>}

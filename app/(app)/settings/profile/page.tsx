@@ -8,14 +8,21 @@ import { MIN_NAME, maxNameFor } from "@/lib/social/limits";
 import { SavedNote, SettingsHeader } from "../SettingsHeader";
 import { maskEmail } from "@/lib/people/normalise";
 import { businessesOnlyOwnedBy, isManagedLogin, realPerson } from "@/lib/identities";
+import { adminClient } from "@/lib/supabase/admin";
+import { LeaveBusiness } from "./LeaveBusiness";
 
 /** Settings → Profile & account: your name and avatar, your login, and deleting the account. */
 export default async function ProfileSettingsPage({ searchParams }: PageProps<"/settings/profile">) {
   const { user, agent } = await requireAgent();
   const { saved, error } = await searchParams;
-  if (user.businessRole === "staff") return <div className="space-y-4"><SettingsHeader title="Profile & account" /><p className="card">An owner or manager manages this business profile. Switch to your personal account to edit your own profile.</p></div>;
-  const managedBusiness = Boolean(user.working) || isManagedLogin(user.email);
   const person = await realPerson(user, agent);
+  // Working in a business you joined (not its own login): you can leave it yourself.
+  const leave = agent.type === "business" && user.working && user.businessRole && person && agent.owner_id !== person
+    ? { role: user.businessRole, soleOwner: user.businessRole === "owner" && (await otherOwners(agent.id, person)) === 0 }
+    : null;
+  const leaveCard = leave && <LeaveBusiness business={agent.display_name} role={leave.role} soleOwner={leave.soleOwner} />;
+  if (user.businessRole === "staff") return <div className="space-y-4"><SettingsHeader title="Profile & account" /><p className="card">An owner or manager manages this business profile. Switch to your personal account to edit your own profile.</p>{leaveCard}</div>;
+  const managedBusiness = Boolean(user.working) || isManagedLogin(user.email);
   const ownedBusinesses = agent.type === "personal" && person ? await businessesOnlyOwnedBy(person) : [];
 
   return (
@@ -48,6 +55,8 @@ export default async function ProfileSettingsPage({ searchParams }: PageProps<"/
         </div>
       </form>
 
+      {leaveCard}
+
       {user.businessRole !== "manager" && <section className="card space-y-3 border-danger" aria-label="Delete account">
         <h2 className="font-semibold text-danger">Delete account</h2>
         <p className="text-sm text-muted">
@@ -65,4 +74,10 @@ export default async function ProfileSettingsPage({ searchParams }: PageProps<"/
       </section>}
     </div>
   );
+}
+
+/** How many other Owners this business has (the last Owner can't leave). */
+async function otherOwners(businessId: string, person: string) {
+  const { count } = await adminClient().from("business_managers").select("user_id", { count: "exact", head: true }).eq("business_agent_id", businessId).eq("role", "owner").neq("user_id", person);
+  return count ?? 0;
 }
