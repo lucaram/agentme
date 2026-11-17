@@ -67,8 +67,6 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const initialWebsite = savedWebsite || (info.website === undefined && typeof website === "string" ? website.slice(0, 300) : "");
   const { data: allRows, error: sourcesError } = await supabase.from("business_sources").select("*").order("created_at");
   const rows = (allRows ?? []).filter((source) => source.origin === "link");
-  // Public documents: a customer button for one of these is "from Website & documents" in Details.
-  const documentUrls = rows.filter((source) => source.visibility === "public").map((source) => source.url);
   const [{ data: site, error: siteError }, person, { data: changes }, dashboard] = await Promise.all([
     supabase.from("business_sites").select("*").maybeSingle(),
     realPerson(user, agent),
@@ -86,7 +84,6 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
     fromText: inAbout.has(linkKey(source.url)) ? "About your business" : inCustomers.has(linkKey(source.url)) ? "For customers only" : null,
     id: source.id, url: source.url, visibility: source.visibility, status: source.status, kind: source.kind, error: source.error, last_read_at: source.last_read_at,
     words: (source.content ?? "").split(/\s+/).filter(Boolean).length, preview: (source.content ?? "").slice(0, 1500),
-    buttonLabel: ways.find((way) => linkKey(way.value) === linkKey(source.url) && way.kind === "custom" && way.purpose === "information")?.label,
   }));
   const faqs = info.faqs ?? [];
   const { data: placementRows } = await supabase.from("business_placements").select("id, conversation_id, community_id, status").order("created_at", { ascending: false });
@@ -152,17 +149,15 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
               <div id="book-or-order" className="scroll-mt-40 border-t border-border pt-4">
                 <h3 className="mb-2 font-medium">Customer actions</h3>
                 <p className="mb-3 text-sm" data-testid="taps-explained">
-                  <b>What customers can tap.</b> These buttons appear on your public page, and your agent offers the right one in chats. A button only links somewhere: your agent
-                  doesn&apos;t read the page behind it. To have your agent read a page too, add it in <SectionLink id="links" className="text-accent underline">Website &amp; documents</SectionLink>.
+                  <b>What customers can tap.</b> Links your agent shares with customers as buttons, on your public page and in chats. Your agent doesn&apos;t read them.
                 </p>
-                <WaysEditor initial={ways} documents={documentUrls} />
+                <WaysEditor initial={ways} />
               </div>
             </section>
             <section className={BODY} aria-label="Website and documents">
               <span id="knows" />
               <p className="text-sm" data-testid="knows-explained">
-                <b>What your agent knows.</b> Your agent reads your website and these documents to answer customers&apos; questions. Customers don&apos;t see them as buttons unless you
-                choose to show one.
+                <b>What your agent knows.</b> Your agent reads your website and these documents, and uses what it learns to answer customers.
               </p>
               <div id="website" className="scroll-mt-40">
                 {siteError ? <p role="alert" className="text-sm text-danger">Your website connection could not be loaded. Refresh this page before adding another.</p> : <WebsiteCard
@@ -181,7 +176,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
               </div>}
               <div id="links" className="scroll-mt-40 space-y-3 border-t border-border pt-4">
                 <h3 className="font-medium">Additional documents &amp; links</h3>
-                <p className="hint">Add a menu, price list or other material beyond your connected website. Each source is stored once, with its own visibility.</p>
+                <p className="hint">Pages, PDFs and photos your agent reads and learns from, such as a menu or price list. Customers don&apos;t see them as buttons.</p>
                 {sourcesError ? <p role="alert" className="text-sm text-danger">Documents could not be loaded. Refresh to try again.</p> : <SourcesManager sources={sources} />}
               </div>
               <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Customer-only information</summary><div className="pt-3"><BusinessInfoForm mode="customers" customers={info.customers ?? ""} /></div></details>

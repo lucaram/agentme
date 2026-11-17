@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normaliseWay, providerOf, wantsToBookOrOrder, wayHref, wayLabel, waysOf, waysText, waysForQuestion, withWays } from "@/lib/business/booking";
+import { MAX_FEATURED, normaliseWay, orderedWays, providerOf, wantsToBookOrOrder, wayHref, wayLabel, waysOf, waysText, waysForQuestion, withWays } from "@/lib/business/booking";
 
 const ok = (kind: string, value: string) => {
   const r = normaliseWay(kind, value);
@@ -77,5 +77,15 @@ describe("how customers book or order", () => {
     const asked = { answer: "Yes, about half the menu.", needs_team: false };
     expect(withWays("Vegetarian options?", asked, ways)).toBe(asked);
     expect(withWays("Can I book?", { answer: "x", needs_team: true }, [])).toEqual({ answer: "x", needs_team: true });
+  });
+
+  it("shows up to four 'Show first' buttons in your order, then fills the rest in your order", () => {
+    const way = (n: number, primary = false) => ({ kind: "website" as const, value: `https://a.example/${n}`, ...(primary ? { primary } : {}) });
+    const ways = [way(1), way(2, true), way(3), way(4, true), way(5)];
+    expect(orderedWays(ways).map((w) => w.value.slice(-1))).toEqual(["2", "4", "1", "3", "5"]);
+    // Older data with more than four ticked: only the first four (in order) go first.
+    const many = [way(1, true), way(2, true), way(3), way(4, true), way(5, true), way(6, true)];
+    expect(orderedWays(many).slice(0, MAX_FEATURED).map((w) => w.value.slice(-1))).toEqual(["1", "2", "4", "5"]);
+    expect(orderedWays(many).map((w) => w.value.slice(-1))).toEqual(["1", "2", "4", "5", "3", "6"]);
   });
 });

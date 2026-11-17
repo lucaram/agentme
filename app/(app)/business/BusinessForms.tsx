@@ -3,7 +3,7 @@
 import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LocalTime } from "@/components/LocalTime";
-import { addSourceAction, createSourceButtonAction, removeSourceAction, rereadSourceAction, saveBusinessInfoAction, saveBusinessDetailsAction, setSourceVisibilityAction, tryQuestionAction } from "./actions";
+import { addSourceAction, removeSourceAction, rereadSourceAction, saveBusinessInfoAction, saveBusinessDetailsAction, setSourceVisibilityAction, tryQuestionAction } from "./actions";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { SectionLink } from "@/components/SectionLink";
 import { CountedField } from "@/components/CountedField";
@@ -60,16 +60,12 @@ export function BusinessDetailsForm({ hours, address, fromWebsite }: { hours: st
   </form>;
 }
 
-type Source = { fromText: string | null; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; last_read_at: string | null; words: number; preview: string; buttonLabel?: string };
+type Source = { fromText: string | null; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; last_read_at: string | null; words: number; preview: string };
 
 const KIND: Record<string, string> = { page: "web page", pdf: "PDF", image: "photo", text: "text" };
 
 /** Links your agent reads: website, PDF menu, menu photos. */
 export function SourcesManager({ sources }: { sources: Source[] }) {
-  const [buttonFor, setButtonFor] = useState<string | null>(null);
-  const [buttonLabel, setButtonLabel] = useState("View document");
-  const [includeButton, setIncludeButton] = useState(false);
-  const [newButtonLabel, setNewButtonLabel] = useState("View menu");
   const router = useRouter();
   const [url, setUrl] = useState("");
   const [visibility, setVisibility] = useState("public");
@@ -126,7 +122,6 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
                 </details>
               )}
               <div className="flex gap-3 text-xs">
-                {s.visibility === "public" && !s.buttonLabel && <button type="button" className="text-accent underline" onClick={() => { setButtonFor(s.id); setButtonLabel("View document"); }}>Create customer button</button>}
                 <button type="button" className="text-accent underline" disabled={pending} onClick={() => act(() => rereadSourceAction(s.id))}>
                   Re-read now
                 </button>
@@ -134,8 +129,6 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
                   Remove
                 </button>
               </div>
-              {s.buttonLabel && <p className="hint">Customer button: {s.buttonLabel}. Rename or move it in <SectionLink id="book-or-order" className="text-accent underline">Details</SectionLink>. Removing this document also removes its button.</p>}
-              {buttonFor === s.id && <div className="flex gap-2"><input className="input" maxLength={60} aria-label="Document button label" value={buttonLabel} onChange={(e) => setButtonLabel(e.target.value)} /><button type="button" className="btn-primary" disabled={pending || !buttonLabel.trim()} onClick={() => act(async () => { const result = await createSourceButtonAction(s.id, buttonLabel); if (!result.error) setButtonFor(null); return result; })}>Add customer button</button></div>}
             </li>
           ))}
         </ul>
@@ -156,10 +149,10 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
         <button
           type="button"
           className="btn-primary"
-          disabled={pending || !url.trim() || (visibility === "public" && includeButton && !newButtonLabel.trim())}
+          disabled={pending || !url.trim()}
           onClick={() =>
             act(async () => {
-              const result = await addSourceAction(url, visibility, visibility === "public" && includeButton ? { buttonLabel: newButtonLabel } : undefined);
+              const result = await addSourceAction(url, visibility);
               if (!result.error) setUrl("");
               return result;
             })
@@ -168,9 +161,8 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
           Add link
         </button>
       </div>
-      {visibility === "public" && <div className="space-y-2"><label className="flex items-center gap-2 text-xs text-muted"><input type="checkbox" checked={includeButton} onChange={(e) => setIncludeButton(e.target.checked)} />Also show customers a button for this document</label>{includeButton && <input className="input" aria-label="New document button label" maxLength={60} value={newButtonLabel} onChange={(e) => setNewButtonLabel(e.target.value)} />}</div>}
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
-      <p className="hint">Add a web page, PDF or photo by its URL. Customers-only sources are used only in private replies to your contacts; changing a source to customers-only also removes its public customer buttons. Sources are checked approximately daily while AGENTME is running.</p>
+      <p className="hint">Customers only: used only when your agent answers your contacts privately. Each link is re-read about once a day.</p>
     </div>
   );
 }

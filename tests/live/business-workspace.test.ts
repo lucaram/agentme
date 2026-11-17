@@ -47,18 +47,21 @@ describe.skipIf(!dbUp)("business workspace compatibility and privacy", () => {
     expect(publicBusinessDetails(await read()).hours).toBe(original.hours);
   });
 
-  it("a public document creates one reusable button; private or foreign sources cannot be published", async () => {
-    const { createSourceButtonAction, setSourceVisibilityAction } = await actions();
-    const { data: source } = await f.db.from("business_sources").insert({ agent_id: f.business.agent.id, url: "https://sole.example/menu.pdf", visibility: "public" }).select("id").single();
-    expect(await createSourceButtonAction(source!.id, "View menu")).toEqual({});
-    expect(await createSourceButtonAction(source!.id, "View menu")).toEqual({});
-    expect(waysOf(await read()).filter((way) => way.label === "View menu")).toHaveLength(1);
+  it("documents and customer buttons stay separate; at most four buttons show first", async () => {
+    const { removeSourceAction, saveWaysAction, setSourceVisibilityAction } = await actions();
+    const url = "https://sole.example/menu.pdf";
+    const { data: source } = await f.db.from("business_sources").insert({ agent_id: f.business.agent.id, url, visibility: "public" }).select("id").single();
+    const button = { kind: "custom", value: url, label: "View menu", purpose: "information" };
+    expect(await saveWaysAction([button])).toMatchObject({ saved: true });
+    // Neither side changes the other: no document from a button, no button lost with a document.
     expect((await f.db.from("business_sources").select("id").eq("agent_id", f.business.agent.id)).data).toHaveLength(1);
     expect(await setSourceVisibilityAction(source!.id, "customers")).toEqual({});
-    expect(waysOf(await read()).some((way) => way.label === "View menu")).toBe(false);
-    expect(await createSourceButtonAction(source!.id, "Leaked menu")).toHaveProperty("error");
-    const { data: foreign } = await f.db.from("business_sources").insert({ agent_id: f.marco.agent.id, url: "https://other.example/private", visibility: "public" }).select("id").single();
-    expect(await createSourceButtonAction(foreign!.id, "Foreign document")).toHaveProperty("error");
+    expect(await removeSourceAction(source!.id)).toEqual({});
+    expect(waysOf(await read())).toEqual([button]);
+    expect(await saveWaysAction([button, button])).toHaveProperty("error");
+    const five = Array.from({ length: 5 }, (_, i) => ({ kind: "book", value: `https://sole.example/book/${i}`, primary: true }));
+    expect(await saveWaysAction(five)).toEqual({ error: "Up to 4 buttons can be shown first. Untick one." });
+    expect(await saveWaysAction(five.map((way, i) => ({ ...way, primary: i < 4 })))).toMatchObject({ saved: true });
   });
 
   it("counts each incoming question once, follows staff outcomes, and excludes previews", async () => {
