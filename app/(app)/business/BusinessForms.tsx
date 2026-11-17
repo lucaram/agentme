@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { LocalTime } from "@/components/LocalTime";
 import { addSourceAction, createSourceButtonAction, removeSourceAction, rereadSourceAction, saveBusinessInfoAction, saveBusinessDetailsAction, setSourceVisibilityAction, tryQuestionAction } from "./actions";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
+import { SectionLink } from "@/components/SectionLink";
 
 /** "About your business" (public) and "For customers only", in your own words. */
 export function BusinessInfoForm({ about = "", customers = "", mode = "about" }: { about?: string; customers?: string; mode?: "about" | "customers" }) {
@@ -24,7 +25,7 @@ export function BusinessInfoForm({ about = "", customers = "", mode = "about" }:
           placeholder={"Family-run Italian restaurant in Camden.\nSeasonal dishes, handmade pasta and a warm welcome for friends and families."}
         />
         <p className="hint mt-1">
-          Introduce your business to customers: what you offer and what makes it special. This description appears on your public page and helps your agent answer questions. Manage hours and contact options in Business information.
+          Introduce your business to customers: what you offer and what makes it special. This description appears on your public page and helps your agent answer questions. Manage hours and contact options in <SectionLink id="business-information" className="text-accent underline">Details</SectionLink>.
         </p>
       </div>}
       {mode === "customers" && <div>
@@ -133,7 +134,7 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
                   Remove
                 </button>
               </div>
-              {s.buttonLabel && <p className="hint">Customer button: {s.buttonLabel}. Edit it in Business information.</p>}
+              {s.buttonLabel && <p className="hint">Customer button: {s.buttonLabel}. Edit it in <SectionLink id="book-or-order" className="text-accent underline">Details</SectionLink>.</p>}
               {buttonFor === s.id && <div className="flex gap-2"><input className="input" maxLength={60} aria-label="Document button label" value={buttonLabel} onChange={(e) => setButtonLabel(e.target.value)} /><button type="button" className="btn-primary" disabled={pending || !buttonLabel.trim()} onClick={() => act(async () => { const result = await createSourceButtonAction(s.id, buttonLabel); if (!result.error) setButtonFor(null); return result; })}>Add customer button</button></div>}
             </li>
           ))}

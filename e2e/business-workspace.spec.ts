@@ -27,8 +27,8 @@ test("business workspace preserves agent information, custom actions, documents 
     await expect(shop.getByTestId("business-badge")).toHaveCount(0);
     await shop.goto("/business");
     const sectionTitles = await shop.getByTestId("business-sections").locator(":scope > details > summary").allTextContents();
-    expect(sectionTitles).toHaveLength(7);
-    for (const [i, title] of ["Customer dashboard", "About your business", "Business information", "Website & documents", "Questions & Answers", "Staff & access", "Share your business"].entries()) expect(sectionTitles[i]).toContain(title);
+    expect(sectionTitles).toHaveLength(4);
+    for (const [i, title] of ["Customer dashboard", "What your agent knows", "Staff & access", "Share your business"].entries()) expect(sectionTitles[i]).toContain(title);
     // Q&A is a tab of "What your agent knows": its count is a total (grey), and the section's summary names it.
     await expect(shop.getByTestId("fold-faqs-badge")).toHaveText("2");
     await expect(shop.getByTestId("fold-knows").locator("summary")).toContainText("2 answers");
@@ -91,7 +91,7 @@ test("business workspace preserves agent information, custom actions, documents 
     await docs.getByLabel("New document button label").fill("View menu");
     await docs.getByRole("button", { name: "Add link", exact: true }).click();
     await expect(docs.getByTestId("business-source")).toHaveCount(1);
-    await expect(docs.getByText("Customer button: View menu. Edit it in Business information.")).toBeVisible();
+    await expect(docs.getByText("Customer button: View menu. Edit it in Details.")).toBeVisible();
 
     // Reuse a connected website after review, record successful checks and pause daily updates.
     // The saved address survives a fresh visit without signup query parameters.

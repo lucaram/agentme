@@ -129,7 +129,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
           >
             <section className={BODY} aria-label="About your business">
               <BusinessInfoForm about={about} />
-              <Link href={`/u/${agent.handle}`} target="_blank" className="text-sm text-accent underline">Preview your public page</Link>
+              <Link href={`/u/${agent.handle}`} target="_blank" className="text-sm text-accent underline">See your public page</Link>
             </section>
             <section className={BODY} aria-label="Business information">
               <BusinessDetailsForm hours={details.hours} address={details.address} fromWebsite={Boolean(site?.live_at && (info.hours === undefined || info.address === undefined))} />
