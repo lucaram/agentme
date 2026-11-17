@@ -71,7 +71,7 @@ test("business search and agent chats show team availability only when enabled; 
     await status(owner.page, "Busy"); await expect(badge).toHaveText("Team busy");
     await luca.page.goto(`/discover?q=${f.marco.agent.handle}`); await expect(luca.page.getByTestId(`presence-${f.marco.agent.id}`)).toHaveCount(0);
     await luca.page.goto(`/chats/${f.direct}`); await expect(badge).toHaveText("Team busy");
-    await owner.page.getByRole("button", { name: "Log out", exact: true }).click(); await expect(owner.page).toHaveURL(/\/login/); await expect(badge).toHaveText("Team offline", { timeout: 45_000 });
+    await owner.page.getByTestId("identity-switcher").click(); await owner.page.getByRole("menuitem", { name: "Log out", exact: true }).click(); await expect(owner.page).toHaveURL(/\/login/); await expect(badge).toHaveText("Team offline", { timeout: 45_000 });
     await luca.page.getByRole("textbox", { name: "Message", exact: true }).fill("Are you open on Mondays?"); await luca.page.getByRole("button", { name: "Send", exact: true }).click();
     await expect(luca.page.getByText(/We are closed Mondays|closed on Mondays/i).last()).toBeVisible(); await expect(badge).toHaveText("Team offline");
     await luca.page.setViewportSize({ width: 390, height: 844 }); expect(await luca.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); await luca.page.screenshot({ path: "test-results/presence-business-mobile.png" });

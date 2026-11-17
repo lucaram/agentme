@@ -8,7 +8,17 @@ import { z } from "zod";
 import type { BusinessRole } from "@/lib/business/permissions";
 import { adminClient } from "@/lib/supabase/admin";
 
-export type SessionUser = { id: string; email: string | null; emailConfirmed: boolean; isAnonymous: boolean; actorId?: string; businessRole?: BusinessRole | null; working?: boolean };
+export type SessionUser = {
+  id: string;
+  email: string | null;
+  emailConfirmed: boolean;
+  isAnonymous: boolean;
+  actorId?: string;
+  /** The email the person signed in with (theirs, also while working for a business). */
+  signInEmail?: string | null;
+  businessRole?: BusinessRole | null;
+  working?: boolean;
+};
 
 /** Verified current user (validates the JWT with Supabase Auth), or null. */
 export const getUser = cache(async (): Promise<SessionUser | null> => {
@@ -21,7 +31,7 @@ export const getUser = cache(async (): Promise<SessionUser | null> => {
   if (!context.success || !context.data.user_id) return null;
   const effective = context.data.user_id === data.user.id ? data.user : (await adminClient().auth.admin.getUserById(context.data.user_id)).data.user;
   if (!effective) return null;
-  return { id: effective.id, email: effective.email ?? null, emailConfirmed: Boolean(effective.email_confirmed_at), isAnonymous: Boolean(data.user.is_anonymous), actorId: data.user.id, businessRole: context.data.role, working: context.data.working };
+  return { id: effective.id, email: effective.email ?? null, emailConfirmed: Boolean(effective.email_confirmed_at), isAnonymous: Boolean(data.user.is_anonymous), actorId: data.user.id, signInEmail: data.user.email ?? null, businessRole: context.data.role, working: context.data.working };
 });
 
 export async function requireUser(): Promise<SessionUser> {

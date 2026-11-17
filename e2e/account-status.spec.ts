@@ -17,7 +17,7 @@ test("account decisions identify personal and business accounts and return activ
     await page.screenshot({ path: "test-results/account-decisions-personal-mobile.png", fullPage: true });
     await page.emulateMedia({ colorScheme: "dark" }); await page.screenshot({ path: "test-results/account-decisions-personal-dark.png", fullPage: true });
     await page.getByRole("link", { name: /Settings$/ }).click(); await expect(page).toHaveURL(/\/settings$/);
-    await page.getByRole("button", { name: "Log out", exact: true }).click(); await login(page, f.business.email, f.password); await page.goto("/account-status");
+    await page.getByTestId("identity-switcher").click(); await page.getByRole("menuitem", { name: "Log out", exact: true }).click(); await login(page, f.business.email, f.password); await page.goto("/account-status");
     await expect(page.getByTestId("account-decision-identity")).toContainText("Trattoria Sole"); await expect(page.getByTestId("account-decision-identity")).toContainText("Business"); await page.getByRole("link", { name: /Settings$/ }).click(); await expect(page).toHaveURL(/\/settings$/);
   } finally { await context.close(); await f.cleanup(); }
 });
