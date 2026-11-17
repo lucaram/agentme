@@ -10,6 +10,8 @@ import { adminClient } from "@/lib/supabase/admin";
 import { publicationWarning, staffControls } from "@/lib/business/staff-controls";
 import { env } from "@/lib/env";
 import { getOrCreateMyAgentConversation } from "@/lib/data/chat";
+import { tellOwner } from "@/lib/requests/notify";
+import { removedNote } from "@/lib/business/departure";
 
 type Result = { error?: string; link?: string };
 export type StaffSearchHit = { id: string; name: string; handle: string; avatar: string };
@@ -36,7 +38,17 @@ export async function cancelBusinessStaffInvite(id: string): Promise<Result> {
 export async function changeBusinessStaff(id: string, role: string, transfer = false): Promise<Result> {
   await requireBusinessPermission("staff");
   if (!z.uuid().safeParse(id).success || !["owner", "manager", "staff", "remove"].includes(role)) return { error: "Choose a valid person and role." };
-  const { error } = await (await createClient()).rpc("change_business_member", { p_user: id, p_role: role, p_transfer: transfer }); update(); return error ? { error: error.message } : {};
+  const { user, agent } = await requireAgent();
+  // Removed by someone else: they're told in their own (personal) My Agent, which stays theirs after access ends.
+  const removed = role === "remove" && id !== (user.actorId ?? user.id) ? await personalAgentOf(id) : null;
+  const { error } = await (await createClient()).rpc("change_business_member", { p_user: id, p_role: role, p_transfer: transfer }); update();
+  if (error) return { error: error.message };
+  if (removed) await tellOwner(id, removed, removedNote(agent.display_name, new Date())).catch((e) => console.error("removal note failed", e instanceof Error ? e.message : e));
+  return {};
+}
+async function personalAgentOf(person: string) {
+  const { data } = await adminClient().from("agents").select("id").eq("owner_id", person).eq("type", "personal").maybeSingle();
+  return data?.id ?? null;
 }
 export async function saveBusinessStaffControls(id: string, requireAssignment: boolean, requirePublicationApproval: boolean): Promise<Result> {
   await requireBusinessPermission("staff");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { departureNotes, leftNote, type Departure } from "@/lib/business/departure";
+import { departureNotes, leftNote, removedAt, removedNote, type Departure } from "@/lib/business/departure";
 
 const OWNER = "00000000-0000-4000-8000-000000000001";
 const OWNER_QUIET = "00000000-0000-4000-8000-000000000002";
@@ -52,5 +52,14 @@ describe("leaving a business: who is told in My Agent", () => {
 
   it("the person who left is told their personal account is unchanged", () => {
     expect(leftNote("Caffè Aurora")).toContain("Your personal account, chats and contacts are unchanged");
+  });
+});
+
+describe("removed by an Owner or Manager: the note in their personal My Agent", () => {
+  it("names the business and when, in UTC, and says the personal account is unaffected", () => {
+    expect(removedNote("Caffè Aurora", new Date("2026-11-17T14:05:30Z"))).toBe(
+      "Your access to Caffè Aurora was removed on 17 Nov 2026 at 14:05 UTC. Your personal account is unaffected: your chats, contacts and plans are as they were.",
+    );
+    expect(removedAt(new Date("2026-01-03T00:07:00Z"))).toBe("3 Jan 2026 at 00:07 UTC");
   });
 });
