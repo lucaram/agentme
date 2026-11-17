@@ -135,7 +135,7 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
                   Remove
                 </button>
               </div>
-              {s.buttonLabel && <p className="hint">Customer button: {s.buttonLabel}. Edit it in <SectionLink id="book-or-order" className="text-accent underline">Details</SectionLink>.</p>}
+              {s.buttonLabel && <p className="hint">Customer button: {s.buttonLabel}. Rename or move it in <SectionLink id="book-or-order" className="text-accent underline">Details</SectionLink>. Removing this document also removes its button.</p>}
               {buttonFor === s.id && <div className="flex gap-2"><input className="input" maxLength={60} aria-label="Document button label" value={buttonLabel} onChange={(e) => setButtonLabel(e.target.value)} /><button type="button" className="btn-primary" disabled={pending || !buttonLabel.trim()} onClick={() => act(async () => { const result = await createSourceButtonAction(s.id, buttonLabel); if (!result.error) setButtonFor(null); return result; })}>Add customer button</button></div>}
             </li>
           ))}

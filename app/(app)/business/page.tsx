@@ -67,6 +67,8 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const initialWebsite = savedWebsite || (info.website === undefined && typeof website === "string" ? website.slice(0, 300) : "");
   const { data: allRows, error: sourcesError } = await supabase.from("business_sources").select("*").order("created_at");
   const rows = (allRows ?? []).filter((source) => source.origin === "link");
+  // Public documents: a customer button for one of these is "from Website & documents" in Details.
+  const documentUrls = rows.filter((source) => source.visibility === "public").map((source) => source.url);
   const [{ data: site, error: siteError }, person, { data: changes }, dashboard] = await Promise.all([
     supabase.from("business_sites").select("*").maybeSingle(),
     realPerson(user, agent),
@@ -149,13 +151,19 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
               <BusinessDetailsForm hours={details.hours} address={details.address} fromWebsite={Boolean(site?.live_at && (info.hours === undefined || info.address === undefined))} />
               <div id="book-or-order" className="scroll-mt-40 border-t border-border pt-4">
                 <h3 className="mb-2 font-medium">Customer actions</h3>
-                <p className="hint mb-3">Add booking, ordering and contact options or create your own labelled buttons. Your agent offers relevant options; customers complete actions directly with your business.</p>
-                {/* Starts again from what's saved whenever the buttons change elsewhere (e.g. a document's button). */}
-                <WaysEditor key={JSON.stringify(ways)} initial={ways} />
+                <p className="mb-3 text-sm" data-testid="taps-explained">
+                  <b>What customers can tap.</b> These buttons appear on your public page, and your agent offers the right one in chats. A button only links somewhere: your agent
+                  doesn&apos;t read the page behind it. To have your agent read a page too, add it in <SectionLink id="links" className="text-accent underline">Website &amp; documents</SectionLink>.
+                </p>
+                <WaysEditor initial={ways} documents={documentUrls} />
               </div>
             </section>
             <section className={BODY} aria-label="Website and documents">
               <span id="knows" />
+              <p className="text-sm" data-testid="knows-explained">
+                <b>What your agent knows.</b> Your agent reads your website and these documents to answer customers&apos; questions. Customers don&apos;t see them as buttons unless you
+                choose to show one.
+              </p>
               <div id="website" className="scroll-mt-40">
                 {siteError ? <p role="alert" className="text-sm text-danger">Your website connection could not be loaded. Refresh this page before adding another.</p> : <WebsiteCard
                   key={`${agent.id}:${site?.url ?? initialWebsite}`}
