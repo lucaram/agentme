@@ -14,6 +14,7 @@ import { describeRetry, hit } from "@/lib/limits";
 import { normaliseWay, waysOf, type Way } from "@/lib/business/booking";
 import { patchBusinessInfo } from "@/lib/business/profile";
 import { requireBusinessPermission } from "@/lib/business/access";
+import { BUSINESS_LIMITS } from "@/lib/social/limits";
 
 type Out = { error?: string };
 const MAX_LINKS = 20;
@@ -32,7 +33,8 @@ export async function saveBusinessInfoAction(_prev: Out | undefined, form: FormD
   const { agent } = await requireBusiness();
   const hasAbout = form.has("about");
   const hasCustomers = form.has("customers");
-  const about = hasAbout ? String(form.get("about") ?? "").trim().slice(0, 8000) : "";
+  const about = hasAbout ? String(form.get("about") ?? "").trim() : "";
+  if (about.length > BUSINESS_LIMITS.about) return { error: `Keep About your business to ${BUSINESS_LIMITS.about.toLocaleString("en-GB")} characters (it has ${about.length.toLocaleString("en-GB")}). Longer details belong in Q&A or Website & documents.` };
   const customers = hasCustomers ? String(form.get("customers") ?? "").trim().slice(0, 4000) : "";
   if (!hasAbout && !hasCustomers) return { error: "No changes to save." };
   if (hasAbout && !about) return { error: "Tell your agent a little about your business." };
@@ -219,7 +221,11 @@ export async function saveWaysAction(input: { kind: string; value: string; label
 export async function saveBusinessDetailsAction(_prev: Out | undefined, form: FormData): Promise<Out & { saved?: boolean }> {
   const { agent } = await requireBusiness();
   const corrections = ((agent.business_info as { corrections?: { label: string; value: string }[] } | null)?.corrections ?? []).filter((correction) => !/^(opening hours|hours|address|business address)$/i.test(correction.label.trim()));
-  await patchBusinessInfo(agent.id, { hours: String(form.get("hours") ?? "").trim().slice(0, 500), address: String(form.get("address") ?? "").trim().slice(0, 500), corrections });
+  const hours = String(form.get("hours") ?? "").trim();
+  const address = String(form.get("address") ?? "").trim();
+  if (hours.length > BUSINESS_LIMITS.hours) return { error: `Keep opening hours to ${BUSINESS_LIMITS.hours} characters.` };
+  if (address.length > BUSINESS_LIMITS.address) return { error: `Keep the address to ${BUSINESS_LIMITS.address} characters.` };
+  await patchBusinessInfo(agent.id, { hours, address, corrections });
   revalidatePath("/business");
   revalidatePath(`/u/${agent.handle}`);
   return { saved: true };

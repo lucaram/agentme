@@ -76,7 +76,7 @@ test("sections start collapsed across the app; updates stay unread until opened"
 
     const shop = await login(f.business.email);
     await shop.goto("/business");
-    await expect(shop.getByTestId("fold-documents")).toBeVisible();
+    await expect(shop.getByTestId("fold-knows")).toBeVisible();
     await expect(shop.locator("details[open]")).toHaveCount(0);
     // SSR markup can be visible before client effects register hashchange handlers.
     // Confirm interactivity before exercising same-document fragment navigation.
@@ -84,7 +84,10 @@ test("sections start collapsed across the app; updates stay unread until opened"
     await expect(shop.getByRole("dialog", { name: "Test your agent", exact: true })).toBeVisible();
     await shop.getByRole("button", { name: "Close agent preview", exact: true }).click();
     await shop.goto("/business#website-documents");
-    await expect(shop.getByTestId("fold-documents")).toHaveAttribute("open", "");
+    // A link to a tab opens its section and chooses the tab.
+    await expect(shop.getByTestId("fold-knows")).toHaveAttribute("open", "");
+    await expect(shop.getByTestId("fold-documents")).toBeVisible();
+    await expect(shop.getByTestId("fold-documents-tab")).toHaveAttribute("aria-selected", "true");
     await expect(shop.locator("details[open]")).toHaveCount(1);
   } finally {
     for (const session of sessions) await session.close();

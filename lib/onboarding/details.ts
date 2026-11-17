@@ -7,7 +7,7 @@ export type BusinessSignupDetails = { description: string | null; hours: string 
 /** The same optional business fields and validation at both creation entry points. */
 export function businessSignupDetails(form: FormData): { ok: true; details: BusinessSignupDetails } | { ok: false; error: string } {
   const description = optionalText(form.get("description")) ?? optionalText(form.get("about")); const hours = optionalText(form.get("hours"));
-  if ((description?.length ?? 0) > SIGNUP_LIMITS.description) return { ok: false, error: `Keep About your business to ${SIGNUP_LIMITS.description} characters. You can add more later in My Business.` };
+  if ((description?.length ?? 0) > SIGNUP_LIMITS.description) return { ok: false, error: `Keep About your business to ${SIGNUP_LIMITS.description} characters.` };
   if ((hours?.length ?? 0) > SIGNUP_LIMITS.hours) return { ok: false, error: `Keep opening hours to ${SIGNUP_LIMITS.hours} characters.` };
   const faqs: BusinessSignupDetails["faqs"] = [];
   for (const i of [1, 2, 3]) {

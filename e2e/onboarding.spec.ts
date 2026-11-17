@@ -88,7 +88,7 @@ test("business website signup finishes before review; findings stay unpublished 
     expect((await f.db.from("business_sites").select("live_at").eq("agent_id", agent.data!.id).single()).data?.live_at).toBeNull();
     await expect(page.getByTestId("setup-invitation")).toContainText("Your website is saved");
     await page.getByRole("button", { name: "Later in My Business", exact: true }).click(); await page.reload(); await expect(page.getByTestId("setup-invitation")).toHaveCount(0);
-    await page.goto("/business#website-documents"); await expect(page.getByTestId("fold-documents")).toHaveAttribute("open", "");
+    await page.goto("/business#website-documents"); await expect(page.getByTestId("fold-documents")).toBeVisible();
     await expect(page.getByTestId("website-card")).toContainText("localhost");
     await page.getByTestId("website-card").getByRole("link", { name: /Review/ }).click();
     await expect(page).toHaveURL(/\/business\/setup$/); await expect(page.getByRole("link", { name: "Later in My Business", exact: true })).toBeVisible();
@@ -115,7 +115,7 @@ test("adding a managed business uses the same optional fields and keeps the pers
     const business = await f.db.from("agents").select("owner_id,business_info").eq("id", managed.data!.business_agent_id).single();
     expect(business.data?.owner_id).not.toBe(user.id); expect(business.data?.business_info).toMatchObject({ about: "Local pottery studio.", hours: "Mon–Fri 10–18", faqs: [{ q: "Do you run classes?", a: "Yes, on Fridays." }] });
     await expect(page.getByTestId("setup-invitation")).toContainText("Introduce your business");
-    await page.getByRole("link", { name: "My Business", exact: true }).click(); await page.getByTestId("fold-faqs").locator("summary").click(); await expect(page.getByTestId("faq-list")).toContainText("Yes, on Fridays.");
+    await page.getByRole("link", { name: "My Business", exact: true }).click(); await page.getByTestId("fold-knows").locator("summary").first().click(); await page.getByTestId("fold-faqs-tab").click(); await expect(page.getByTestId("faq-list")).toContainText("Yes, on Fridays.");
     const personal = await f.db.from("agents").select("type,business_info").eq("owner_id", user.id).single(); expect(personal.data).toMatchObject({ type: "personal", business_info: {} });
   } finally { await f.cleanup(); }
 });

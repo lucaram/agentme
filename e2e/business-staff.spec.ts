@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { openSection } from "./open-section";
 import { config } from "dotenv";
 import { businessStaffFixture } from "../tests/fixtures/business-staff";
 config({ path: ".env.local", quiet: true });
@@ -10,7 +11,7 @@ test("staff accept privately, switch safely, handle shared requests and lose onl
     const context = await browser.newContext(); sessions.push(context); const page = await context.newPage();
     await page.goto("/login"); await page.getByLabel("Email", { exact: true }).fill(email); await page.getByLabel("Password", { exact: true }).fill(f.password); await page.getByRole("button", { name: "Log in", exact: true }).click(); await expect(page).toHaveURL(/\/chats/); return page;
   };
-  const open = async (page: Page, id: string) => { const section = page.getByTestId(id); if (await section.getAttribute("open") === null) await section.locator("summary").first().click(); return section; };
+  const open = (page: Page, id: string) => openSection(page, id);
   const myAgent = async (page: Page) => { await page.goto("/chats"); const card = page.getByTestId("my-agent-card"); if (await card.count()) await page.goto((await card.getAttribute("href"))!); else await page.getByRole("button", { name: "Talk to your agent", exact: true }).click(); await expect(page.getByRole("heading", { name: "My Agent", exact: true })).toBeVisible(); };
   try {
     const owner = await login(f.business.email); await owner.goto("/business"); const staffCard = await open(owner, "fold-staff");
