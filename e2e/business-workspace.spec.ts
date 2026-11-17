@@ -1,9 +1,10 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { openSection } from "./open-section";
 import { config } from "dotenv";
 import { planBusinessFixture } from "../tests/fixtures/plan-business";
 
 config({ path: ".env.local", quiet: true });
-const open = async (page: Page, id: string) => { const section = page.getByTestId(id); if (await section.getAttribute("open") === null) await section.locator("summary").first().click(); return section; };
+const open = (page: Page, id: string) => openSection(page, id);
 const send = async (page: Page, message: string) => { await page.getByLabel("Message", { exact: true }).fill(message); await page.getByRole("button", { name: "Send", exact: true }).click(); };
 
 test("business workspace preserves agent information, custom actions, documents and staff replies", async ({ browser, baseURL }) => {
@@ -28,8 +29,9 @@ test("business workspace preserves agent information, custom actions, documents 
     const sectionTitles = await shop.getByTestId("business-sections").locator(":scope > details > summary").allTextContents();
     expect(sectionTitles).toHaveLength(7);
     for (const [i, title] of ["Customer dashboard", "About your business", "Business information", "Website & documents", "Questions & Answers", "Staff & access", "Share your business"].entries()) expect(sectionTitles[i]).toContain(title);
-    await expect(shop.getByTestId("fold-faqs-badge")).toHaveCount(0);
-    await expect(shop.getByTestId("fold-faqs").locator("summary")).toContainText("2 approved answers");
+    // Q&A is a tab of "What your agent knows": its count is a total (grey), and the section's summary names it.
+    await expect(shop.getByTestId("fold-faqs-badge")).toHaveText("2");
+    await expect(shop.getByTestId("fold-knows").locator("summary")).toContainText("2 answers");
     await expect(shop.getByRole("link", { name: /questions? awaiting your team/ })).toHaveCount(0);
     await expect(shop.locator("details[open]")).toHaveCount(0);
     await expect(shop.getByRole("button", { name: "Test your agent", exact: true })).toBeVisible();
@@ -156,16 +158,16 @@ test("business workspace preserves agent information, custom actions, documents 
     await expect(clickStats.getByTestId("action-click-total")).toHaveText("2");
     await expect(clickStats).toContainText("Your own test clicks are excluded");
     await clickStats.getByRole("link",{name:"Customer actions",exact:true}).click();
-    await expect(shop.getByTestId("fold-book")).toHaveAttribute("open","");
+    await expect(shop.getByTestId("fold-book")).toBeVisible();
     await expect(shop.getByRole("heading",{name:"Customer actions",exact:true})).toBeInViewport();
     await open(shop,"fold-activity");
     const knowledge=dashboard.getByRole("region",{name:"Knowledge opportunities",exact:true});
     await expect(knowledge.getByRole("list")).toHaveCount(0);
     for(let visit=0;visit<2;visit++) {
       await knowledge.getByRole("link",{name:"Questions & Answers",exact:true}).click();
-      await expect(shop.getByTestId("fold-faqs")).toHaveAttribute("open","");
-      await expect(shop.getByTestId("fold-faqs").locator("summary")).toBeFocused();
-      await expect(shop.getByTestId("fold-faqs").locator("summary")).toBeInViewport();
+      await expect(shop.getByTestId("fold-faqs")).toBeVisible();
+      await expect(shop.getByTestId("fold-faqs-tab")).toBeFocused();
+      await expect(shop.getByTestId("fold-faqs-tab")).toBeInViewport();
       await open(shop,"fold-activity");
     }
     await expect(dashboard.getByRole("img", { name: /Daily recorded questions/ })).toBeVisible();

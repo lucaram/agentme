@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { adminClient } from "@/lib/supabase/admin";
 import { RealtimeRefresh } from "@/components/RealtimeRefresh";
 import { Fold } from "@/components/Fold";
+import { Tabs } from "@/components/Tabs";
 import { OpenFromHash } from "@/components/OpenFromHash";
 import { BusinessInfoForm, BusinessDetailsForm, SourcesManager } from "./BusinessForms";
 import { QuestionsAnswers } from "./QuestionsAnswers";
@@ -48,7 +49,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const info = (agent.business_info ?? {}) as Info;
   const about = businessDescription(info);
   const requiresPublicationApproval = user.businessRole === "staff" ? (await staffControls(user, agent)).require_publication_approval : true;
-  if (user.businessRole === "staff") return <div className="space-y-5"><RealtimeRefresh channel={`staff-business-${user.id}`} tables={["business_queue_versions", "presence_preferences"]} /><OpenFromHash /><h1 className="text-lg font-semibold">My Business</h1><p className="text-sm text-muted">Handle customer requests in My Agent. {requiresPublicationApproval ? "Suggest reusable answers for an Owner or Manager to approve." : "Add eligible general answers to Questions & Answers after the publication check."}</p><form action={openMyAgent}><button className="btn-primary">Go to My Agent</button></form><Fold name={SECTIONS} id="about-business" icon="✍️" title="About your business" summary={about.slice(0, 120)}><div className={BODY}><p className="whitespace-pre-wrap text-sm">{about}</p>{info.hours && <p className="text-sm">{info.hours}</p>}</div></Fold><Fold name={SECTIONS} id="questions-answers" icon="💬" title="Questions & Answers" summary={`${info.faqs?.length ?? 0} approved answers`} testId="fold-faqs"><div className={`${BODY} space-y-4`}>{info.faqs?.map((faq, index) => <div key={index} className="text-sm"><p className="font-medium">{faq.q}</p><p className="text-muted">{faq.a}</p></div>)}<BusinessAnswerSuggestion approvalRequired={requiresPublicationApproval} /></div></Fold><Fold name={SECTIONS} id="staff-access" icon="👥" title="Staff & access" summary="Your team, work availability and permissions" testId="fold-staff"><div className={BODY}><StaffSection /></div></Fold></div>;
+  if (user.businessRole === "staff") return <div className="space-y-5"><RealtimeRefresh channel={`staff-business-${user.id}`} tables={["business_queue_versions", "presence_preferences"]} /><OpenFromHash /><h1 className="text-lg font-semibold">My Business</h1><p className="text-sm text-muted">Handle customer requests in My Agent. {requiresPublicationApproval ? "Suggest reusable answers for an Owner or Manager to approve." : "Add eligible general answers to Questions & Answers after the publication check."}</p><form action={openMyAgent}><button className="btn-primary">Go to My Agent</button></form><Fold name={SECTIONS} id="agent-knows" icon="🧠" title="What your agent knows" testId="fold-knows" summary={`About · ${info.faqs?.length ?? 0} approved answers`}><Tabs label="What your agent knows" tabs={[{ id: "about-business", label: "About", testId: "fold-own-words" }, { id: "questions-answers", label: "Q&A", testId: "fold-faqs", badge: { count: info.faqs?.length ?? 0, tone: "total" } }]}><div className={BODY}><p className="whitespace-pre-wrap text-sm">{about}</p>{info.hours && <p className="text-sm">{info.hours}</p>}</div><div className={`${BODY} space-y-4`}>{info.faqs?.map((faq, index) => <div key={index} className="text-sm"><p className="font-medium">{faq.q}</p><p className="text-muted">{faq.a}</p></div>)}<BusinessAnswerSuggestion approvalRequired={requiresPublicationApproval} /></div></Tabs></Fold><Fold name={SECTIONS} id="staff-access" icon="👥" title="Staff & access" summary="Your team, work availability and permissions" testId="fold-staff"><div className={BODY}><StaffSection /></div></Fold></div>;
   const ownerView = user.businessRole === "owner";
   const scope = typeof requestedScope === "string" && ["all", "team", "person"].includes(requestedScope) ? requestedScope : ownerView ? "all" : "team";
   const personId = typeof requestedPerson === "string" && z.uuid().safeParse(requestedPerson).success ? requestedPerson : !ownerView && scope === "team" ? user.actorId ?? user.id : null;
@@ -95,6 +96,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const changeList = changes ?? [];
   const siteSummary = siteError ? "Website status unavailable" : site ? `${site.domain} · ${site.live_at ? "Connected" : site.status === "reading" ? "Reading…" : site.status === "error" ? "Needs attention" : "Ready for review"}` : initialWebsite ? "Website saved · connection needed" : "No website connected";
   const documentsSummary = `${siteSummary}${sources.length ? ` · ${plural(sources.length, "additional document")}` : ""}`;
+  const knowsSummary = [about ? "About" : "", details.hours || details.address ? "Details" : "", ways.length ? plural(ways.length, "customer action") : "", documentsSummary, faqs.length ? plural(faqs.length, "answer") : ""].filter(Boolean).join(" · ");
 
   return (
     <div className="space-y-6">
@@ -115,53 +117,57 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
           </div>
           {ownerView && scope === "all" && <CustomerDashboard data={dashboard} approvedAnswers={faqs.length} />}
         </Fold>
-        <Fold name={SECTIONS} id="about-business" icon="✍️" title="About your business" testId="fold-own-words" summary={about ? about.replace(/\s+/g, " ").slice(0, 120) : "Introduce your business to customers"}>
-          <section className={BODY} aria-label="About your business">
-            <BusinessInfoForm about={about} />
-            <Link href={`/u/${agent.handle}`} target="_blank" className="text-sm text-accent underline">Preview your public page</Link>
-          </section>
-        </Fold>
-        <Fold name={SECTIONS} id="business-information" icon="📋" title="Business information" testId="fold-book" summary={ways.length ? `${plural(ways.length, "customer action")} · contact, booking and ordering` : "Hours, address and ways customers can reach you"}>
-          <section className={BODY} aria-label="Business information">
-            <BusinessDetailsForm hours={details.hours} address={details.address} fromWebsite={Boolean(site?.live_at && (info.hours === undefined || info.address === undefined))} />
-            <div id="book-or-order" className="scroll-mt-40 border-t border-border pt-4">
-              <h3 className="mb-2 font-medium">Customer actions</h3>
-              <p className="hint mb-3">Add booking, ordering and contact options or create your own labelled buttons. Your agent offers relevant options; customers complete actions directly with your business.</p>
-              <WaysEditor initial={ways} />
-            </div>
-          </section>
-        </Fold>
-        <Fold name={SECTIONS} id="website-documents" icon="🌐" title="Website & documents" testId="fold-documents" summary={documentsSummary} badge={{ count: changeList.length, tone: "new" }}>
-          <section className={BODY} aria-label="Website and documents">
-            <span id="knows" />
-            <div id="website" className="scroll-mt-40">
-              {siteError ? <p role="alert" className="text-sm text-danger">Your website connection could not be loaded. Refresh this page before adding another.</p> : <WebsiteCard
-                key={`${agent.id}:${site?.url ?? initialWebsite}`}
-                site={site ? { domain: site.domain, url: site.url, status: site.status, pagesRead: site.pages_read, lastReadAt: site.last_read_at, lastSuccessAt: site.last_success_at, autoRefresh: site.auto_refresh, live: Boolean(site.live_at), warning: site.warning, error: site.error, verifyToken: site.verify_token } : null}
-                lookup={(agent.business_info as { lookup?: boolean } | null)?.lookup !== false}
-                verified={Boolean(site && agent.verified_domain === site.domain)}
-                canVerifyByEmail={Boolean(site && emailProofEnforced() && email.confirmed && verifiesByEmail(email.address, site.domain))}
-                initialValue={initialWebsite}
-                initialError={!site && initialWebsite ? "Your website address is saved. Retry the connection below." : !site && website_error ? "Your website could not be connected. Enter its address below to retry." : undefined}
-              />}
-            </div>
-            {changeList.length > 0 && <div data-testid="site-changes" className="space-y-3 rounded-xl border border-border p-3">
-              <div className="flex items-center justify-between gap-3"><h3 className="font-medium">Website updates</h3><ActionButton action={clearSiteChangesAction} label="Clear" /></div>
-              <ul>{changeList.map((change) => <li key={change.id} className="py-2 text-sm" data-testid="site-change">{change.text}<span className="block text-xs text-muted">{dayBucket(change.created_at)}</span></li>)}</ul>
-            </div>}
-            <div id="links" className="scroll-mt-40 space-y-3 border-t border-border pt-4">
-              <h3 className="font-medium">Additional documents &amp; links</h3>
-              <p className="hint">Add a menu, price list or other material beyond your connected website. Each source is stored once, with its own visibility.</p>
-              {sourcesError ? <p role="alert" className="text-sm text-danger">Documents could not be loaded. Refresh to try again.</p> : <SourcesManager sources={sources} />}
-            </div>
-            <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Customer-only information</summary><div className="pt-3"><BusinessInfoForm mode="customers" customers={info.customers ?? ""} /></div></details>
-          </section>
-        </Fold>
-        <Fold name={SECTIONS} id="questions-answers" icon="💬" title="Questions & Answers" testId="fold-faqs" summary={faqs.length ? `${plural(faqs.length, "approved answer")}` : "Add the questions customers ask most"}>
-          <section className={BODY} aria-label="Questions and answers">
-            <p className="hint">Your approved reusable answers. General answers from your team are added here only when you choose to publish them.</p>
-            <QuestionsAnswers faqs={faqs} />
-          </section>
+        <Fold name={SECTIONS} id="agent-knows" icon="🧠" title="What your agent knows" testId="fold-knows" summary={knowsSummary} badge={{ count: changeList.length, tone: "new" }}>
+          <Tabs
+            label="What your agent knows"
+            tabs={[
+              { id: "about-business", label: "About", testId: "fold-own-words" },
+              { id: "business-information", label: "Details", testId: "fold-book" },
+              { id: "website-documents", label: "Website & documents", testId: "fold-documents", badge: { count: changeList.length, tone: "new" } },
+              { id: "questions-answers", label: "Q&A", testId: "fold-faqs", badge: { count: faqs.length, tone: "total" } },
+            ]}
+          >
+            <section className={BODY} aria-label="About your business">
+              <BusinessInfoForm about={about} />
+              <Link href={`/u/${agent.handle}`} target="_blank" className="text-sm text-accent underline">Preview your public page</Link>
+            </section>
+            <section className={BODY} aria-label="Business information">
+              <BusinessDetailsForm hours={details.hours} address={details.address} fromWebsite={Boolean(site?.live_at && (info.hours === undefined || info.address === undefined))} />
+              <div id="book-or-order" className="scroll-mt-40 border-t border-border pt-4">
+                <h3 className="mb-2 font-medium">Customer actions</h3>
+                <p className="hint mb-3">Add booking, ordering and contact options or create your own labelled buttons. Your agent offers relevant options; customers complete actions directly with your business.</p>
+                <WaysEditor initial={ways} />
+              </div>
+            </section>
+            <section className={BODY} aria-label="Website and documents">
+              <span id="knows" />
+              <div id="website" className="scroll-mt-40">
+                {siteError ? <p role="alert" className="text-sm text-danger">Your website connection could not be loaded. Refresh this page before adding another.</p> : <WebsiteCard
+                  key={`${agent.id}:${site?.url ?? initialWebsite}`}
+                  site={site ? { domain: site.domain, url: site.url, status: site.status, pagesRead: site.pages_read, lastReadAt: site.last_read_at, lastSuccessAt: site.last_success_at, autoRefresh: site.auto_refresh, live: Boolean(site.live_at), warning: site.warning, error: site.error, verifyToken: site.verify_token } : null}
+                  lookup={(agent.business_info as { lookup?: boolean } | null)?.lookup !== false}
+                  verified={Boolean(site && agent.verified_domain === site.domain)}
+                  canVerifyByEmail={Boolean(site && emailProofEnforced() && email.confirmed && verifiesByEmail(email.address, site.domain))}
+                  initialValue={initialWebsite}
+                  initialError={!site && initialWebsite ? "Your website address is saved. Retry the connection below." : !site && website_error ? "Your website could not be connected. Enter its address below to retry." : undefined}
+                />}
+              </div>
+              {changeList.length > 0 && <div data-testid="site-changes" className="space-y-3 rounded-xl border border-border p-3">
+                <div className="flex items-center justify-between gap-3"><h3 className="font-medium">Website updates</h3><ActionButton action={clearSiteChangesAction} label="Clear" /></div>
+                <ul>{changeList.map((change) => <li key={change.id} className="py-2 text-sm" data-testid="site-change">{change.text}<span className="block text-xs text-muted">{dayBucket(change.created_at)}</span></li>)}</ul>
+              </div>}
+              <div id="links" className="scroll-mt-40 space-y-3 border-t border-border pt-4">
+                <h3 className="font-medium">Additional documents &amp; links</h3>
+                <p className="hint">Add a menu, price list or other material beyond your connected website. Each source is stored once, with its own visibility.</p>
+                {sourcesError ? <p role="alert" className="text-sm text-danger">Documents could not be loaded. Refresh to try again.</p> : <SourcesManager sources={sources} />}
+              </div>
+              <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Customer-only information</summary><div className="pt-3"><BusinessInfoForm mode="customers" customers={info.customers ?? ""} /></div></details>
+            </section>
+            <section className={BODY} aria-label="Questions and answers">
+              <p className="hint">Your approved reusable answers. General answers from your team are added here only when you choose to publish them.</p>
+              <QuestionsAnswers faqs={faqs} />
+            </section>
+          </Tabs>
         </Fold>
         <Fold name={SECTIONS} id="staff-access" icon="👥" title="Staff & access" summary="Your team, invitations and permissions" testId="fold-staff"><div className={BODY}><StaffSection /></div></Fold>
         <Fold name={SECTIONS} id="share" icon="📷" title="Share your business" testId="fold-qr" summary="Your public page, customer QR code and printable poster">

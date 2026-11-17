@@ -1,14 +1,10 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser } from "@playwright/test";
+import { openSection } from "./open-section";
 
 // "Paste your website": a business signs up with its website, reviews what its agent
 // learned, tries it as a customer and goes live; then answers a question its website
 // doesn't cover, once. The demo website is served by the app (public/demo/site).
 
-/** My Business sections open one at a time: open the one a step needs (if it isn't already). */
-async function openSection(page: Page, testId: string) {
-  const fold = page.getByTestId(testId);
-  if ((await fold.getAttribute("open")) === null) await fold.locator("summary").first().click();
-}
 
 async function as(browser: Browser, handle: string) {
   const context = await browser.newContext();

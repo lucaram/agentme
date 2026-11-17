@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { openSection } from "./open-section";
 
 const PASSWORD = "password123";
 
@@ -13,11 +14,6 @@ async function as(browser: Browser, handle: string) {
   return { page, close: () => context.close() };
 }
 
-/** My Business sections open one at a time: open the one a step needs (if it isn't already). */
-async function openSection(page: Page, testId: string) {
-  const fold = page.getByTestId(testId);
-  if ((await fold.getAttribute("open")) === null) await fold.locator("summary").first().click();
-}
 
 async function send(page: Page, text: string) {
   await page.getByLabel("Message", { exact: true }).fill(text);
