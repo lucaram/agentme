@@ -31,7 +31,7 @@ test("business workspace preserves agent information, custom actions, documents 
     for (const [i, title] of ["Customer dashboard", "What your agent knows", "Staff & access", "Share your business"].entries()) expect(sectionTitles[i]).toContain(title);
     // Q&A is a tab of "What your agent knows": its count is a total (grey), and the section's summary names it.
     await expect(shop.getByTestId("fold-faqs-badge")).toHaveText("2");
-    await expect(shop.getByTestId("fold-knows").locator("summary")).toContainText("2 answers");
+    await expect(shop.getByTestId("fold-knows").locator("summary").first()).toContainText("2 answers");
     await expect(shop.getByRole("link", { name: /questions? awaiting your team/ })).toHaveCount(0);
     await expect(shop.locator("details[open]")).toHaveCount(0);
     await expect(shop.getByRole("button", { name: "Test your agent", exact: true })).toBeVisible();

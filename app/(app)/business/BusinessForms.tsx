@@ -6,6 +6,8 @@ import { LocalTime } from "@/components/LocalTime";
 import { addSourceAction, createSourceButtonAction, removeSourceAction, rereadSourceAction, saveBusinessInfoAction, saveBusinessDetailsAction, setSourceVisibilityAction, tryQuestionAction } from "./actions";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { SectionLink } from "@/components/SectionLink";
+import { CountedField } from "@/components/CountedField";
+import { BUSINESS_LIMITS } from "@/lib/social/limits";
 
 /** "About your business" (public) and "For customers only", in your own words. */
 export function BusinessInfoForm({ about = "", customers = "", mode = "about" }: { about?: string; customers?: string; mode?: "about" | "customers" }) {
@@ -13,14 +15,13 @@ export function BusinessInfoForm({ about = "", customers = "", mode = "about" }:
   return (
     <form action={action} className="space-y-4" aria-label={mode === "about" ? "Business description" : "Customer-only information"}>
       {mode === "about" && <div>
-        <label className="label" htmlFor="about">About your business <span className="font-normal text-muted">· public</span></label>
-        <AutoGrowTextarea
+        <CountedField
           id="about"
-          name="about"
-          className="input"
+          label="About your business"
+          note="· public"
+          max={BUSINESS_LIMITS.about}
           minRows={5}
           maxRows={16}
-          maxLength={8000}
           defaultValue={about}
           placeholder={"Family-run Italian restaurant in Camden.\nSeasonal dishes, handmade pasta and a warm welcome for friends and families."}
         />
@@ -52,8 +53,8 @@ export function BusinessDetailsForm({ hours, address, fromWebsite }: { hours: st
   const [state, action, pending] = useActionState(saveBusinessDetailsAction, undefined);
   return <form action={action} className="space-y-3" aria-label="Business details">
     {fromWebsite && <p className="hint">Available details from your published website are filled in. Save your changes to override them.</p>}
-    <div><label className="label" htmlFor="hours">Opening hours</label><AutoGrowTextarea id="hours" name="hours" className="input" minRows={2} maxRows={5} maxLength={500} defaultValue={hours} /></div>
-    <div><label className="label" htmlFor="address">Business address</label><AutoGrowTextarea id="address" name="address" className="input" minRows={2} maxRows={5} maxLength={500} defaultValue={address} /></div>
+    <CountedField id="hours" label="Opening hours" max={BUSINESS_LIMITS.hours} maxRows={5} defaultValue={hours} />
+    <CountedField id="address" label="Business address" max={BUSINESS_LIMITS.address} maxRows={5} defaultValue={address} />
     {state?.error && <p role="alert" className="text-sm text-danger">{state.error}</p>}
     {state?.saved && <p role="status" className="text-sm text-accent">Saved. Your page and agent use these details.</p>}
     <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : "Save business details"}</button>

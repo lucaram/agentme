@@ -5,7 +5,8 @@ import { checkHandle, suggestAvailableHandle, type OnboardingState } from "@/app
 import { AvatarPicker } from "@/components/profile/AvatarPicker";
 import { Avatar } from "@/components/Avatar";
 import { avatarsFor } from "@/lib/avatars";
-import { maxNameFor, MIN_NAME, SIGNUP_LIMITS } from "@/lib/social/limits";
+import { BUSINESS_LIMITS, maxNameFor, MIN_NAME, SIGNUP_LIMITS } from "@/lib/social/limits";
+import { CountedField } from "@/components/CountedField";
 import { handleCandidates } from "@/lib/onboarding/details";
 import { normalizeHandle } from "@/lib/policy/handles";
 import { TOPICS } from "@/lib/profile/topics";
@@ -74,9 +75,9 @@ export function AgentSetupForm({ type, submit, suggestedHandle = "", next = "", 
           <PersonalDetail field="notes" />
         </> : <>
           <WebsiteField onFilled={fillFrom} />
-          <div><label className="label" htmlFor="description">About your business</label><LimitedField id="description" name="description" multiline rows={2} maxRows={6} max={SIGNUP_LIMITS.description} value={description} onChange={setDescription} placeholder="A short introduction for your customers" /><p className="hint mt-1">Public.</p></div>
+          <div><CountedField id="description" label="About your business" note="· public" max={SIGNUP_LIMITS.description} minRows={2} maxRows={6} value={description} onChange={setDescription} placeholder="A short introduction for your customers" /><p className="hint mt-1">You can write more (up to {BUSINESS_LIMITS.about.toLocaleString("en-GB")} characters) later in My Business.</p></div>
           <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-medium">More business details <span className="font-normal text-muted">· Optional</span></summary><div className="mt-4 space-y-5">
-            <div><label className="label" htmlFor="hours">Opening hours</label><LimitedField id="hours" name="hours" max={SIGNUP_LIMITS.hours} placeholder="e.g. Tue–Sun 12:00–23:00" /></div>
+            <CountedField id="hours" label="Opening hours" max={SIGNUP_LIMITS.hours} multiline={false} placeholder="e.g. Tue–Sun 12:00–23:00" />
             <SignupQuestions />
           </div></details>
           <p className="hint">Your agent can answer from the details you enter here. Website findings need your review before publishing.</p>

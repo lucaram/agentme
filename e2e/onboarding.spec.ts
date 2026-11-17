@@ -115,7 +115,7 @@ test("adding a managed business uses the same optional fields and keeps the pers
     const business = await f.db.from("agents").select("owner_id,business_info").eq("id", managed.data!.business_agent_id).single();
     expect(business.data?.owner_id).not.toBe(user.id); expect(business.data?.business_info).toMatchObject({ about: "Local pottery studio.", hours: "Mon–Fri 10–18", faqs: [{ q: "Do you run classes?", a: "Yes, on Fridays." }] });
     await expect(page.getByTestId("setup-invitation")).toContainText("Introduce your business");
-    await page.getByRole("link", { name: "My Business", exact: true }).click(); await page.getByTestId("fold-knows").locator("summary").click(); await page.getByTestId("fold-faqs-tab").click(); await expect(page.getByTestId("faq-list")).toContainText("Yes, on Fridays.");
+    await page.getByRole("link", { name: "My Business", exact: true }).click(); await page.getByTestId("fold-knows").locator("summary").first().click(); await page.getByTestId("fold-faqs-tab").click(); await expect(page.getByTestId("faq-list")).toContainText("Yes, on Fridays.");
     const personal = await f.db.from("agents").select("type,business_info").eq("owner_id", user.id).single(); expect(personal.data).toMatchObject({ type: "personal", business_info: {} });
   } finally { await f.cleanup(); }
 });
