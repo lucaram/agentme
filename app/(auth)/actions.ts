@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { restoreAtLogin } from "@/lib/appearance-server";
+import { restoreIdentityAppearance } from "@/lib/appearance-server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { safeNext } from "@/lib/next-path";
@@ -42,7 +42,7 @@ export async function signIn(_prev: AuthState, form: FormData): Promise<AuthStat
   const agent = await getAgentForUser(data.user.id);
   if (agent) await registerAccountEmail(agent.id, { email: data.user.email ?? null, emailConfirmed: Boolean(data.user.email_confirmed_at) });
   // Their Personalise choices follow them to this device.
-  await restoreAtLogin(data.user.id);
+  await restoreIdentityAppearance();
   redirect(safeNext(form.get("next")));
 }
 

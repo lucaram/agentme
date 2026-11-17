@@ -2,15 +2,15 @@
 
 import { requireAgent } from "@/lib/auth";
 import { parseAppearance } from "@/lib/appearance";
-import { rememberOnDevice, saveForPerson } from "@/lib/appearance-server";
-import { realPerson } from "@/lib/identities";
+import { rememberOnDevice } from "@/lib/appearance-server";
+import { createClient } from "@/lib/supabase/server";
 
-/** Saves the look on this device (cookie) and on the person's account (follows them everywhere). */
+/** The database binds both the actual person and selected identity, including Staff. */
 export async function saveAppearanceAction(input: unknown): Promise<{ error?: string }> {
-  const { user, agent } = await requireAgent();
+  await requireAgent();
   const look = parseAppearance(input);
+  const { error } = await (await createClient()).rpc("set_identity_appearance", { p_appearance: look });
+  if (error) return { error: "Couldn't save your appearance. Please try again." };
   await rememberOnDevice(look);
-  const person = await realPerson(user, agent);
-  if (person) await saveForPerson(person, look);
   return {};
 }

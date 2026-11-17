@@ -25,6 +25,7 @@ export type Database = {
           }
         },"public": {
           Tables: {
+            identity_appearance: BusinessTeamTable<{ user_id: string; agent_id: string; appearance: Json }, "user_id" | "agent_id" | "appearance">,
             profile_avatar_assets: BusinessTeamTable<{ id: string; agent_id: string; path: string; created_at: string }, "id" | "agent_id" | "path">,
             profile_avatar_deletions: BusinessTeamTable<{ path: string; created_at: string }, "path">,
             business_team_settings: BusinessTeamTable<{ business_agent_id: string; default_owner: string | null; tracking_since: string }, "business_agent_id">,
@@ -1267,6 +1268,8 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
+            current_identity_appearance: { Args: Record<string, never>; Returns: Json },
+            set_identity_appearance: { Args: { p_appearance: Json }; Returns: undefined },
             commit_profile_avatar: { Args: { p_agent: string; p_actor: string; p_preset?: string | null; p_asset?: string | null; p_path?: string | null }; Returns: string },
             queue_unused_avatar_files: { Args: Record<string, never>; Returns: undefined },
             "action_counts":
