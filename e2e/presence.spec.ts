@@ -24,7 +24,10 @@ test("contacts and chat headers show live human status; invisible and privacy ha
     const luca = await login(browser, f.luca, f.password); sessions.push(luca); const marco = await login(browser, f.marco, f.password); sessions.push(marco);
     await contacts(marco.page); const badge = marco.page.getByTestId(`presence-${f.luca.agent.id}`); await expect(badge).toHaveText("Online");
     await status(luca.page, "Busy"); await expect(badge).toHaveText("Busy");
-    await luca.page.getByTestId("identity-switcher").click(); await luca.page.getByRole("combobox", { name: "Busy for", exact: true }).selectOption("forever"); await expect(luca.page.getByTestId("busy-until")).toHaveText("Busy until changed");
+    await luca.page.getByTestId("identity-switcher").click(); await expect(luca.page.getByTestId("busy-until")).toHaveText("Busy until changed");
+    // A length is chosen after Busy, from now; "Until changed" takes it away again.
+    await luca.page.getByRole("button", { name: "1 hour", exact: true }).click(); await expect(luca.page.getByTestId("busy-until")).toContainText(", then Online");
+    await luca.page.getByRole("button", { name: "Until changed", exact: true }).click(); await expect(luca.page.getByTestId("busy-until")).toHaveText("Busy until changed");
     await luca.page.reload(); await expect(luca.page.getByTestId("own-presence")).toHaveText("Busy"); await luca.page.getByTestId("identity-switcher").click(); await expect(luca.page.getByTestId("busy-until")).toHaveText("Busy until changed"); await luca.page.getByTestId("identity-switcher").click();
     await status(luca.page, "Away"); await expect(badge).toHaveText("Away");
     await status(luca.page, "Appear offline"); await expect(badge).toHaveText("Offline"); await expect(luca.page.getByTestId("own-presence")).toContainText("Appear offline");
