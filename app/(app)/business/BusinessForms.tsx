@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { LocalTime } from "@/components/LocalTime";
 import { addSourceAction, removeSourceAction, rereadSourceAction, saveBusinessInfoAction, saveBusinessDetailsAction, setSourceVisibilityAction, tryQuestionAction } from "./actions";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
-import { SectionLink } from "@/components/SectionLink";
 import { CountedField } from "@/components/CountedField";
 import { BUSINESS_LIMITS } from "@/lib/social/limits";
 
@@ -162,7 +161,7 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
         </button>
       </div>
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
-      <p className="hint">Customers only: used only when your agent answers your contacts privately. Each link is re-read about once a day.</p>
+      <p className="hint" data-testid="visibility-hint"><b className="font-medium">Public:</b> your agent can use it when answering anyone. <b className="font-medium">Customers only:</b> only in one-to-one chats with your contacts. Links are re-read daily.</p>
     </div>
   );
 }
