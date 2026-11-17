@@ -18,7 +18,6 @@ export function BusinessInfoForm({ about = "", customers = "", mode = "about" }:
         <CountedField
           id="about"
           label="About your business"
-          note="· public"
           max={BUSINESS_LIMITS.about}
           minRows={5}
           maxRows={16}
@@ -26,7 +25,7 @@ export function BusinessInfoForm({ about = "", customers = "", mode = "about" }:
           placeholder={"Family-run Italian restaurant in Camden.\nSeasonal dishes, handmade pasta and a warm welcome for friends and families."}
         />
         <p className="hint mt-1">
-          Introduce your business to customers: what you offer and what makes it special. This description appears on your public page and helps your agent answer questions. Manage hours and contact options in <SectionLink id="business-information" className="text-accent underline">Details</SectionLink>.
+          Introduce your business to customers: what you offer and what makes it special.
         </p>
       </div>}
       {mode === "customers" && <div>
