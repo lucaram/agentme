@@ -48,6 +48,17 @@ export function departureNotes(d: Departure): DepartureNote[] {
   return [...notes].map(([to, text]) => ({ to, text }));
 }
 
+/** "17 Nov 2026 at 14:05 UTC": when access was removed, the same however later it is read. */
+export function removedAt(at: Date): string {
+  const day = at.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  const time = at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" });
+  return `${day} at ${time} UTC`;
+}
+
+/** What someone removed from a business by an Owner or Manager sees in their own (personal) My Agent. */
+export const removedNote = (business: string, at: Date) =>
+  `Your access to ${business} was removed on ${removedAt(at)}. Your personal account is unaffected: your chats, contacts and plans are as they were.`;
+
 /** What the person who left sees in their own My Agent. */
 export const leftNote = (business: string) =>
   `You left ${business}. Your personal account, chats and contacts are unchanged, and your past work there stays in the business's records. To work with ${business} again, an Owner or Manager can invite you.`;
