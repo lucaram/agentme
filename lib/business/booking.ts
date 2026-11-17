@@ -90,6 +90,18 @@ export function normaliseWay(kind: string, raw: string, options: { label?: unkno
   return { ok: true, way: { kind: k, value: url.toString(), ...extra } };
 }
 
+/** Buttons shown before "More options", and the most that can be ticked "Show first". */
+export const MAX_FEATURED = 4;
+
+/**
+ * The order customers see: the ones ticked "Show first" (at most four, in your order), then the rest in
+ * your order. The first four of these are shown; the others are under "More options".
+ */
+export function orderedWays(ways: Way[]): Way[] {
+  const first = ways.filter((way) => way.primary).slice(0, MAX_FEATURED);
+  return [...first, ...ways.filter((way) => !first.includes(way))];
+}
+
 /** Ways stored in business_info, re-checked (never trust stored data blindly). */
 export function waysOf(businessInfo: unknown): Way[] {
   const list = ((businessInfo ?? {}) as { ways?: unknown }).ways;

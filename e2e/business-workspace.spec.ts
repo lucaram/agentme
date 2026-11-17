@@ -78,7 +78,8 @@ test("business workspace preserves agent information, custom actions, documents 
       await information.getByLabel(`Way ${i + 1}: button label`, { exact: true }).fill(actions[i].label);
       if (actions[i].kind === "custom") await information.getByLabel(`Way ${i + 1}: purpose`, { exact: true }).selectOption(actions[i].purpose!);
     }
-    await information.getByTestId("way-row").nth(6).getByRole("checkbox", { name: "Feature this button" }).check();
+    await information.getByTestId("way-row").nth(6).getByRole("checkbox", { name: "Show first" }).check();
+    await expect(information.getByTestId("show-first-count")).toContainText("Show first: 1 of 4 selected.");
     await information.getByRole("button", { name: "Save customer actions" }).click();
     await expect(information.getByRole("status").filter({ hasText: "Saved. Your agent" })).toBeVisible();
     expect(((await f.db.from("agents").select("business_info").eq("id", f.business.agent.id).single()).data!.business_info as { ways: unknown[] }).ways).toHaveLength(9);
@@ -87,11 +88,10 @@ test("business workspace preserves agent information, custom actions, documents 
     await expect(docs.getByLabel("Your website", { exact: true })).toHaveValue(`${baseURL}/demo/trattoria-menu.html`);
     await expect(docs.getByRole("button", { name: "Retry connection", exact: true })).toBeVisible();
     await docs.getByLabel("Link to read").fill(documentUrl);
-    await docs.getByRole("checkbox", { name: /Also show customers a button/ }).check();
-    await docs.getByLabel("New document button label").fill("View menu");
     await docs.getByRole("button", { name: "Add link", exact: true }).click();
     await expect(docs.getByTestId("business-source")).toHaveCount(1);
-    await expect(docs.getByText("Customer button: View menu. Rename or move it in Details. Removing this document also removes its button.")).toBeVisible();
+    // What your agent reads never becomes a customer button.
+    await expect(docs.getByText(/customer button/i)).toHaveCount(0);
 
     // Reuse a connected website after review, record successful checks and pause daily updates.
     // The saved address survives a fresh visit without signup query parameters.
@@ -119,8 +119,7 @@ test("business workspace preserves agent information, custom actions, documents 
     await expect(publicPage.getByRole("link", { name: /Request catering/ })).toBeVisible();
     await publicPage.getByText(/More options \(/).click();
     await expect(publicPage.getByRole("link", { name: /Download brochure/ })).toHaveAttribute("href", "https://sole.example/brochure");
-    await expect(publicPage.getByRole("link", { name: /View menu/ })).toHaveAttribute("href", documentUrl);
-    await expect(publicPage.getByTestId("business-ways").getByRole("link")).toHaveCount(10);
+    await expect(publicPage.getByTestId("business-ways").getByRole("link")).toHaveCount(9);
 
     await visitor.route("https://sole.example/**",route=>route.fulfill({body:"Booking website",contentType:"text/html"}));
     const recorded=publicPage.waitForResponse(response=>response.url().endsWith("/api/business/actions/click"));
