@@ -167,7 +167,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
                   verified={Boolean(site && agent.verified_domain === site.domain)}
                   canVerifyByEmail={Boolean(site && emailProofEnforced() && email.confirmed && verifiesByEmail(email.address, site.domain))}
                   initialValue={initialWebsite}
-                  initialError={!site && initialWebsite ? "Your website address is saved. Retry the connection below." : !site && website_error ? "Your website could not be connected. Enter its address below to retry." : undefined}
+                  notice={site ? undefined : website_error ? "We couldn't connect the website you gave at sign-up. Check the address and try again." : initialWebsite ? "We couldn't connect your website yet. Check the address and try again." : undefined}
                 />}
               </div>
               {changeList.length > 0 && <div data-testid="site-changes" className="space-y-3 rounded-xl border border-border p-3">

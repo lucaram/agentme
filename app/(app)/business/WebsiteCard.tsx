@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LocalTime } from "@/components/LocalTime";
-import { verifyTag } from "@/lib/business/site";
+import { MAX_SITE_PAGES, verifyTag } from "@/lib/business/site";
 import { removeWebsiteAction, rereadWebsiteAction, setSiteLookupAction, setAutomaticRefreshAction, startWebsiteAction, verifyWebsiteAction } from "./website-actions";
 
 export type WebsiteSummary = {
@@ -22,10 +22,11 @@ export type WebsiteSummary = {
 };
 
 /** "Your website": the whole site your agent reads (and re-reads every day), with the ✓ Verified badge. */
-export function WebsiteCard({ site, verified, canVerifyByEmail, lookup = true, initialValue = "", initialError }: { site: WebsiteSummary | null; verified: boolean; canVerifyByEmail: boolean; lookup?: boolean; initialValue?: string; initialError?: string }) {
+export function WebsiteCard({ site, verified, canVerifyByEmail, lookup = true, initialValue = "", notice }: { site: WebsiteSummary | null; verified: boolean; canVerifyByEmail: boolean; lookup?: boolean; initialValue?: string; /** Why it is not connected yet (e.g. the sign-up connection failed); shown until you try again. */ notice?: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(initialError ?? null);
+  const [error, setError] = useState<string | null>(null);
+  const [showNotice, setShowNotice] = useState(Boolean(notice));
   const [value, setValue] = useState(initialValue);
   const [changing, setChanging] = useState(false);
   const [automatic, setAutomatic] = useOptimistic(site?.autoRefresh !== false);
@@ -42,11 +43,16 @@ export function WebsiteCard({ site, verified, canVerifyByEmail, lookup = true, i
     return (
       <div className="space-y-2 rounded-xl border border-accent/50 bg-accent-soft/50 p-3" data-testid="website-card">
         <h3 className="text-sm font-semibold">{changing ? "Change your website" : "Connect your website"}</h3>
-        <p className="text-xs text-muted">Connect once. Your agent reads key pages, then you review the information before publishing. It can look up additional pages when customers ask.</p>
+        <p className="text-xs text-muted">
+          Your agent reads up to {MAX_SITE_PAGES} pages of your site. You check what it learned, then go live. After that, it re-reads your site daily and can look up other pages when
+          customers ask.
+        </p>
+        {showNotice && notice && !changing && <p className="text-xs text-amber-600 dark:text-amber-400" data-testid="website-notice">{notice}</p>}
         <form
           className="flex gap-2"
           onSubmit={(e) => {
             e.preventDefault();
+            setShowNotice(false);
             run(() => startWebsiteAction(value), () => router.push("/business/setup"));
           }}
         >
