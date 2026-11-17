@@ -150,7 +150,8 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
               <div id="book-or-order" className="scroll-mt-40 border-t border-border pt-4">
                 <h3 className="mb-2 font-medium">Customer actions</h3>
                 <p className="hint mb-3">Add booking, ordering and contact options or create your own labelled buttons. Your agent offers relevant options; customers complete actions directly with your business.</p>
-                <WaysEditor initial={ways} />
+                {/* Starts again from what's saved whenever the buttons change elsewhere (e.g. a document's button). */}
+                <WaysEditor key={JSON.stringify(ways)} initial={ways} />
               </div>
             </section>
             <section className={BODY} aria-label="Website and documents">
