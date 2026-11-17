@@ -116,7 +116,10 @@ export async function createSourceButtonAction(sourceId: string, label: string):
   const button = normaliseWay("custom", source.url, { label: String(label), purpose: "information" });
   if (!button.ok) return { error: button.error };
   const ways = waysOf(agent.business_info);
-  if (!ways.some((way) => way.value === button.way.value && way.label === button.way.label)) await patchBusinessInfo(agent.id, { ways: [...ways, button.way] });
+  // One customer button per document: asking again with another label renames it (never a second button).
+  const existing = ways.findIndex((way) => way.kind === "custom" && way.purpose === "information" && way.value === button.way.value);
+  const next = existing >= 0 ? ways.map((way, i) => (i === existing ? { ...way, label: button.way.label } : way)) : [...ways, button.way];
+  if (existing < 0 || ways[existing].label !== button.way.label) await patchBusinessInfo(agent.id, { ways: next });
   revalidatePath("/business");
   revalidatePath(`/u/${agent.handle}`);
   return {};
