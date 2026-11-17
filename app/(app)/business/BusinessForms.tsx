@@ -161,7 +161,7 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
         </button>
       </div>
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
-      <p className="hint" data-testid="visibility-hint"><b className="font-medium">Public:</b> your agent can use it when answering anyone. <b className="font-medium">Customers only:</b> only in one-to-one chats with your contacts. Links are re-read daily.</p>
+      <p className="hint" data-testid="visibility-hint"><b className="font-medium">Public:</b> your agent can use it when answering anyone.<br /><b className="font-medium">Customers only:</b> only in one-to-one chats with your contacts. Links are re-read daily.</p>
     </div>
   );
 }
