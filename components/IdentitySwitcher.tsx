@@ -102,7 +102,6 @@ export function IdentitySwitcher({
               ＋ Add a business
             </Link>
           )}
-          <p className="px-2 pt-1 text-xs text-muted">Each one has its own chats, contacts and inbox.</p>
         </div>
       )}
     </div>
