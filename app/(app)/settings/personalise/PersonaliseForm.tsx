@@ -14,6 +14,7 @@ export function PersonaliseForm({ initial, name }: { initial: Appearance; name: 
 
   function change(patch: Partial<Appearance>) {
     const next = { ...look, ...patch };
+    setStatus("idle");
     setLook(next);
     for (const [attr, value] of Object.entries(appearanceAttributes(next))) document.documentElement.setAttribute(attr, value);
     start(async () => {

@@ -9,8 +9,8 @@ export default async function PersonaliseSettingsPage() {
   const look = await currentAppearance();
   return (
     <div className="space-y-6">
-      <SettingsHeader title="Personalise" hint="How AGENTME looks to you. Changes apply straight away and follow you to every device." />
-      <PersonaliseForm initial={look} name={agent.display_name} />
+      <SettingsHeader title="Personalise" hint={`Your appearance for @${agent.handle}. Changes apply straight away and follow you to every device. Other accounts and team members keep their own choices.`} />
+      <PersonaliseForm key={agent.id} initial={look} name={agent.display_name} />
     </div>
   );
 }

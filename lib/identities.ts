@@ -1,4 +1,5 @@
 import "server-only";
+import { restoreIdentityAppearance } from "@/lib/appearance-server";
 import { commitAvatar, pruneAvatarFiles } from "@/lib/profile/avatar-server";
 import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
@@ -95,6 +96,7 @@ export async function signInAs(userId: string, businessAgentId?: string): Promis
     const binding = await db.from("business_work_sessions").insert({ session_id: sessionId, business_agent_id: businessAgentId, person_user: userId });
     if (binding.error) { await client.auth.signOut({ scope: "local" }); return false; }
   }
+  if (!signInError) await restoreIdentityAppearance();
   return !signInError;
 }
 

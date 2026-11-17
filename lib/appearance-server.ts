@@ -1,36 +1,28 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { adminClient } from "@/lib/supabase/admin";
-import { APPEARANCE_COOKIE, parseAppearance, serializeAppearance, type Appearance } from "@/lib/appearance";
+import { cache } from "react";
+import { createClient } from "@/lib/supabase/server";
+import { APPEARANCE_COOKIE, DEFAULT_APPEARANCE, parseAppearance, serializeAppearance, type Appearance } from "@/lib/appearance";
 
 const YEAR = 60 * 60 * 24 * 365;
 
-/** This device's appearance (defaults when never set). */
-export async function currentAppearance(): Promise<Appearance> {
-  return parseAppearance((await cookies()).get(APPEARANCE_COOKIE)?.value);
-}
+/** Draw the selected identity in this person's colours on the first server render.
+ * The device cookie is only a fallback for signed-out pages, never another identity.
+ */
+export const currentAppearance = cache(async (): Promise<Appearance> => {
+  const client = await createClient();
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) return parseAppearance((await cookies()).get(APPEARANCE_COOKIE)?.value);
+  const { data, error } = await client.rpc("current_identity_appearance");
+  return error ? DEFAULT_APPEARANCE : parseAppearance(data);
+});
 
 export async function rememberOnDevice(a: Appearance) {
   (await cookies()).set(APPEARANCE_COOKIE, serializeAppearance(a), { path: "/", maxAge: YEAR, sameSite: "lax", httpOnly: false });
 }
 
-/** Saved on the person's own agent (their personal one when they have it), so it follows them to every device and identity. */
-async function personAgentId(personId: string): Promise<string | null> {
-  const { data } = await adminClient().from("agents").select("id, type").eq("owner_id", personId);
-  const rows = data ?? [];
-  return (rows.find((r) => r.type === "personal") ?? rows[0])?.id ?? null;
-}
-
-export async function saveForPerson(personId: string, a: Appearance) {
-  const id = await personAgentId(personId);
-  if (id) await adminClient().from("agents").update({ appearance: a }).eq("id", id);
-}
-
-/** At login: bring the person's saved look to this device (keeps the device's look if they never chose one). */
-export async function restoreAtLogin(personId: string) {
-  const id = await personAgentId(personId);
-  if (!id) return;
-  const { data } = await adminClient().from("agents").select("appearance").eq("id", id).maybeSingle();
-  const saved = data?.appearance;
-  if (saved && typeof saved === "object" && Object.keys(saved).length) await rememberOnDevice(parseAppearance(saved));
+/** Called after login or switching sessions, using the newly selected workspace. */
+export async function restoreIdentityAppearance() {
+  const { data, error } = await (await createClient()).rpc("current_identity_appearance");
+  await rememberOnDevice(error ? DEFAULT_APPEARANCE : parseAppearance(data));
 }

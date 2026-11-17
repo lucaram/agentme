@@ -296,6 +296,19 @@ Apply migrations `20261116001000` through `20261116002000` locally or in deploym
 - Apply migrations `20261116002700` through `20261116003400` before using reporting lines and team dashboards. No additional server is required.
 
 
+### Appearance per identity
+
+Settings > Personalise saves theme, accent, text size, dark style and background
+for the actual person and selected identity. Personal and business views are
+independent; Owners, Managers and Staff can each personalise their own business
+view without changing a colleague's choices. Switching identities and signing in
+on another device restores that combination's saved appearance. Existing
+preferences remain the starting defaults until changed for an identity.
+
+Apply migration `20261117000100_identity_appearance.sql` before deploying this
+change. Preferences use the existing Supabase database, with session-bound RPCs
+and row-level security; no additional server is required.
+
 ### Businesses in groups and communities
 
 A business is never a member of a group or community. It is *placed* there (`business_placements`) and follows four rules:
