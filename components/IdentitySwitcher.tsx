@@ -125,7 +125,7 @@ export function IdentitySwitcher({
               </svg>
               <span className="min-w-0">
                 <span id={`${logOutId}-label`} className="block">Log out</span>
-                {signedInAs && <span id={`${logOutId}-email`} className="block truncate text-xs text-muted" data-testid="signed-in-as">Signed in as {signedInAs}</span>}
+                {signedInAs && <span id={`${logOutId}-email`} className="block truncate text-xs text-muted" data-testid="signed-in-as">{signedInAs}</span>}
               </span>
             </button>
           </form>
