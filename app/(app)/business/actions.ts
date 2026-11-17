@@ -144,7 +144,14 @@ export async function rereadSourceAction(id: string): Promise<Out> {
 
 export async function removeSourceAction(id: string): Promise<Out> {
   const { agent } = await requireBusiness();
-  await adminClient().from("business_sources").delete().eq("id", String(id ?? "")).eq("agent_id", agent.id);
+  const source = await ownSource(id, agent.id);
+  if (!source) return { error: "Not found." };
+  // Its customer button goes with it (a button for a document your agent no longer reads would be a leftover).
+  const ways = waysOf(agent.business_info);
+  const kept = ways.filter((way) => !(way.kind === "custom" && way.value === source.url));
+  if (kept.length !== ways.length) await patchBusinessInfo(agent.id, { ways: kept });
+  await adminClient().from("business_sources").delete().eq("id", source.id).eq("agent_id", agent.id);
+  revalidatePath(`/u/${agent.handle}`);
   revalidatePath("/business");
   return {};
 }
@@ -205,14 +212,33 @@ export async function updateFaqAction(index: number, question: string, answer: s
 }
 
 /** "How customers book or order": the business's own ways (AGENTME never books or takes orders). */
-export async function saveWaysAction(input: { kind: string; value: string; label?: string; purpose?: string; primary?: boolean }[]): Promise<Out & { saved?: boolean }> {
+export async function saveWaysAction(input: { kind: string; value: string; label?: string; purpose?: string; primary?: boolean; read?: boolean }[]): Promise<Out & { saved?: boolean }> {
   const { agent } = await requireBusiness();
   const rows = (Array.isArray(input) ? input : []).filter((w) => String(w?.value ?? "").trim());
   const ways: Way[] = [];
+  const toRead: string[] = [];
   for (const row of rows) {
     const checked = normaliseWay(String(row.kind), String(row.value), row);
     if (!checked.ok) return { error: checked.error };
+    // One button per address: two would show customers the same link twice.
+    const twin = ways.find((way) => way.kind === checked.way.kind && way.value === checked.way.value);
+    if (twin) return { error: `There's already a button for ${checked.way.value}${twin.label ? ` (${twin.label})` : ""}. Keep one of them.` };
     ways.push(checked.way);
+    if (row.read && checked.way.kind === "custom" && /^https?:/i.test(checked.way.value)) toRead.push(checked.way.value);
+  }
+  // "Also let your agent read this page": added to Website & documents as a public document (if it isn't already).
+  if (toRead.length) {
+    const db = adminClient();
+    const { data: have } = await db.from("business_sources").select("url").eq("agent_id", agent.id).eq("origin", "link");
+    const known = new Set((have ?? []).map((s) => s.url));
+    const fresh = [...new Set(toRead)].filter((url) => !known.has(url));
+    if ((have?.length ?? 0) + fresh.length > MAX_LINKS) return { error: `Your agent can read up to ${MAX_LINKS} documents. Remove one in Website & documents first.` };
+    for (const url of fresh) {
+      const check = checkUrl(url, { allowLocal: allowLocal() });
+      if (!check.ok) return { error: check.error };
+      const { data } = await db.from("business_sources").insert({ agent_id: agent.id, url: check.url.toString(), visibility: "public" }).select("id").single();
+      if (data) after(() => readSource(data.id));
+    }
   }
   await patchBusinessInfo(agent.id, { ways });
   revalidatePath("/business");

@@ -29,7 +29,9 @@ export function Tabs({ label, tabs, children }: { label: string; tabs: TabSpec[]
     const panel = id ? document.getElementById(id)?.closest<HTMLElement>("[data-tab-panel]") : null;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reading the address once, on arrival
     if (panel && tabs.some((t) => t.id === panel.id)) setActive(panel.id);
-  }, [tabs]);
+    // Only on arrival: a save refreshes the page (and these props), and must not jump back to the tab in the address.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     const show = (event: Event) => {
       const id = (event as CustomEvent<string>).detail;

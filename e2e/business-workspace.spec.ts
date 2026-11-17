@@ -91,7 +91,7 @@ test("business workspace preserves agent information, custom actions, documents 
     await docs.getByLabel("New document button label").fill("View menu");
     await docs.getByRole("button", { name: "Add link", exact: true }).click();
     await expect(docs.getByTestId("business-source")).toHaveCount(1);
-    await expect(docs.getByText("Customer button: View menu. Edit it in Details.")).toBeVisible();
+    await expect(docs.getByText("Customer button: View menu. Rename or move it in Details. Removing this document also removes its button.")).toBeVisible();
 
     // Reuse a connected website after review, record successful checks and pause daily updates.
     // The saved address survives a fresh visit without signup query parameters.
