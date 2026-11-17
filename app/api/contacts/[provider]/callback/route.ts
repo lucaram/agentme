@@ -21,6 +21,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/contacts
   const user = await getUser();
   const agent = user ? await getAgentForUser(user.id) : null;
   if (!user || !agent) return NextResponse.redirect(new URL("/login?next=/discover", request.url));
+  if (user.businessRole === "staff") return NextResponse.json({ error: "An owner or manager manages business contacts." }, { status: 403 });
   if (await sessionRestriction(user.id)) return NextResponse.redirect(new URL("/account-status", request.url));
   if (!isProvider(provider) || providerMode(provider) !== "real") return back("synced=error");
   if (url.searchParams.get("error")) return back("synced=cancelled");

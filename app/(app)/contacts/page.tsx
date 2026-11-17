@@ -1,3 +1,4 @@
+import { Avatar } from "@/components/Avatar";
 import Link from "next/link";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -12,6 +13,7 @@ import { OpenRequests } from "@/components/requests/OpenRequests";
 import { Fold } from "@/components/Fold";
 import { ClosableDetails } from "@/components/ClosableDetails";
 import { AgentName } from "@/components/AgentName";
+import { PresenceBadge } from "@/components/presence/PresenceBadge";
 
 export default async function ContactsPage() {
   const { agent } = await requireAgent();
@@ -50,7 +52,7 @@ export default async function ContactsPage() {
         <section className="card space-y-1" aria-label="Waiting introductions">
           {waitingIntros.map((i) => (
             <p key={i.id} className="text-sm text-muted" data-testid="intro-waiting">
-              👍 You said yes to meeting {i.other?.avatar} {i.other?.display_name}
+              👍 You said yes to meeting <Avatar value={i.other?.avatar} /> {i.other?.display_name}
               {i.introducer ? ` (introduced by ${i.introducer.display_name})` : ""}. Waiting for them to say yes too.
             </p>
           ))}
@@ -210,13 +212,14 @@ function SubList({ title, testId, children }: { title: string; testId?: string; 
   );
 }
 
-function Row({ agent, children }: { agent: { avatar: string; display_name: string; handle: string; type: string }; children: React.ReactNode }) {
+function Row({ agent, children }: { agent: { id: string; avatar: string; display_name: string; handle: string; type: string }; children: React.ReactNode }) {
   return (
     <li className="flex flex-wrap items-center gap-3 px-5 py-3 sm:px-6">
-      <AgentName agent={agent} className="text-2xl">{agent.avatar}</AgentName>
+      <AgentName agent={agent} className="text-2xl"><Avatar value={agent.avatar} /></AgentName>
       <span className="min-w-0 flex-1">
         <AgentName agent={agent} className="block font-medium" pageHint>{agent.display_name}</AgentName>
         <span className="block text-xs text-muted">@{agent.handle}{agent.type === "business" ? " · Business" : ""}</span>
+        <PresenceBadge agentId={agent.id} business={agent.type === "business"} />
       </span>
       <span className="flex gap-2">{children}</span>
     </li>

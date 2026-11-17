@@ -17,7 +17,7 @@ describe.skipIf(!dbUp)("human message reactions", () => {
   const clients: Record<string, ReturnType<typeof createClient<Database>>> = {};
   beforeAll(async () => {
     f = await planBusinessFixture();
-    for (const [key, person] of Object.entries({ luca: f.luca, marco: f.marco, business: f.business })) {
+    for (const [key, person] of Object.entries({ luca: f.luca, marco: f.marco, paul: f.paul, business: f.business })) {
       const client = createClient<Database>(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
       const { error } = await client.auth.signInWithPassword({ email: person.email, password: f.password }); if (error) throw error; clients[key] = client;
     }
@@ -92,5 +92,19 @@ describe.skipIf(!dbUp)("human message reactions", () => {
     await f.db.from("conversation_members").delete().eq("conversation_id", f.group).eq("user_id", f.marco.userId);
     expect((await react(m.id, "sad", "marco")).error).toBeTruthy(); expect(await summaries(m.id, "marco")).toEqual([]);
     await f.db.from("conversation_members").insert({ conversation_id: f.group, user_id: f.marco.userId });
+  });
+  it("filters before paging and keeps filtered names within the caller's message access", async () => {
+    const m = await message();
+    expect((await react(m.id, "heart")).error).toBeNull(); expect((await react(m.id, "happy", "marco")).error).toBeNull(); expect((await react(m.id, "heart", "paul")).error).toBeNull();
+    as("luca");
+    const hearts = await details(m.id, f.group, "&reaction=heart"); expect(hearts.status).toBe(200);
+    const allHearts = ReactionDetails.parse(await hearts.json()); expect(allHearts.items).toHaveLength(2); expect(allHearts.items.every((r) => r.reaction === "heart")).toBe(true);
+    const second = ReactionDetails.parse(await (await details(m.id, f.group, "&reaction=heart&offset=1")).json()); expect(second.items.map((r) => r.user_id)).toEqual([allHearts.items[1].user_id]); expect(second.hasMore).toBe(false);
+    const happy = ReactionDetails.parse(await (await details(m.id, f.group, "&reaction=happy")).json()); expect(happy.items).toEqual([expect.objectContaining({ user_id: f.marco.userId, name: "Marco", reaction: "happy" })]);
+    expect((await details(m.id, f.group, "&reaction=unknown")).status).toBe(400);
+    expect((await clients.luca.rpc("get_message_reaction_details", { p_message: m.id, p_offset: 0, p_reaction: "unknown" })).error).toBeTruthy();
+    expect((await clients.business.rpc("get_message_reaction_details", { p_message: m.id, p_offset: 0, p_reaction: "heart" })).data).toEqual({ items: [], hasMore: false });
+    as("business"); expect((await details(m.id, f.group, "&reaction=heart")).status).toBe(404);
+    as(null); expect((await details(m.id, f.group, "&reaction=heart")).status).toBe(401);
   });
 });

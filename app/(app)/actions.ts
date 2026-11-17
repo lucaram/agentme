@@ -1,4 +1,6 @@
 "use server";
+import { prepareAvatar, commitAvatar, pruneAvatarFiles } from "@/lib/profile/avatar-server";
+import { businessAllows } from "@/lib/business/permissions";
 import { askTeam } from "@/lib/business/ask-team";
 import { sendRichMessage } from "@/lib/chat/send-rich";
 
@@ -6,7 +8,11 @@ import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireAgent } from "@/lib/auth";
+import { guardBusinessPermission } from "@/lib/business/access";
+import { withBusinessActor } from "@/lib/business/actor-context";
+import { handleBusinessInbox } from "@/lib/business/team-reply";
+import { draftBusinessAnswer } from "@/lib/agents/respond";
+import { businessSources } from "@/lib/business/sources";
 import { adminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentByHandle, getAgentById, getContactRow } from "@/lib/data/agents";
@@ -50,6 +56,7 @@ import { quoteContext } from "@/lib/social/quote";
 import { businessesOnlyOwnedBy, forgetPerson, realPerson, signInAs } from "@/lib/identities";
 
 const Id = z.uuid();
+const requireAgent = () => guardBusinessPermission("configure");
 
 // ------------------------------------------------------------- messages
 
@@ -64,7 +71,8 @@ export async function sendMessage(
   /** Community: the author chose "Post anyway" after a nudge. replyTo: ↩ Reply to this earlier message in the chat. */
   options: { confirmed?: boolean; replyTo?: string | null; rich?: unknown; /** My Agent, "📍 Near me now": the sender's position, for this message only (never stored). */ here?: { lat: number; lon: number } | null } = {},
 ): Promise<{ error?: string; threadId?: string; nudge?: { rule: string; message: string }; appealId?: string }> {
-  const { user, agent } = await requireAgent();
+  const { user, agent } = await guardBusinessPermission("respond");
+  return withBusinessActor(user, agent, async () => {
   const content = text.trim().slice(0, 4000);
   if ((!content && !options.rich) || !Id.safeParse(conversationId).success) return {};
   if (!(await isMember(conversationId, user.id))) throw new Error("Not found");
@@ -77,6 +85,7 @@ export async function sendMessage(
     if (state !== "open") return { error: DM_CLOSED[state] };
   }
   if (options.rich) {
+    if (agent.type === "business" && user.businessRole === "staff" && typeof options.rich === "object" && options.rich && "poll" in options.rich && options.rich.poll) return { error: "An owner or manager can create a business poll." };
     const allowed = await canPost(conv as ConvRow, user.id);
     if (!allowed.ok) return { error: allowed.error };
     const result = await sendRichMessage({ conv, userId: user.id, agent, text: content, threadId, replyTo: options.replyTo, confirmed: options.confirmed, raw: options.rich });
@@ -123,6 +132,11 @@ export async function sendMessage(
   await withUsageContext({ userId: user.id, agentId: agent.id }, async () => {
     if (conv.kind === "my_agent" && thread) {
       await withThread({ conversationId, threadId: thread }, async () => {
+        if (agent.type === "business" && user.businessRole === "staff") {
+          await postMessage({ conversationId, from: "human", userId: user.id, content });
+          const reply = await draftBusinessAnswer(agent, content, await businessSources(agent.id), "customers");
+          await postMessage({ conversationId, from: "agent", agentId: agent.id, content: reply.answer }); return;
+        }
         // "📍 Near me now": the position becomes the nearest town here, on our server; only the town is used.
         await handleOwnerMessage({ userId: user.id, agent, conversationId, text: content, reply, here: townAt(options.here) });
         // "I'm vegetarian now": offer to remember it (nothing is saved until you tap Save).
@@ -131,7 +145,11 @@ export async function sendMessage(
     } else if (conv.kind === "agent_chat") {
       await askAgent({ userId: user.id, agent, conversationId, text: content, reply });
     } else if (summoned) {
-      await handleAgentCommand({ userId: user.id, agent, conversation: conv, text: content, reply });
+      if (agent.type === "business" && user.businessRole === "staff") {
+        await postMessage({ conversationId, from: "human", userId: user.id, content, visibleTo: user.id });
+        const help = await draftBusinessAnswer(agent, content, await businessSources(agent.id), "customers");
+        await postMessage({ conversationId, from: "agent", agentId: agent.id, content: help.answer, visibleTo: user.id });
+      } else await handleAgentCommand({ userId: user.id, agent, conversation: conv, text: content, reply });
     } else {
       await postMessage({ conversationId, from: "human", userId: user.id, content, replyTo: reply?.id, ...(flags.length ? { metadata: { flags } } : {}) });
       // Businesses placed in this group or community answer when @mentioned (after the reply is sent).
@@ -142,6 +160,7 @@ export async function sendMessage(
   });
   revalidatePath(`/chats/${conversationId}`);
   return thread ? { threadId: thread } : {};
+  });
 }
 
 /** "Shall I remember …?" in My Agent: save it to your profile, or not. */
@@ -151,6 +170,7 @@ export async function answerFactSuggestionAction(messageId: string, accept: bool
   const result = await answerSuggestion(user.id, agent, messageId, Boolean(accept));
   revalidatePath("/chats", "layout");
   revalidatePath("/settings/about");
+  revalidatePath("/settings/about/lifestyle");
   return result.ok ? {} : { error: result.error };
 }
 
@@ -186,7 +206,7 @@ export async function renameThreadAction(threadId: string, title: string): Promi
 
 /** Viewing a thread: its updates are read (keeps its badge in step while it's open). */
 export async function markThreadReadAction(threadId: string) {
-  await requireAgent();
+  await guardBusinessPermission("respond");
   if (!Id.safeParse(threadId).success) return;
   const supabase = await createClient();
   await supabase.rpc("mark_thread_read", { p_thread: threadId });
@@ -198,7 +218,8 @@ export async function markThreadReadAction(threadId: string) {
  * they type (closed chats, community checks), and exactly once.
  */
 export async function sendDraftAction(conversationId: string, draftMessageId: string, text: string): Promise<{ error?: string }> {
-  const { user, agent } = await requireAgent();
+  const { user, agent } = await guardBusinessPermission("respond");
+  return withBusinessActor(user, agent, async () => {
   const content = text.trim().slice(0, 4000);
   if (!content || !Id.safeParse(conversationId).success || !Id.safeParse(draftMessageId).success) return { error: "Nothing to send." };
   if (!(await isMember(conversationId, user.id))) return { error: "Not found." };
@@ -212,7 +233,7 @@ export async function sendDraftAction(conversationId: string, draftMessageId: st
   if (!allowed.ok) return { error: allowed.error };
   const db = adminClient();
   // Only the owner's own, unused private draft in this chat.
-  if (!(await db.rpc("can_read_chat_message", { p_message: draftMessageId, p_user: user.id })).data) return { error: "Not found." };
+  if (!(await (await createClient()).rpc("can_read_chat_message", { p_message: draftMessageId, p_user: user.id })).data) return { error: "Not found." };
   const { data: draft } = await db.from("messages").select("id, metadata").eq("id", draftMessageId).eq("conversation_id", conversationId).eq("visible_to", user.id).maybeSingle();
   const meta = (draft?.metadata ?? {}) as Record<string, unknown>;
   if (!draft || meta.kind !== "draft") return { error: "Not found." };
@@ -252,11 +273,12 @@ export async function sendDraftAction(conversationId: string, draftMessageId: st
   }
   revalidatePath(`/chats/${conversationId}`);
   return {};
+  });
 }
 
 /** The user has seen this conversation up to now (clears its unread counter). */
 export async function markReadAction(conversationId: string) {
-  await requireAgent();
+  await guardBusinessPermission("respond");
   if (!Id.safeParse(conversationId).success) return;
   // Database clock + the caller's own row only (see mark_conversation_read).
   const supabase = await createClient();
@@ -290,26 +312,26 @@ export async function continueWithoutWaitingAction(taskId: string) {
 // ------------------------------------------------------------- inbox ("ask my human")
 
 export async function answerInboxAction(itemId: string, answers: Record<string, string>, remember: boolean): Promise<{ error?: string }> {
-  const { user, agent } = await requireAgent();
+  const { user, agent } = await guardBusinessPermission("respond");
+  if (agent.type === "business") { const result = await handleBusinessInbox(user, agent, itemId, answers, remember, false); revalidatePath("/chats", "layout"); revalidatePath("/business"); return result; }
   const result = await withUsageContext({ userId: user.id, agentId: agent.id }, () => answerInboxItem(itemId, user.id, answers, remember));
   if (!result.ok) return { error: result.error };
   const wake = result.wake;
   if (wake) after(() => runTask(wake));
   await tellOwner(user.id, agent.id, "✅ Done: I sent your answer, marked as answered by you personally.");
   revalidatePath("/chats", "layout");
-  if (agent.type === "business") revalidatePath("/business");
   return {};
 }
 
 export async function declineInboxAction(itemId: string): Promise<{ error?: string }> {
-  const { user, agent } = await requireAgent();
+  const { user, agent } = await guardBusinessPermission("respond");
+  if (agent.type === "business") { const result = await handleBusinessInbox(user, agent, itemId, {}, false, true); revalidatePath("/chats", "layout"); revalidatePath("/business"); return result; }
   const result = await declineInboxItem(itemId, user.id);
   if (!result.ok) return { error: result.error };
   const wake = result.wake;
   if (wake) after(() => runTask(wake));
   await tellOwner(user.id, agent.id, "🙅 OK: I didn't answer. Nothing was shared.");
   revalidatePath("/chats", "layout");
-  if (agent.type === "business") revalidatePath("/business");
   return {};
 }
 
@@ -429,7 +451,7 @@ export async function blockContact(contactId: string) {
 // ------------------------------------------------------------- conversations
 
 export async function openDirectMessage(otherAgentId: string) {
-  const { user, agent } = await requireAgent();
+  const { user, agent } = await guardBusinessPermission("respond");
   const other = await getAgentById(otherAgentId);
   if (!other) throw new Error("Not found");
   if ((await getContactRow(agent.id, other.id))?.status !== "accepted") throw new Error("Only contacts can message each other.");
@@ -439,7 +461,7 @@ export async function openDirectMessage(otherAgentId: string) {
 }
 
 export async function openAgentChat(otherAgentId: string) {
-  const { user, agent } = await requireAgent();
+  const { user, agent } = await guardBusinessPermission("respond");
   const other = await getAgentById(otherAgentId);
   if (!other || other.id === agent.id) throw new Error("Not found");
   const existing = await findConversation("agent_chat", [user.id], other.id);
@@ -450,7 +472,7 @@ export async function openAgentChat(otherAgentId: string) {
 }
 
 export async function openMyAgent() {
-  const { user } = await requireAgent();
+  const { user } = await guardBusinessPermission("read");
   const conv = await getOrCreateMyAgentConversation(user.id);
   redirect(`/chats/${conv.id}`);
 }
@@ -487,7 +509,8 @@ export async function leaveConversation(conversationId: string) {
 
 
 export async function saveSettings(form: FormData) {
-  const { agent } = await requireAgent();
+  const { user, agent } = await requireAgent();
+  if (agent.type === "business" && (form.has("avatar") || form.has("avatar_image") || form.has("display_name")) && !businessAllows(user.businessRole, "configure")) throw new Error("Only Owners and Managers can change the business profile.");
   const db = adminClient();
   const policy = z.enum(["contacts_only", "anyone", "nobody"]).safeParse(form.get("contact_policy"));
   const groupPolicy = z.enum(["contacts", "nobody"]).safeParse(form.get("group_add_policy"));
@@ -495,7 +518,11 @@ export async function saveSettings(form: FormData) {
   const displayName = typedName.length >= MIN_NAME ? typedName : "";
   const pickedAvatar = String(form.get("avatar") ?? "");
   const avatar = avatarsFor(agent.type, agent.avatar).includes(pickedAvatar) ? pickedAvatar : null;
-  await db
+  try {
+    const image = await prepareAvatar(form, user.actorId ?? user.id);
+    if (image || avatar && avatar !== agent.avatar) await commitAvatar(agent.id, user.actorId ?? user.id, image, avatar ?? agent.avatar);
+  } catch { redirect("/settings/profile?error=avatar"); }
+  const updated = await db
     .from("agents")
     .update({
       ...(policy.success ? { contact_policy: policy.data } : {}),
@@ -504,9 +531,10 @@ export async function saveSettings(form: FormData) {
       ...(form.get("recommendations_form") ? { recommendations_ok: form.get("recommendations_ok") === "on" } : {}),
       ...(form.get("lookup_form") ? { lookup_place: form.get("lookup_place") === "on" } : {}),
       ...(displayName ? { display_name: displayName } : {}),
-      ...(avatar ? { avatar } : {}),
     })
     .eq("id", agent.id);
+  if (updated.error) redirect("/settings/profile?error=profile");
+  after(pruneAvatarFiles);
 
   // What the agent knows about you is edited in Settings → What your agent knows (its own page).
   if (form.get("receipts_form")) {
@@ -514,7 +542,17 @@ export async function saveSettings(form: FormData) {
     if (error) redirect("/settings/privacy?error=receipts");
   }
   // Business details are edited in My Business (they'd be wiped if saved from here).
+  if (form.get("mentions_form")) {
+    const { error } = await (await createClient()).from("mention_preferences").upsert({ user_id: agent.owner_id, enabled: form.get("mention_notifications") === "on" });
+    if (error) redirect("/settings/privacy?error=mentions");
+  }
   // Back to the settings page the form was on.
+  if (form.get("presence_form")) {
+    const visibility = agent.type === "business" ? form.get("team_presence") === "on" ? "customers" : "nobody" : form.get("presence_visibility");
+    if (typeof visibility !== "string") redirect("/settings/privacy?error=presence");
+    const { error } = await (await createClient()).rpc("set_presence_visibility", { p_visibility: visibility });
+    if (error) redirect("/settings/privacy?error=presence");
+  }
   const returnTo = String(form.get("return_to") ?? "");
   const page = ["/settings/profile", "/settings/privacy"].includes(returnTo) ? returnTo : "/settings";
   // The name and avatar show all over the app (header, chats, contacts).
@@ -523,7 +561,7 @@ export async function saveSettings(form: FormData) {
 }
 
 export async function deleteAccount(form: FormData) {
-  const { user, agent } = await requireAgent();
+  const { user, agent } = await guardBusinessPermission("ownership");
   if (String(form.get("confirm") ?? "").trim().toLowerCase() !== agent.handle) redirect("/settings/profile?error=confirm");
   const person = await realPerson(user, agent);
   const db = adminClient();

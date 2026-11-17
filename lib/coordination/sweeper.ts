@@ -1,3 +1,4 @@
+import { pruneAvatarFiles } from "@/lib/profile/avatar-server";
 import "server-only";
 import { recoverStuckTasks } from "@/lib/plans/engine";
 import { pruneRateLimits } from "@/lib/limits";
@@ -36,6 +37,7 @@ const MAINTENANCE: readonly (readonly [string, () => Promise<unknown>])[] = [
   ["research cache", pruneResearchCache],
   ["answer log", pruneAnswerLog],
   ["chat attachments", pruneChatAttachments],
+  ["profile avatars", pruneAvatarFiles],
   // Communities: appeals nobody answered in 3 days, the daily digest, quiet moderators.
   ["appeals", () => autoResolveAppeals()],
   ["digests", () => sendDigests()],

@@ -128,14 +128,17 @@ test("add a business from a personal account and switch between the two", async 
   // The address is suggested from the name.
   await expect(form.getByLabel("Agent address")).toHaveValue(`gina_bakery_${id}`);
   await expect(form.getByText(`@gina_bakery_${id} is available.`)).toBeVisible();
-  await form.getByRole("button", { name: "Picture ☕" }).click();
-  await form.getByLabel(/In a few words/).fill("Sourdough and pastries in Hackney. Open daily 7–15.");
+  await form.getByTestId("avatar-choice").locator("summary").click();
+  await form.getByRole("button", { name: "Avatar ☕" }).click();
+  await form.getByTestId("optional-details").locator("summary").first().click();
+  await form.getByLabel("About your business", { exact: true }).fill("Sourdough and pastries in Hackney. Open daily 7–15.");
   await form.getByRole("button", { name: "Create business" }).click();
 
-  // Now acting as the business, on My Business.
-  await expect(page.getByTestId("business-welcome")).toContainText(`live at @gina_bakery_${id}`);
+  // Now acting as the business, in its own My Agent.
+  await expect(page).toHaveURL(/\/chats\//);
   await expect(switcher).toContainText("Business");
   await expect(page.getByRole("navigation").first().getByRole("link", { name: "My Business" })).toBeVisible();
+  await page.goto("/business");
   await openSection(page, "fold-own-words");
   await expect(page.getByRole("textbox", { name: /About your business/ })).toHaveValue(/Sourdough and pastries/);
 

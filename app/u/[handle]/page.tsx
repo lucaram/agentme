@@ -1,3 +1,4 @@
+import { Avatar } from "@/components/Avatar";
 import Link from "next/link";
 import { VerifiedBadge } from "@/components/business/VerifiedBadge";
 import { notFound } from "next/navigation";
@@ -36,7 +37,7 @@ export default async function PersonalLinkPage({ params, searchParams }: PagePro
     const ways = waysOf(other.business_info);
     return (
       <main className="mx-auto flex w-full max-w-sm flex-1 flex-col items-center justify-center gap-5 px-6 py-16 text-center">
-        <div className="text-6xl">{other.avatar}</div>
+        <div className="text-6xl"><Avatar value={other.avatar} /></div>
         <div>
           <h1 className="text-2xl font-semibold">{other.display_name}</h1>
           <p className="text-sm text-muted">@{other.handle} · Business</p>
@@ -80,7 +81,7 @@ export default async function PersonalLinkPage({ params, searchParams }: PagePro
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col items-center justify-center gap-5 px-6 py-16 text-center">
-      <div className="text-6xl">{other.avatar}</div>
+      <div className="text-6xl"><Avatar value={other.avatar} /></div>
       <div>
         {/* Signed-out visitors only see the address that is already in the link. */}
         {me && <h1 className="text-2xl font-semibold">{other.display_name}</h1>}

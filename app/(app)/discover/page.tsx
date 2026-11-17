@@ -1,4 +1,6 @@
+import { Avatar } from "@/components/Avatar";
 import { requireAgent } from "@/lib/auth";
+import { PresenceBadge } from "@/components/presence/PresenceBadge";
 import { VerifiedBadge } from "@/components/business/VerifiedBadge";
 import { createClient } from "@/lib/supabase/server";
 import { ActionButton } from "@/components/ActionButton";
@@ -100,9 +102,10 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/discove
               const status = statusOf(a.id);
               return (
                 <li key={a.id} className="flex flex-wrap items-center gap-3 px-5 py-3 sm:px-6">
-                  <AgentName agent={a} className="text-2xl">{a.avatar}</AgentName>
+                  <AgentName agent={a} className="text-2xl"><Avatar value={a.avatar} /></AgentName>
                   <span className="min-w-0 flex-1">
                     <AgentName agent={a} className="block font-medium" pageHint>{a.display_name}</AgentName>
+                    <PresenceBadge agentId={a.id} business={a.type === "business"} />
                     <span className="block text-xs text-muted">@{a.handle}{a.type === "business" ? ` · Business${a.bio ? ` · ${a.bio}` : ""}` : ""}</span>
                     {a.type === "business" && <VerifiedBadge domain={a.verified_domain} className="mt-1" />}
                   </span>

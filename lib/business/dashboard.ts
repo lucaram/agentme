@@ -1,5 +1,6 @@
 import "server-only";
 import { adminClient } from "@/lib/supabase/admin";
+import type { SessionUser } from "@/lib/auth";
 
 export type QuestionSummary = { question: string; asked: number; automatic: number; needed_team: number; unresolved: number };
 export type DaySummary = { day: string; total: number; automatic: number; team: number; pending: number; unanswered: number; closed: number; redirected: number };
@@ -12,8 +13,9 @@ export type DashboardData = {
 export const dashboardDays = (raw: unknown) => [7, 30, 90].includes(Number(raw)) ? Number(raw) : 30;
 
 /** Called only after the page authorises the current business identity. */
-export async function businessDashboard(agentId: string, days: number): Promise<DashboardData | null> {
-  const { data, error } = await adminClient().rpc("business_dashboard", { p_agent: agentId, p_days: dashboardDays(days) });
+export async function businessDashboard(agentId: string, days: number, user: Pick<SessionUser, "id" | "actorId" | "businessRole">): Promise<DashboardData | null> {
+  if (user.businessRole !== "owner") return null;
+  const { data, error } = await adminClient().rpc("business_dashboard_as_owner", { p_business: agentId, p_actor: user.actorId ?? user.id, p_days: dashboardDays(days) });
   if (error || !data) return null;
   return data as unknown as DashboardData;
 }

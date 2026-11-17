@@ -1,0 +1,17 @@
+"use client";
+import { Avatar } from "@/components/Avatar";
+
+import { useId, useRef, useState } from "react";
+import type { TeamOption } from "@/lib/business/team-types";
+
+/** Options are already restricted to this business and the actual person's access. */
+export function MemberPicker({ options, value, onChange, label, disabled = false }: { options: TeamOption[]; value: string; onChange: (id: string) => void; label: string; disabled?: boolean }) {
+  const id = useId(); const root = useRef<HTMLDivElement>(null); const [query, setQuery] = useState(""); const [open, setOpen] = useState(false); const [active, setActive] = useState(0);
+  const selected = options.find((person) => person.id === value); const search = query.trim().replace(/^@/, "").toLowerCase();
+  const matches = options.filter((person) => !search || `${person.name} ${person.handle ?? ""}`.toLowerCase().includes(search)).slice(0, 20);
+  const choose = (person: TeamOption) => { onChange(person.id); setOpen(false); setQuery(""); setActive(0); };
+  return <div ref={root} className="relative min-w-0" onBlur={(event) => { if (!root.current?.contains(event.relatedTarget)) setOpen(false); }}>
+    {selected ? <div className="flex items-center gap-2 rounded-xl border border-accent bg-accent-soft p-3" data-testid="selected-team-person"><span aria-hidden><Avatar value={selected.avatar} /></span><span className="min-w-0 flex-1 text-sm"><b>{selected.name}</b><span className="block text-xs text-muted">{selected.handle ? `@${selected.handle}` : "Former account"}{selected.former ? " · Former member" : ""}</span></span><button type="button" className="btn-ghost text-sm" aria-label={`Clear ${label}`} disabled={disabled} onClick={() => onChange("")}>×</button></div> : <input role="combobox" aria-label={label} aria-autocomplete="list" aria-expanded={open} aria-controls={id} aria-activedescendant={open && matches.length ? `${id}-${Math.min(active, matches.length - 1)}` : undefined} className="input" placeholder="Search name or @address" disabled={disabled} value={query} onFocus={() => setOpen(true)} onChange={(event) => { setQuery(event.target.value); setActive(0); setOpen(true); }} onKeyDown={(event) => { if (event.key === "ArrowDown") { event.preventDefault(); setOpen(true); setActive((old) => Math.min(old + 1, matches.length - 1)); } if (event.key === "ArrowUp") { event.preventDefault(); setActive((old) => Math.max(0, old - 1)); } if (event.key === "Escape") setOpen(false); if (event.key === "Enter" && open && matches.length) { event.preventDefault(); choose(matches[Math.min(active, matches.length - 1)]); } }} />}
+    {open && !selected && <ul id={id} role="listbox" aria-label={label} className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-border bg-surface p-1 shadow-xl">{matches.map((person, index) => <li key={person.id}><button type="button" id={`${id}-${index}`} role="option" aria-selected={index === active} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(person)} className={`flex w-full items-center gap-2 rounded-lg p-2 text-left ${index === active ? "bg-accent-soft" : "hover:bg-accent-soft"}`}><span aria-hidden><Avatar value={person.avatar} /></span><span className="min-w-0 text-sm"><b>{person.name}</b><span className="block text-xs text-muted">{person.handle ? `@${person.handle}` : "Former account"} · {person.former ? "Former member" : person.role}</span></span></button></li>)}{!matches.length && <li className="p-3 text-sm text-muted">No matching team members.</li>}</ul>}
+  </div>;
+}

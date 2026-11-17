@@ -58,6 +58,7 @@ export function SiteSetup({ name, site, learned, hidden, corrections }: { name: 
         </p>
       </div>
 
+      {!site.live && <Link href="/business" className="btn-ghost">Later in My Business</Link>}
       {now.status === "reading" && <Reading site={now} />}
       {now.status === "error" && <ReadError message={now.error ?? "Couldn't read your website."} />}
       {now.status === "ready" && (

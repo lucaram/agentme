@@ -1,3 +1,4 @@
+import { Avatar } from "@/components/Avatar";
 import { ActionButton } from "@/components/ActionButton";
 import { CATEGORY_LABELS, type FactCategory } from "@/lib/policy/disclosure";
 import { displayClock } from "@/lib/coordination/heuristics";
@@ -238,7 +239,7 @@ export function TaskCard({
               return (
                 <li key={e.id} className="rounded-xl border border-border p-2.5" data-testid="exchange">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xl" aria-hidden>{to?.avatar}</span>
+                    <span className="text-xl" aria-hidden><Avatar value={to?.avatar} /></span>
                     <span className="text-sm font-medium" title={to ? `@${to.handle}` : undefined}>{to?.display_name || `@${to?.handle ?? "participant"}`}&apos;s agent</span>
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE[status.tone]}`}>{status.label}</span>
                     {e.answered_by === "human" && reply?.answered_at && <span className="ml-auto text-[11px] tabular-nums text-muted"><LocalTime iso={reply.answered_at} /></span>}

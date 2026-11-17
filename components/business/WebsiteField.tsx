@@ -33,7 +33,7 @@ export function WebsiteField({ onFilled }: { onFilled: (fill: WebsiteFill) => vo
         <label className="label" htmlFor="website">
           🌐 Have a website? <span className="font-normal text-muted">· optional</span>
         </label>
-        <p className="hint">Connect your website once. We can fill in this form from it, then your agent reads key pages for you to review.</p>
+        <p className="hint">Your agent reads key pages after signup; review and publish the findings when you&apos;re ready.</p>
       </div>
       <div className="flex gap-2">
         <input

@@ -6,6 +6,7 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAgent, requireUser } from "@/lib/auth";
+import { requireBusinessPermission } from "@/lib/business/access";
 import { adminClient } from "@/lib/supabase/admin";
 import { asJson } from "@/lib/data/json";
 import { allowLocal, safeFetch } from "@/lib/business/fetch";
@@ -16,7 +17,7 @@ import { emailProofEnforced, homepageToVerify, readFromSameSite } from "@/lib/bu
 import { businessSources } from "@/lib/business/sources";
 import { BASICS, itemKey, type BasicKey, type Correction } from "@/lib/business/learn";
 import { draftBusinessAnswer } from "@/lib/agents/respond";
-import { answerInboxItem, declineInboxItem } from "@/lib/plans/inbox";
+import { handleBusinessInbox } from "@/lib/business/team-reply";
 import { realPerson } from "@/lib/identities";
 import { describeRetry, hit } from "@/lib/limits";
 import { withUsageContext } from "@/lib/usage/context";
@@ -27,7 +28,7 @@ const MAX_FAQS = 50;
 const MAX_CORRECTIONS = 30;
 
 async function requireBusiness() {
-  const { user, agent } = await requireAgent();
+  const { user, agent } = await requireBusinessPermission("configure");
   if (agent.type !== "business") throw new Error("Not a business account");
   return { user, agent };
 }
@@ -278,7 +279,7 @@ export async function answerGapAction(ids: string[], question: string, answer: s
   }) || !(await mayPublishBusinessAnswer(q, a))) return { error: "This answer may contain private information. Reply to each request privately in My Agent instead." };
   let sent = 0;
   await withUsageContext({ userId: user.id, agentId: agent.id }, async () => {
-    for (const id of items.data) if ((await answerInboxItem(id, user.id, { answer: a }, false)).ok) sent++;
+    for (const id of items.data) if (!(await handleBusinessInbox(user, agent, id, { answer: a }, false, false)).error) sent++;
   });
   if (!sent) return { error: "These questions were already answered." };
   await addToBusinessInfo(agent.id, q, a, true);
@@ -293,7 +294,7 @@ export async function dismissGapAction(ids: string[]): Promise<Out> {
   const { user, agent } = await requireBusiness();
   const items = Ids.safeParse(ids);
   if (!items.success) return { error: "Not found." };
-  for (const id of items.data) await declineInboxItem(id, user.id);
+  for (const id of items.data) await handleBusinessInbox(user, agent, id, {}, false, true);
   await settleGapNotices(user.id, agent.id);
   revalidatePath("/business");
   revalidatePath("/chats", "layout");

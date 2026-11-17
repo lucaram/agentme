@@ -1,7 +1,7 @@
 export const HANDLE_PATTERN = /^[a-z0-9_]{3,20}$/;
 
 const RESERVED = new Set([
-  "admin", "agentme", "api", "help", "login", "logout", "me", "root",
+  "admin", "agent", "agentme", "api", "help", "login", "logout", "me", "root",
   "settings", "signup", "support", "system", "anthropic", "official",
 ]);
 

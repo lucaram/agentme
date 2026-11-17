@@ -1,6 +1,9 @@
 "use client";
+import { Avatar } from "@/components/Avatar";
+
 import Link from "next/link";
 import type { HistoryBundle } from "@/lib/chat/history-types";
+import { MentionText } from "@/components/chat/MentionText";
 import { RichText } from "@/components/RichText";
 import { LocalTime } from "@/components/LocalTime";
 import { AgentName } from "@/components/AgentName";
@@ -63,7 +66,7 @@ export function MessageList({ bundle, unreadId }: { bundle: HistoryBundle; unrea
           const quoteState = !quoted || (quoted.visible_to && quoted.visible_to !== user.id) ? "missing" : quoted.deleted_at ? "deleted" : quoted.removed_at ? "removed" : "ok";
           // Actions on this message: in direct chats, groups and communities; and, to reply or forward (labelled
           // "from @you's agent"), your own agent's replies in My Agent and your private @agent answers.
-          const canDelete = mine && !m.sender_agent_id && !m.is_ai_generated && !m.removed_at;
+          const canDelete = mine && !m.sender_agent_id && !m.is_ai_generated && !m.removed_at && (!bundle.deletableMessageIds || bundle.deletableMessageIds.includes(m.id));
           const reactOk = !bundle.suspended && !isPrivate && !m.removed_at && (conv.kind !== "dm" || canReplyHere);
           const showActions = !m.removed_at && (reactOk || canDelete || (!isPrivate && Boolean(shared || conv.kind === "dm" || replyTarget || forwardOk)));
 
@@ -82,24 +85,24 @@ export function MessageList({ bundle, unreadId }: { bundle: HistoryBundle; unrea
           const rsvpStep = proposal ? steps?.find((s) => s.task_id === proposal.task_id && s.type === "rsvp") : undefined;
           const pollStep = !m.removed_at && meta.kind === "poll" ? steps?.find((s) => s.id === meta.step_id) : undefined;
           const assignStep = !m.removed_at && meta.kind === "assign" ? steps?.find((s) => s.id === meta.step_id) : undefined;
-          const isPlanOwner = (taskId?: string) => Boolean(taskId && (tasks ?? []).some((t) => t.id === taskId && t.owner_id === user.id));
+          const isPlanOwner = (taskId?: string) => bundle.canManageBusiness !== false && Boolean(taskId && (tasks ?? []).some((t) => t.id === taskId && t.owner_id === user.id));
           const messageFiles = !m.removed_at ? (attachments ?? []).filter((a) => a.message_id === m.id) as AttachmentView[] : [];
           const sharedLocation = !m.removed_at ? LocationSchema.safeParse((m.metadata as { shared_location?: unknown }).shared_location).data : undefined;
           const hasMedia = messageFiles.length > 0 || Boolean(sharedLocation);
 
           return (
-            <MessageReactions key={m.id} messageId={m.id} conversationId={id} summary={reactions.get(m.id)} available={!isPrivate && !m.removed_at}><li id={`m-${m.id}`} data-timeline-message={m.id} className={`group flex flex-col ${mine ? "items-end" : "items-start"}`}>
+            <MessageReactions key={m.id} messageId={m.id} conversationId={id} userId={user.id} summary={reactions.get(m.id)} available={!isPrivate && !m.removed_at}><li id={`m-${m.id}`} data-timeline-message={m.id} className={`group flex flex-col ${mine ? "items-end" : "items-start"}`}>
               {m.id === unreadId && <div className="mb-3 flex w-full items-center justify-center gap-3 text-xs font-medium text-accent" role="separator" aria-label="New messages" data-testid="new-messages-divider"><span className="h-px flex-1 bg-border" />New messages<span className="h-px flex-1 bg-border" /></div>}
               <span className="mb-0.5 flex flex-wrap items-center gap-1 text-xs text-muted">
                 {m.is_ai_generated ? (
                   <>
-                    <AgentName agent={senderAgent}>{senderAgent?.avatar} {senderAgent ? `@${senderAgent.handle}'s agent` : "An agent"}</AgentName>
+                    <AgentName agent={senderAgent}><Avatar value={senderAgent?.avatar} /> {senderAgent ? `@${senderAgent.handle}'s agent` : "An agent"}</AgentName>
                     <span className="rounded bg-agent-border px-1 text-[10px] font-semibold uppercase text-foreground" title="Written by an AI agent">AI</span>
                   </>
                 ) : mine ? (
                   "You"
                 ) : (
-                  `${senderUser?.avatar ?? ""} ${senderUser?.display_name ?? "Someone"}`
+                  <><Avatar value={senderUser?.avatar} /> {senderUser?.display_name ?? "Someone"}</>
                 )}
                 {/* Flagged by the community spam guard: shown to moderators only. */}
                 {canModerate &&
@@ -109,8 +112,8 @@ export function MessageList({ bundle, unreadId }: { bundle: HistoryBundle; unrea
                     </span>
                   ))}
                 {isPrivate && (
-                  <span className="text-[10px]" data-testid="private-label" title="Only you can see this message">
-                    · 🔒 only visible to you
+                  <span className="text-[10px]" data-testid="private-label" title={byId.get(agent.id)?.type === "business" ? "Only your business team can see this message" : "Only you can see this message"}>
+                    · 🔒 {byId.get(agent.id)?.type === "business" ? "only visible to your team" : "only visible to you"}
                   </span>
                 )}
                 <span className="ml-2 shrink-0 whitespace-nowrap text-[10px] tabular-nums opacity-70" data-testid="message-timestamp"><LocalTime iso={m.created_at} /></span>
@@ -128,6 +131,7 @@ export function MessageList({ bundle, unreadId }: { bundle: HistoryBundle; unrea
                           : "border border-border bg-surface"
                   }`}
                   data-message-bubble=""
+                  data-outgoing-human={mine && !m.is_ai_generated ? "true" : undefined}
                   data-seen-message={!m.removed_at ? m.id : undefined}
                   data-testid={m.deleted_at ? "deleted-message" : isPrivate ? "private-message" : m.removed_at ? "removed-message" : undefined}
                 >
@@ -149,8 +153,8 @@ export function MessageList({ bundle, unreadId }: { bundle: HistoryBundle; unrea
                   {meta.kind === "forwarded_snapshot" && !m.removed_at && <p className="mb-2 text-xs font-semibold opacity-80" data-testid="shared-snapshot">Read-only copy · {(m.metadata as { snapshot?: { label?: string } }).snapshot?.label ?? "Message"}{(m.metadata as { snapshot?: { at?: string } }).snapshot?.at && <> · <LocalTime iso={(m.metadata as { snapshot: { at: string } }).snapshot.at} /></>}</p>}
                   {m.deleted_at ? <>Message deleted on <LocalTime iso={m.deleted_at} /></> : hasMedia ? <>
                     <MessageMedia files={messageFiles} location={sharedLocation} />
-                    {m.content && <div className="whitespace-pre-wrap break-words px-1.5 pb-1 pt-2" data-testid="attachment-caption">{m.is_ai_generated ? <RichText text={m.content} /> : m.content}</div>}
-                  </> : m.is_ai_generated && !m.removed_at ? <RichText text={m.content} /> : m.content}
+                    {m.content && <div className="whitespace-pre-wrap break-words px-1.5 pb-1 pt-2" data-testid="attachment-caption">{m.is_ai_generated ? <RichText text={m.content} /> : <MentionText text={m.content} mentions={(bundle.mentions ?? []).filter((mention) => mention.message_id === m.id)} agents={bundle.agents} />}</div>}
+                  </> : m.is_ai_generated && !m.removed_at ? <RichText text={m.content} /> : <MentionText text={m.content} mentions={(bundle.mentions ?? []).filter((mention) => mention.message_id === m.id)} agents={bundle.agents} />}
                 </div>
                 {showActions && (
                   // With a mouse: ↩ Reply · ↪ Forward · ⋯ appear on hover. On phones: ⋯ (with everything in it).
@@ -201,14 +205,14 @@ export function MessageList({ bundle, unreadId }: { bundle: HistoryBundle; unrea
                   <ForwardButton messageId={m.id} />
                 </div>
               )}
-              <fieldset disabled={bundle.suspended} className="contents">
+              <fieldset disabled={bundle.suspended || bundle.canManageBusiness === false} className="contents">
               {task && (
                 <TaskCard
                   task={task as TaskView}
                   exchanges={(exchanges ?? []).filter((e) => e.task_id === task.id)}
                   steps={(steps ?? []).filter((s) => s.task_id === task.id)}
                   agents={byId}
-                  canAct={task.owner_id === user.id}
+                  canAct={isPlanOwner(task.id)}
                   participation={isMyAgent ? { responses: stepResponses ?? [], claims: claims ?? [], myAgentId: agent.id, myHandle: agent.handle, myFacts: myFacts ?? [] } : undefined}
                 />
               )}

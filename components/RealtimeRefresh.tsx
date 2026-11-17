@@ -6,7 +6,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { browserClient } from "@/lib/supabase/client";
 import { scheduleRefresh } from "@/lib/refresh";
 
-type Table = "messages" | "tasks" | "task_exchanges" | "proposals" | "proposal_responses" | "inbox_items" | "plan_steps" | "step_responses" | "item_claims" | "plan_changes" | "business_sources" | "business_sites" | "business_action_events" | "business_action_versions" | "message_receipt_versions" | "message_reaction_versions" | "reports" | "platform_cases" | "platform_notifications" | "platform_moderators" | "platform_operators" | "platform_staff_events" | "platform_evidence_requests" | "platform_account_sanctions" | "platform_account_appeals" | "account_access_versions";
+type Table = "business_queue_versions" | "presence_preferences" | "agent_threads" | "messages" | "tasks" | "task_exchanges" | "proposals" | "proposal_responses" | "inbox_items" | "plan_steps" | "step_responses" | "item_claims" | "plan_changes" | "business_sources" | "business_sites" | "business_action_events" | "business_action_versions" | "message_receipt_versions" | "message_reaction_versions" | "reports" | "platform_cases" | "platform_notifications" | "platform_moderators" | "platform_operators" | "platform_staff_events" | "platform_evidence_requests" | "platform_account_sanctions" | "platform_account_appeals" | "account_access_versions";
 
 /** A page rendered this recently is already up to date when its socket connects. */
 const FRESH_MS = 2000;

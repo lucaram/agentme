@@ -1,3 +1,4 @@
+import { Avatar } from "@/components/Avatar";
 import Link from "next/link";
 import { getUser } from "@/lib/auth";
 import { getAgentForUser } from "@/lib/data/agents";
@@ -30,7 +31,7 @@ export default async function JoinPage({ params }: PageProps<"/join/[token]">) {
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 px-6 py-12">
       <section className="card space-y-2" aria-label="Plan">
-        <p className="text-xs uppercase tracking-wide text-muted">{invite.organiser.avatar} {invite.organiser.display_name} invited you</p>
+        <p className="text-xs uppercase tracking-wide text-muted"><Avatar value={invite.organiser.avatar} /> {invite.organiser.display_name} invited you</p>
         <h1 className="text-2xl font-semibold">{invite.title}</h1>
         {invite.when && <p>🗓️ {invite.when}</p>}
         <p className="text-sm text-muted">👥 {invite.people} {invite.people === 1 ? "person" : "people"} so far</p>

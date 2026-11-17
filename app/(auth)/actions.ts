@@ -48,7 +48,7 @@ export async function signIn(_prev: AuthState, form: FormData): Promise<AuthStat
 
 export async function signOut() {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: "local" });
   await forgetPerson();
   redirect("/login");
 }

@@ -3,7 +3,8 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireAgent } from "@/lib/auth";
+import { guardBusinessPermission } from "@/lib/business/access";
+const requireAgent = () => guardBusinessPermission("configure");
 import { adminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { deleteOwnMessageAction } from "./delete-message-action";

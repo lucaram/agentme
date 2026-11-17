@@ -45,7 +45,7 @@ test("delivery, visible group viewing, background tabs and privacy update live",
     await expect.poll(async () => (await f.db.from("message_receipts").select("delivered_at").eq("message_id", backgroundId).eq("user_id", f.marco.userId).single()).data?.delivered_at).toBeTruthy();
     await blank.waitForTimeout(1500); expect(await sharedViews(backgroundId)).toBe(0);
     await marco.bringToFront(); await tabActive(marco, true); await expect(indicator(backgroundId)).toHaveText("Seen by 1 of 2"); await blank.close();
-    const paul = await login(f.paul.email); await paul.goto(`/chats/${f.group}`); await paul.bringToFront();
+    const paul = await login(f.paul.email); await paul.goto(`/chats/${f.group}`); await paul.bringToFront(); await tabActive(paul, true);
     await expect(indicator(id)).toHaveAttribute("data-state", "seen"); await expect(indicator(id)).toHaveText("Seen by 2 of 2");
     await tabActive(paul, false);
     await luca.bringToFront(); await indicator(id).click();
@@ -96,7 +96,7 @@ test("agent receipt is distinct from a business owner's actual view", async ({ b
     expect((await f.db.from("message_receipt_tracking").select("owner_seen_at").eq("agent_id", f.business.agent.id).not("inbox_id", "is", null)).data?.filter((r) => r.owner_seen_at)).toEqual([]);
     await shop.getByTestId("my-agent-card").click(); await shop.bringToFront();
     await expect(shop.getByTestId("inbox-item").filter({ hasText: "four bicycles" })).toBeVisible();
-    await expect(question).toHaveText("Seen by business owner"); await expect(question).toHaveAttribute("data-state", "seen");
+    await expect(question).toHaveText("Seen by team"); await expect(question).toHaveAttribute("data-state", "seen");
     await expect(first).toHaveText("Agent received");
     await luca.bringToFront(); await question.click(); const details = luca.getByRole("dialog", { name: "Message status", exact: true });
     await expect(details).toContainText("An automatic reply does not confirm human viewing."); await expect(details.locator("time")).toHaveCount(3);

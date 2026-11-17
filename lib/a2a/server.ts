@@ -287,7 +287,7 @@ async function recordExchange(
             ? `🔎 ${from} is asking around: “${response.inbox.question}” Share a tip if you have one.`
             : `🔔 ${from} asks you: “${response.inbox.question}”.`
           : `🔔 ${from}'s agent is organising ${response.inbox.event} and needs something only you can share.`;
-      await tellOwner(recipient.owner_id, recipient.id, `${what} ${NEEDS_ANSWER}`);
+      await tellOwner(recipient.owner_id, recipient.id, `${what} ${NEEDS_ANSWER}`, created[0].id);
     }
   }
 }

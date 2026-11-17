@@ -16,7 +16,7 @@ export function Fold({
 }: {
   icon: string;
   title: string;
-  summary: string;
+  summary: React.ReactNode;
   name?: string;
   open?: boolean;
   /** For links to it (#id): see OpenFromHash. */

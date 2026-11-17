@@ -21,7 +21,7 @@ type Result = { ok: true; wake: string | null } | { ok: false; error: string };
 async function loadItem(itemId: string, ownerId: string) {
   const { data: item } = await adminClient().from("inbox_items").select("*").eq("id", itemId).maybeSingle();
   // Introductions have their own flow (lib/people/introductions.ts).
-  if (!item || item.owner_id !== ownerId || item.kind === "introduction" || item.kind === "group_invite") return null;
+  if (!item || item.owner_id !== ownerId || !["question", "info_request"].includes(item.kind)) return null;
   return item;
 }
 
@@ -57,12 +57,15 @@ export async function answerInboxItem(itemId: string, ownerId: string, raw: Reco
     stored = { answer: parsed.data.answer };
     // Business: the team's answer goes back to the asker; optionally it becomes part of the business info.
     if (payload.business) {
-      await relayTeamAnswer(item, parsed.data.answer);
+      const claimed = await db.from("inbox_items").update({ status: "answered", answer: asJson(stored), answered_at: new Date().toISOString() }).eq("id", item.id).eq("status", "open").select("id");
+      if (claimed.error || !claimed.data?.length) return { ok: false, error: "This request has already been handled." };
+      try { await relayTeamAnswer(item, parsed.data.answer); }
+      catch (error) { await db.from("inbox_items").update({ status: "open", answer: null, answered_at: null }).eq("id", item.id).eq("status", "answered"); throw error; }
       if (remember && payload.faq_eligible === true) await addToBusinessInfo(item.agent_id, payload.question, parsed.data.answer, true);
     }
     // Ask around: optionally keep the answer as a tip the agent may share by itself next time.
     if (remember && payload.ask_around) {
-      await db.from("agent_tips").insert({ agent_id: item.agent_id, topic: payload.question.slice(0, 80), tip: parsed.data.answer.slice(0, 500) });
+      await db.from("agent_tips").insert({ agent_id: item.agent_id, topic: payload.question.slice(0, 80), tip: parsed.data.answer.slice(0, 500), disclosure: "contacts" });
     }
   } else {
     const parsedAnswers = InfoAnswers.safeParse(raw);
@@ -121,7 +124,12 @@ export async function declineInboxItem(itemId: string, ownerId: string): Promise
   const agent = await getAgentById(item.agent_id);
   const declined = payloadOf(item);
   const verb = declined.kind === "question" ? "answer" : "share";
-  if (declined.kind === "question" && declined.business) await relayTeamAnswer(item, null);
+  if (declined.kind === "question" && declined.business) {
+    const claimed = await db.from("inbox_items").update({ status: "declined", answered_at: new Date().toISOString() }).eq("id", item.id).eq("status", "open").select("id");
+    if (claimed.error || !claimed.data?.length) return { ok: false, error: "This request has already been handled." };
+    try { await relayTeamAnswer(item, null); }
+    catch (error) { await db.from("inbox_items").update({ status: "open", answered_at: null }).eq("id", item.id).eq("status", "declined"); throw error; }
+  }
   if (item.exchange_id) {
     await db
       .from("task_exchanges")

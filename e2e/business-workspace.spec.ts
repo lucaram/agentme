@@ -26,8 +26,8 @@ test("business workspace preserves agent information, custom actions, documents 
     await expect(shop.getByTestId("business-badge")).toHaveCount(0);
     await shop.goto("/business");
     const sectionTitles = await shop.getByTestId("business-sections").locator(":scope > details > summary").allTextContents();
-    expect(sectionTitles).toHaveLength(6);
-    for (const [i, title] of ["Customer dashboard", "About your business", "Business information", "Website & documents", "Questions & Answers", "Share your business"].entries()) expect(sectionTitles[i]).toContain(title);
+    expect(sectionTitles).toHaveLength(7);
+    for (const [i, title] of ["Customer dashboard", "About your business", "Business information", "Website & documents", "Questions & Answers", "Staff & access", "Share your business"].entries()) expect(sectionTitles[i]).toContain(title);
     await expect(shop.getByTestId("fold-faqs-badge")).toHaveCount(0);
     await expect(shop.getByTestId("fold-faqs").locator("summary")).toContainText("2 approved answers");
     await expect(shop.getByRole("link", { name: /questions? awaiting your team/ })).toHaveCount(0);

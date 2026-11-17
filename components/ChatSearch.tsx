@@ -1,10 +1,12 @@
 "use client";
+import { Avatar } from "@/components/Avatar";
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { searchAction, type SearchHit, type SearchScope, type SearchSection } from "@/app/(app)/chats/search-actions";
 import { openDirectMessage } from "@/app/(app)/actions";
+import { PresenceBadge } from "@/components/presence/PresenceBadge";
 
 /** The tab you're on decides what the header search looks for. */
 function scopeFor(pathname: string): SearchScope | null {
@@ -143,10 +145,11 @@ export function ChatSearch() {
                             choose(hit);
                           }}
                         >
-                          <span className="text-xl">{hit.icon}</span>
+                          <span className="text-xl"><Avatar value={hit.icon} /></span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-medium">{hit.name}</span>
                             <span className="block truncate text-xs text-muted">{hit.detail}</span>
+                            {hit.presenceAgent && <PresenceBadge agentId={hit.presenceAgent} business={hit.business} />}
                           </span>
                         </li>
                       );

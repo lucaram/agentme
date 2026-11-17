@@ -1,3 +1,4 @@
+import { Avatar } from "@/components/Avatar";
 import Link from "next/link";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -54,7 +55,7 @@ export default async function GroupsPage() {
             return (
               <li key={g.id}>
                 <Link href={`/groups/${g.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-accent-soft">
-                  <span className="text-2xl">{g.avatar ?? "👥"}</span>
+                  <span className="text-2xl"><Avatar value={g.avatar ?? "👥"} /></span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">
                       {g.title ?? "Group"} {me?.muted && <span title="Muted">🔕</span>}

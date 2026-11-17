@@ -24,7 +24,7 @@ const TEXT: Record<Variant, { label: string; send: string; decline: string; reme
 };
 
 /** A contact's question, a friend asking around, or a visitor's question your business agent couldn't answer. */
-export function QuestionForm({ itemId, variant = "question", faqEligible = false }: { itemId: string; variant?: Variant; faqEligible?: boolean }) {
+export function QuestionForm({ itemId, variant = "question", faqEligible = false, staff = false, approvalRequired = true, disabled = false }: { itemId: string; variant?: Variant; faqEligible?: boolean; staff?: boolean; approvalRequired?: boolean; disabled?: boolean }) {
   const t = TEXT[variant];
   const [answer, setAnswer] = useState("");
   const [remember, setRemember] = useState(variant !== "business");
@@ -34,8 +34,8 @@ export function QuestionForm({ itemId, variant = "question", faqEligible = false
   const run = (fn: () => Promise<{ error?: string }>) =>
     start(async () => {
       setError(null);
-      const result = await fn();
-      if (result.error) setError(result.error);
+      try { const result = await fn(); if (result.error) setError(result.error); }
+      catch { setError("Couldn't send your answer. Please try again."); }
     });
 
   return (
@@ -48,6 +48,7 @@ export function QuestionForm({ itemId, variant = "question", faqEligible = false
     >
       <label className="label" htmlFor={`${itemId}-answer`}>{t.label}</label>
       <AutoGrowTextarea
+        disabled={disabled || pending}
         id={`${itemId}-answer`}
         className="input"
         minRows={2}
@@ -61,14 +62,14 @@ export function QuestionForm({ itemId, variant = "question", faqEligible = false
       {canRemember && (
         <label className="flex items-center gap-2 text-xs text-muted">
           <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-          {t.remember}
+          {staff && variant === "business" ? approvalRequired ? "Suggest this as a reusable answer for approval" : "Add this to Questions & Answers" : t.remember}
         </label>
       )}
       {variant === "business" && !faqEligible && <p className="hint">This answer stays private to this request and cannot be added to public business information.</p>}
       {error && <p role="alert" className="text-xs text-danger">{error}</p>}
       <div className="flex gap-2">
-        <button className="btn-primary" disabled={pending}>{pending ? "Sending…" : t.send}</button>
-        <button type="button" className="btn-ghost" disabled={pending} onClick={() => run(() => declineInboxAction(itemId))}>
+        <button className="btn-primary" disabled={pending || disabled}>{pending ? "Sending…" : t.send}</button>
+        <button type="button" className="btn-ghost" disabled={pending || disabled} onClick={() => run(() => declineInboxAction(itemId))}>
           {t.decline}
         </button>
       </div>

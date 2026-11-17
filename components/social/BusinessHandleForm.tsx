@@ -1,4 +1,6 @@
 "use client";
+import { Avatar } from "@/components/Avatar";
+
 
 import { useEffect, useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -97,7 +99,7 @@ export function BusinessHandleForm({
           {hits.length === 0 && <li className="px-3 py-2 text-sm text-muted">No business found. Businesses that only talk to their own customers can&apos;t be added.</li>}
           {hits.map((h) => (
             <li key={h.id} role="option" aria-selected={false} className="flex items-center gap-3 px-3 py-2">
-              <span className="text-xl">{h.avatar}</span>
+              <span className="text-xl"><Avatar value={h.avatar} /></span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{h.display_name}</span>
                 <span className="block truncate text-xs text-muted">@{h.handle}{h.bio ? ` · ${h.bio}` : ""}</span>

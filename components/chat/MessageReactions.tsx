@@ -1,17 +1,19 @@
 "use client";
+import { Avatar } from "@/components/Avatar";
+
 
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { setMessageReaction } from "@/app/(app)/reaction-actions";
-import { REACTIONS, ReactionDetails, withReaction, type ReactionKey, type ReactionSummary } from "@/lib/chat/reactions";
+import { REACTIONS, ReactionDetails, reactionOverview, withReaction, type ReactionKey, type ReactionSummary } from "@/lib/chat/reactions";
 import { ChatDialog } from "./ChatDialog";
 import { LocalTime } from "@/components/LocalTime";
 
 type Controls = { summary: ReactionSummary; pending: boolean; open: boolean; showPicker: (anchor: HTMLButtonElement) => void; showPeople: () => void };
 const Context = createContext<Controls | null>(null);
 
-/** One controller per shared message; optimistic chips stay in sync with its picker. */
-export function MessageReactions({ messageId, conversationId, summary: source, available, children }: { messageId: string; conversationId: string; summary?: ReactionSummary; available: boolean; children: ReactNode }) {
+/** One controller per shared message; the badge, details and picker share live counts. */
+export function MessageReactions({ messageId, conversationId, userId, summary: source, available, children }: { messageId: string; conversationId: string; userId: string; summary?: ReactionSummary; available: boolean; children: ReactNode }) {
   const base = useMemo(() => source ?? { message_id: messageId, counts: {}, mine: null }, [source, messageId]);
   const [override, setOverride] = useState<{ base: ReactionSummary; value: ReactionSummary } | null>(null);
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null); const [people, setPeople] = useState(false);
@@ -34,7 +36,7 @@ export function MessageReactions({ messageId, conversationId, summary: source, a
   return <Context value={{ summary, pending, open: Boolean(anchor), showPicker: (button) => { setError(""); setAnchor(anchor === button ? null : button); }, showPeople: () => setPeople(true) }}>
     {children}
     {available && anchor && createPortal(<ReactionPicker anchor={anchor} selected={summary.mine} onChoose={choose} onClose={closePicker} />, document.body)}
-    {available && people && createPortal(<ReactionPeople key={JSON.stringify(base)} messageId={messageId} conversationId={conversationId} onClose={() => setPeople(false)} />, document.body)}
+    {available && people && createPortal(<ReactionPeople messageId={messageId} conversationId={conversationId} userId={userId} summary={summary} refreshToken={base} pending={pending} onRemove={() => { if (summary.mine) choose(summary.mine); }} onClose={() => setPeople(false)} />, document.body)}
     {error && createPortal(<ChatDialog label="Reaction not saved" onClose={() => setError("")}><div className="p-5"><p role="alert" className="text-sm">{error}</p><button type="button" className="btn-secondary mt-4" onClick={() => setError("")}>Close</button></div></ChatDialog>, document.body)}
   </Context>;
 }
@@ -48,12 +50,11 @@ export function ReactionButton() {
 
 export function ReactionChips() {
   const controls = useContext(Context); if (!controls) return null;
-  const reactions = REACTIONS.filter((r) => (controls.summary.counts[r.key] ?? 0) > 0);
-  if (!reactions.length) return null;
-  return <div className="mt-1 flex max-w-[85%] flex-wrap gap-1" role="group" aria-label="Message reactions" data-testid="message-reactions">
-    {reactions.slice(0, 3).map((r) => <button type="button" key={r.key} aria-label={`${r.label}: ${controls.summary.counts[r.key]}${controls.summary.mine === r.key ? ', including you' : ''}. View reactions`} onClick={controls.showPeople} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs tabular-nums transition-colors hover:border-accent ${controls.summary.mine === r.key ? "border-accent bg-accent-soft text-foreground" : "border-border bg-surface text-muted"}`}><span aria-hidden>{r.emoji}</span>{controls.summary.counts[r.key]}</button>)}
-    {reactions.length > 3 && <button type="button" className="rounded-full border border-border bg-surface px-2 py-0.5 text-xs text-muted hover:border-accent" aria-label="View all reactions" onClick={controls.showPeople}>+{reactions.length - 3}</button>}
-  </div>;
+  const { groups, total } = reactionOverview(controls.summary);
+  if (!total) return null;
+  return <button type="button" aria-haspopup="dialog" aria-label={`${total} ${total === 1 ? "person reacted" : "people reacted"}${controls.summary.mine ? ", including you" : ""}. View reactions`} onClick={controls.showPeople} data-testid="message-reactions" className={`mt-1 inline-flex min-h-7 items-center gap-1 rounded-full border px-2 py-0.5 text-xs tabular-nums transition-colors hover:border-accent focus-visible:outline-2 focus-visible:outline-accent ${controls.summary.mine ? "border-accent bg-accent-soft text-foreground" : "border-border bg-surface text-muted"}`}>
+    <span aria-hidden className="inline-flex items-center gap-0.5">{groups.slice(0, 3).map((r) => <span key={r.key} className="text-sm">{r.emoji}</span>)}</span><span className="ml-0.5">{total}</span>
+  </button>;
 }
 
 function ReactionPicker({ anchor, selected, onChoose, onClose }: { anchor: HTMLButtonElement; selected: ReactionKey | null; onChoose: (key: ReactionKey) => void; onClose: (focus?: boolean) => void }) {
@@ -83,27 +84,57 @@ function ReactionPicker({ anchor, selected, onChoose, onClose }: { anchor: HTMLB
   </div>;
 }
 
-function ReactionPeople({ messageId, conversationId, onClose }: { messageId: string; conversationId: string; onClose: () => void }) {
-  const [data, setData] = useState<ReactionDetails>({ items: [], hasMore: false }); const [busy, setBusy] = useState(true); const [error, setError] = useState("");
-  const moreRef = useRef(false);
+function ReactionPeople({ messageId, conversationId, userId, summary, refreshToken, pending, onRemove, onClose }: { messageId: string; conversationId: string; userId: string; summary: ReactionSummary; refreshToken: ReactionSummary; pending: boolean; onRemove: () => void; onClose: () => void }) {
+  const [selected, setSelected] = useState<ReactionKey | null>(null);
+  const { groups, total } = reactionOverview(summary);
+  const filter = groups.some((r) => r.key === selected) ? selected : null;
+  return <ChatDialog label="Message reactions" onClose={onClose} presentation="sheet">
+    <div className="sticky top-0 z-10 bg-surface px-5 pb-3 pt-3">
+      <div aria-hidden className="mx-auto mb-3 h-1 w-9 rounded-full bg-border sm:hidden" />
+      <div className="mb-3 flex items-center justify-between gap-3"><h2 className="font-semibold">Message reactions</h2><button type="button" className="rounded-full px-2 py-1 text-muted hover:bg-accent-soft" aria-label="Close reactions" onClick={onClose}>✕</button></div>
+      <div role="group" aria-label="Filter reactions" className="flex flex-wrap gap-2">
+        <button type="button" aria-pressed={filter === null} className={`rounded-full border px-3 py-1.5 text-sm tabular-nums focus-visible:outline-2 focus-visible:outline-accent ${filter === null ? "border-accent bg-accent-soft" : "border-border hover:bg-accent-soft"}`} onClick={() => setSelected(null)}>All · {total}</button>
+        {groups.map((r) => <button type="button" key={r.key} aria-label={`${r.label}: ${r.count}${summary.mine === r.key ? ", including you" : ""}`} aria-pressed={filter === r.key} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm tabular-nums focus-visible:outline-2 focus-visible:outline-accent ${filter === r.key ? "bg-accent-soft border-accent" : summary.mine === r.key ? "border-accent hover:bg-accent-soft" : "border-border hover:bg-accent-soft"}`} onClick={() => setSelected(r.key)}><span aria-hidden>{r.emoji}</span>{r.count}</button>)}
+      </div>
+    </div>
+    <ReactionPeopleList key={filter ?? "all"} messageId={messageId} conversationId={conversationId} userId={userId} filter={filter} summary={summary} refreshToken={refreshToken} pending={pending} />
+    {summary.mine && <div className="sticky bottom-0 border-t border-border bg-surface px-5 py-3"><button type="button" className="btn-secondary w-full" disabled={pending} onClick={onRemove}>{pending ? "Removing…" : "Remove my reaction"}</button></div>}
+  </ChatDialog>;
+}
+
+/** Filtering happens before the server's 50-person page, including in large groups. */
+function ReactionPeopleList({ messageId, conversationId, userId, filter, summary, refreshToken, pending }: { messageId: string; conversationId: string; userId: string; filter: ReactionKey | null; summary: ReactionSummary; refreshToken: ReactionSummary; pending: boolean }) {
+  const [data, setData] = useState<ReactionDetails>({ items: [], hasMore: false }); const [busy, setBusy] = useState(true); const [error, setError] = useState(""); const [attempt, setAttempt] = useState(0);
+  const moreAbort = useRef<AbortController | null>(null);
+  const url = `/api/chats/${conversationId}/reactions?message=${messageId}${filter ? `&reaction=${filter}` : ""}`;
   useEffect(() => {
+    if (pending) return; // Wait for our optimistic change to be committed before reading names.
     const abort = new AbortController();
-    void fetch(`/api/chats/${conversationId}/reactions?message=${messageId}`, { cache: "no-store", signal: abort.signal }).then(async (response) => { if (!response.ok) throw new Error(); setData(ReactionDetails.parse(await response.json())); }).catch(() => { if (!abort.signal.aborted) setError("Couldn't load reactions. Close and try again."); }).finally(() => { if (!abort.signal.aborted) setBusy(false); });
-    return () => abort.abort();
-  }, [messageId, conversationId]);
+    void fetch(url, { cache: "no-store", signal: abort.signal }).then(async (response) => {
+      if (!response.ok) throw new Error(); const next = ReactionDetails.parse(await response.json());
+      if (!abort.signal.aborted) { setData(next); setError(""); }
+    }).catch(() => { if (!abort.signal.aborted) setError("Couldn't load reactions. Try again."); }).finally(() => { if (!abort.signal.aborted) setBusy(false); });
+    return () => { abort.abort(); moreAbort.current?.abort(); moreAbort.current = null; };
+  }, [url, summary, refreshToken, pending, attempt]);
   async function more() {
-    if (moreRef.current) return; moreRef.current = true; setBusy(true); setError("");
+    if (moreAbort.current || busy || pending) return;
+    const abort = new AbortController(); moreAbort.current = abort; setBusy(true); setError("");
     try {
-      const response = await fetch(`/api/chats/${conversationId}/reactions?message=${messageId}&offset=${data.items.length}`, { cache: "no-store" }); if (!response.ok) throw new Error();
-      const next = ReactionDetails.parse(await response.json()); setData((previous) => ({ items: [...new Map([...previous.items, ...next.items].map((item) => [item.user_id, item])).values()], hasMore: next.hasMore }));
-    } catch { setError("Couldn't load more reactions. Try again."); } finally { moreRef.current = false; setBusy(false); }
+      const response = await fetch(`${url}&offset=${data.items.length}`, { cache: "no-store", signal: abort.signal }); if (!response.ok) throw new Error();
+      const next = ReactionDetails.parse(await response.json());
+      if (!abort.signal.aborted) setData((previous) => ({ items: [...new Map([...previous.items, ...next.items].map((item) => [item.user_id, item])).values()], hasMore: next.hasMore }));
+    } catch { if (!abort.signal.aborted) setError("Couldn't load more reactions. Try again."); }
+    finally { if (!abort.signal.aborted) { moreAbort.current = null; setBusy(false); } }
   }
-  return <ChatDialog label="Message reactions" onClose={onClose}><div className="p-5">
-    <div className="mb-4 flex items-center justify-between"><h2 className="font-semibold">Message reactions</h2><button type="button" className="rounded-full px-2 py-1 text-muted hover:bg-accent-soft" aria-label="Close reactions" onClick={onClose}>✕</button></div>
-    <ul className="divide-y divide-border">{data.items.map((item) => <li key={item.user_id} className="flex items-center gap-3 py-3"><span aria-hidden className="text-xl">{REACTIONS.find((r) => r.key === item.reaction)?.emoji}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{item.avatar} {item.name ?? "Former member"}</p>{item.handle && <p className="truncate text-xs text-muted">@{item.handle}</p>}</div><span className="shrink-0 text-[11px] tabular-nums text-muted"><LocalTime iso={item.reacted_at} /></span></li>)}</ul>
+  return <div className="px-5 pb-4" aria-busy={busy || pending}>
+    <ul aria-label="People who reacted" className="divide-y divide-border">{data.items.map((item) => <li key={item.user_id} data-testid="reaction-person" className={`flex items-center gap-3 py-3 ${item.user_id === userId ? "rounded-xl bg-accent-soft/50" : ""}`}>
+      <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-2xl"><Avatar value={item.avatar ?? "👤"} /></span>
+      <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{item.name ?? "Former member"}{item.user_id === userId && <span className="ml-1 text-xs font-normal text-muted">(you)</span>}</p>{item.handle && <p className="truncate text-xs text-muted">@{item.handle}</p>}<p className="mt-0.5 text-[11px] text-muted"><LocalTime iso={item.reacted_at} full /></p></div>
+      <span className="shrink-0 pl-2 text-2xl" aria-label={REACTIONS.find((r) => r.key === item.reaction)?.label}>{REACTIONS.find((r) => r.key === item.reaction)?.emoji}</span>
+    </li>)}</ul>
     {busy && <p role="status" className="py-2 text-sm text-muted">Loading reactions…</p>}
-    {!busy && !data.items.length && !error && <p className="text-sm text-muted">No reactions yet.</p>}
-    {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-    {data.hasMore && <button type="button" className="btn-secondary mt-3" disabled={busy} onClick={() => void more()}>Load more</button>}
-  </div></ChatDialog>;
+    {!busy && !data.items.length && !error && <p className="py-3 text-sm text-muted">No reactions yet.</p>}
+    {error && <div className="space-y-2"><p role="alert" className="text-sm text-danger">{error}</p><button type="button" className="btn-secondary" onClick={() => { setError(""); setBusy(true); setAttempt((n) => n + 1); }}>Retry</button></div>}
+    {data.hasMore && <button type="button" className="btn-secondary mt-3" disabled={busy || pending} onClick={() => void more()}>Load more</button>}
+  </div>;
 }

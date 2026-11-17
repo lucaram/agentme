@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { respondAsAgent, type RecipientAgent } from "@/lib/agents/respond";
 import { setLLMProviderForTesting } from "@/lib/llm";
 import { MockProvider } from "@/lib/llm/mock";
-import { mayPublishBusinessAnswer } from "@/lib/business/handoff";
+import { mayPublishBusinessAnswer, reviewBusinessPublication } from "@/lib/business/handoff";
 
 const shop: RecipientAgent = { id: "shop", handle: "trattoria", type: "business", display_name: "Trattoria Sole", contact_policy: "anyone", business_info: {} };
 afterEach(() => setLLMProviderForTesting(undefined));
@@ -14,6 +14,16 @@ it.each(["What time did we agree for dinner at @Trattoria on 21 November, and wh
   expect(result).toMatchObject({ status: "completed", disclosed: [] });
   expect(result).not.toHaveProperty("inbox");
   expect(result).toHaveProperty("data", { type: "agentme.business.redirect", scope: "personal_plan" });
+});
+it("distinguishes an irrelevant cello answer from private details and a failed publication check", async () => {
+  const provider = new MockProvider(); setLLMProviderForTesting(provider);
+  expect(await reviewBusinessPublication("Can you securely store a cello in a locked room while we have dinner?", "Yes, we do have a purple cello.")).toBe("not_answered");
+  expect(await reviewBusinessPublication("Do you offer secure cello storage?", "Yes, we store cellos in a locked room during meals.")).toBe("approved");
+  expect(await reviewBusinessPublication("Who is coming to our dinner?", "Luca and Marco.")).toBe("privacy");
+  vi.spyOn(provider, "generateObject").mockResolvedValueOnce({ decision: "uncertain" });
+  expect(await reviewBusinessPublication("Do you offer storage?", "Maybe.")).toBe("uncertain");
+  vi.spyOn(provider, "generateObject").mockRejectedValueOnce(new Error("offline"));
+  expect(await reviewBusinessPublication("Do you offer storage?", "Yes.")).toBe("unavailable");
 });
 it("offers a real pre-booking question without invoking staff, and gives anonymous callers no offer", async () => {
   setLLMProviderForTesting(new MockProvider());

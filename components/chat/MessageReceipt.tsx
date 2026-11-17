@@ -28,7 +28,7 @@ export function MessageReceipt({ messageId, summary }: { messageId: string; summ
         {details.kind === "untracked" ? <p className="text-sm text-muted">Delivery and seen tracking started after this message was sent.</p> : details.kind === "agent" ? <div className="space-y-3 text-sm">
           <p>{details.agent_name ?? "Agent"}</p>
           <p>Agent received: {details.agent_received_at ? <LocalTime iso={details.agent_received_at} /> : "No acknowledgement recorded"}</p>
-          {details.agent_business && <p>Seen by business owner: {details.owner_seen_at ? <LocalTime iso={details.owner_seen_at} /> : details.owner_seen_shared ? "No human view recorded" : "Seen status not shared"}</p>}
+          {details.agent_business && <p>Seen by team: {details.owner_seen_at ? <LocalTime iso={details.owner_seen_at} /> : details.owner_seen_shared ? "No human view recorded" : "Seen status not shared"}</p>}
           <p className="hint">An automatic reply does not confirm human viewing.</p>
         </div> : <>
           {details.group && details.total > 0 && <p className="text-sm font-medium">Seen by {details.seen} of {details.total}</p>}

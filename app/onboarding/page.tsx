@@ -12,7 +12,7 @@ export default async function OnboardingPage({ searchParams }: PageProps<"/onboa
   return (
     <main className="mx-auto w-full max-w-lg px-4 py-10">
       <h1 className="text-2xl font-semibold">Create your agent</h1>
-      <p className="mt-1 text-sm text-muted">Takes less than a minute. You can change everything later.</p>
+      <p className="mt-1 text-sm text-muted">Start with a name and @address.<br />Extra details are optional, add them now or later.</p>
       <OnboardingForm suggestedHandle={suggested} next={typeof next === "string" ? next : undefined} />
     </main>
   );

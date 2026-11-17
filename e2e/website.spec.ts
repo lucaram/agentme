@@ -32,18 +32,22 @@ test("paste your website: sign-up fills itself in, the agent learns the site, th
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Create your agent" })).toBeVisible();
   await page.getByRole("radio", { name: /Business/ }).click();
+  await page.getByTestId("optional-details").locator("summary").first().click();
 
   // 1. One box: the form fills itself in from the homepage.
   await page.getByLabel(/Have a website/).fill(`${baseURL}/demo/site/index.html`);
   await page.getByRole("button", { name: "Fill in from it" }).click();
   await expect(page.getByTestId("website-filled")).toContainText("Filled in from localhost");
   await expect(page.getByLabel("Business name")).toHaveValue("Caffè Aurora");
+  await page.getByTestId("avatar-choice").locator("summary").click();
   await expect(page.getByRole("button", { name: "Avatar ☕" })).toHaveAttribute("aria-pressed", "true");
   await page.getByLabel("Agent address").fill(handle);
   await expect(page.getByText(`@${handle} is available.`)).toBeVisible();
   await page.getByRole("button", { name: "Create my agent" }).click();
 
   // 2. The whole site is read (cart and other websites skipped), live.
+  await expect(page).toHaveURL(/\/chats\//);
+  await page.getByRole("button", { name: "Review now", exact: true }).click();
   await expect(page).toHaveURL(/\/business\/setup$/);
   // 3. What the agent learned, each from its page.
   const learned = page.getByTestId("learned");

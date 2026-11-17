@@ -1,3 +1,4 @@
+import { Avatar } from "@/components/Avatar";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireAgent } from "@/lib/auth";
@@ -16,7 +17,7 @@ export default async function QrPosterPage() {
         <PrintButton />
       </div>
       <section className="mx-auto flex max-w-md flex-col items-center gap-5 px-6 pb-12 pt-6 text-center print:pt-16" data-testid="qr-poster">
-        <div className="text-6xl">{agent.avatar}</div>
+        <div className="text-6xl"><Avatar value={agent.avatar} /></div>
         <h1 className="text-3xl font-bold">{agent.display_name}</h1>
         <p className="text-2xl font-semibold">Scan to ask us anything</p>
         <p className="text-sm">Menu, opening hours, allergens… our AI agent answers straight away.</p>

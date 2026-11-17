@@ -6,6 +6,7 @@ import { adminClient } from "@/lib/supabase/admin";
  * and multiple app instances). Tuned for an invite-only beta; adjust freely.
  */
 export const LIMITS = {
+  avatarUploadsPerUser: { windowSeconds: 60, max: 8 },
   chatUploadsPerUser: { windowSeconds: 60, max: 12 },
   richMessagesPerUser: { windowSeconds: 60, max: 30 },
   businessActionClicksPerIp: { windowSeconds: 60, max: 60 },

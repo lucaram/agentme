@@ -12,6 +12,8 @@ export function NameField({
   defaultValue = "",
   placeholder,
   disabled,
+  value: controlled,
+  onValueChange,
 }: {
   id: string;
   name: string;
@@ -22,10 +24,12 @@ export function NameField({
   defaultValue?: string;
   placeholder?: string;
   disabled?: boolean;
+  value?: string;
+  onValueChange?: (value: string) => void;
 }) {
   const [typed, setValue] = useState(defaultValue);
   // The limit can change while typing (e.g. Personal ⇄ Business at sign-up).
-  const value = typed.slice(0, max);
+  const value = (controlled ?? typed).slice(0, max);
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2">
@@ -41,7 +45,7 @@ export function NameField({
         id={id}
         name={name}
         value={value}
-        onChange={(e) => setValue(e.target.value.slice(0, max))}
+        onChange={(e) => { const next = e.target.value.slice(0, max); setValue(next); onValueChange?.(next); }}
         minLength={min}
         maxLength={max}
         required

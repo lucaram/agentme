@@ -36,7 +36,7 @@ export async function askTeam(userId: string, agent: AgentRow, messageId: string
   if (result.outcome === "business_limit") return { error: "This team has reached today's request limit. Please try tomorrow or contact the business directly." };
   if (!result.item_id) return { error: "This offer is no longer available." };
   await db.rpc("link_business_receipt", { p_inbox: result.item_id });
-  if (result.created) await tellOwner(business.owner_id, business.id, `@${agent.handle} asked ${business.display_name}: “${offer.data.question}” ${NEEDS_ANSWER}`);
+  if (result.created) await tellOwner(business.owner_id, business.id, `@${agent.handle} asked ${business.display_name}: “${offer.data.question}” ${NEEDS_ANSWER}`, result.item_id);
   // Keep offers private in shared chats: UI state belongs to the original asker.
   const notice = result.created
     ? inGroup ? `Sent to the team. They'll reply in your private chat with @${business.handle}.` : "Sent to the team. They'll reply in this conversation."

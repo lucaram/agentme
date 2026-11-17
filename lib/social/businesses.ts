@@ -1,3 +1,4 @@
+import { avatarText } from "@/lib/profile/avatar";
 import "server-only";
 import { handoffMetadata } from "@/lib/business/question-scope";
 import { adminClient } from "@/lib/supabase/admin";
@@ -70,7 +71,7 @@ export async function addBusinessToGroup(groupId: string, me: Me, handle: string
   if (error) return { ok: false, error: error.code === "23505" ? `${business.display_name} is already in this group.` : "Couldn't add the business." };
   await note(
     groupId,
-    `${me.agent.display_name} added ${business.avatar} ${business.display_name} (business). Mention @${business.handle} to ask it something: it only sees messages that mention it, answers from its public information and never posts on its own. Anyone can remove it.`,
+    `${me.agent.display_name} added ${avatarText(business.avatar)} ${business.display_name} (business). Mention @${business.handle} to ask it something: it only sees messages that mention it, answers from its public information and never posts on its own. Anyone can remove it.`,
   );
   await tellOwner(
     business.owner_id,
@@ -137,7 +138,7 @@ export async function answerPartnerInvite(placementId: string, me: Me, accept: b
   await db.from("business_placements").update({ status: "active" }).eq("id", placementId);
   const general = await generalChannel(placement.community_id);
   if (general) {
-    await note(general, `🤝 ${me.agent.avatar} ${me.agent.display_name} is now an official partner. Mention @${me.agent.handle} to ask it something: it only sees messages that mention it and never posts on its own.`);
+    await note(general, `🤝 ${avatarText(me.agent.avatar)} ${me.agent.display_name} is now an official partner. Mention @${me.agent.handle} to ask it something: it only sees messages that mention it and never posts on its own.`);
   }
   return { ok: true };
 }

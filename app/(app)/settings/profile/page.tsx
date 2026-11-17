@@ -13,7 +13,8 @@ import { businessesOnlyOwnedBy, isManagedLogin, realPerson } from "@/lib/identit
 export default async function ProfileSettingsPage({ searchParams }: PageProps<"/settings/profile">) {
   const { user, agent } = await requireAgent();
   const { saved, error } = await searchParams;
-  const managedBusiness = isManagedLogin(user.email);
+  if (user.businessRole === "staff") return <div className="space-y-4"><SettingsHeader title="Profile & account" /><p className="card">An owner or manager manages this business profile. Switch to your personal account to edit your own profile.</p></div>;
+  const managedBusiness = Boolean(user.working) || isManagedLogin(user.email);
   const person = await realPerson(user, agent);
   const ownedBusinesses = agent.type === "personal" && person ? await businessesOnlyOwnedBy(person) : [];
 
@@ -22,6 +23,8 @@ export default async function ProfileSettingsPage({ searchParams }: PageProps<"/
       <SettingsHeader title="Profile & account" />
       <SavedNote show={saved === "account"} text="Your account is saved. You can now log in with your email anywhere." />
       <SavedNote show={saved === "1"} />
+      {error === "avatar" && <p role="alert" className="card text-danger">Your avatar could not be saved. Please try another image; your existing avatar is unchanged.</p>}
+      {error === "profile" && <p role="alert" className="card text-danger">Your profile could not be saved. Please try again.</p>}
 
       {agent.guest && (
         <section id="account" className="card space-y-3 border-accent">
@@ -36,7 +39,7 @@ export default async function ProfileSettingsPage({ searchParams }: PageProps<"/
         <h2 className="font-semibold">Profile</h2>
         <NameField id="display_name" name="display_name" label="Name" max={maxNameFor(agent.type)} min={MIN_NAME} defaultValue={agent.display_name} />
         <p className="hint">Your address @{agent.handle} is permanent.</p>
-        <AvatarChoice options={avatarsFor(agent.type, agent.avatar)} initial={agent.avatar} />
+        <AvatarChoice key={agent.avatar} options={avatarsFor(agent.type, agent.avatar)} initial={agent.avatar} business={agent.type === "business"} />
         {!agent.guest && !managedBusiness && (
           <p className="text-sm">✉️ {user.email && user.emailConfirmed ? `${maskEmail(user.email)} ✓` : "Your email isn't verified yet."}</p>
         )}
@@ -45,7 +48,7 @@ export default async function ProfileSettingsPage({ searchParams }: PageProps<"/
         </div>
       </form>
 
-      <section className="card space-y-3 border-danger" aria-label="Delete account">
+      {user.businessRole !== "manager" && <section className="card space-y-3 border-danger" aria-label="Delete account">
         <h2 className="font-semibold text-danger">Delete account</h2>
         <p className="text-sm text-muted">
           Permanently deletes your agent, preferences, contacts, private chats, tasks and audit history. Messages you sent in shared chats stay for
@@ -59,7 +62,7 @@ export default async function ProfileSettingsPage({ searchParams }: PageProps<"/
           <button className="btn-danger">Delete everything</button>
         </form>
         {error === "confirm" && <p className="text-sm text-danger">Type your handle exactly to confirm.</p>}
-      </section>
+      </section>}
     </div>
   );
 }

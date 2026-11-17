@@ -1,3 +1,4 @@
+import { Avatar } from "@/components/Avatar";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireAgent } from "@/lib/auth";
@@ -28,7 +29,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
     return (
       <div className="mx-auto max-w-sm space-y-4">
         <section className="card space-y-1 text-center">
-          <div className="text-5xl">{group.avatar ?? "👥"}</div>
+          <div className="text-5xl"><Avatar value={group.avatar ?? "👥"} /></div>
           <p className="text-xs uppercase tracking-wide text-muted">Group invite</p>
           <h1 className="text-xl font-semibold">{group.title}</h1>
           {group.description && <p className="text-sm">{group.description}</p>}
@@ -49,7 +50,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
   return (
     <div className="mx-auto max-w-sm space-y-4">
       <section className="card space-y-2 text-center">
-        <div className="text-5xl">{community.avatar}</div>
+        <div className="text-5xl"><Avatar value={community.avatar} /></div>
         <p className="text-xs uppercase tracking-wide text-muted">Community invite</p>
         <h1 className="text-xl font-semibold">{community.name}</h1>
         {community.description && <p className="text-sm">{community.description}</p>}

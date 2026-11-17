@@ -1,4 +1,6 @@
 "use client";
+import { avatarText } from "@/lib/profile/avatar";
+
 
 import { useState, useTransition } from "react";
 import { introduceAction } from "../people-actions";
@@ -14,7 +16,7 @@ export function IntroduceForm({ people }: { people: Person[] }) {
   const [pending, start] = useTransition();
   const option = (p: Person) => (
     <option key={p.handle} value={p.handle}>
-      {p.avatar} {p.display_name} (@{p.handle})
+      {avatarText(p.avatar)} {p.display_name} (@{p.handle})
     </option>
   );
   return (

@@ -12,10 +12,7 @@ const CONTACT_POLICY: Record<string, string> = { contacts_only: "Only contacts",
 export default async function SettingsPage() {
   const { user, agent } = await requireAgent();
   const supabase = await createClient();
-  const [{ data: facts }, { count: tips }] = await Promise.all([
-    supabase.from("agent_facts").select("disclosure"),
-    supabase.from("agent_tips").select("*", { count: "exact", head: true }),
-  ]);
+  const { data: facts } = await supabase.from("agent_facts").select("disclosure");
   const personal = agent.type === "personal";
   const managedBusiness = isManagedLogin(user.email);
   const shared = (facts ?? []).filter((f) => f.disclosure === "contacts").length;
@@ -65,17 +62,6 @@ export default async function SettingsPage() {
       ].join(" · "),
       testId: "privacy-link",
     },
-    ...(personal
-      ? [
-          {
-            href: "/settings/tips",
-            icon: "💡",
-            title: "Saved tips",
-            summary: tips ? `${tips} ${tips === 1 ? "tip" : "tips"} your agent can share when friends ask around` : "Tips your agent can share when friends ask around",
-            testId: "tips-link",
-          },
-        ]
-      : []),
     {
       href: "/history",
       icon: "📜",

@@ -1,4 +1,6 @@
 "use client";
+import { Avatar } from "@/components/Avatar";
+
 
 import { useRef, useState } from "react";
 
@@ -35,7 +37,7 @@ export function ContactSearch({ contacts }: { contacts: Person[] }) {
         <ul className="flex flex-wrap gap-2" aria-label="Members to add">
           {picked.map((p) => (
             <li key={p.id} className="flex items-center gap-1 rounded-full bg-accent-soft py-1 pl-3 pr-1 text-sm" data-testid="picked-member">
-              {p.avatar} {p.display_name}
+              <Avatar value={p.avatar} /> {p.display_name}
               <button
                 type="button"
                 className="rounded-full px-1.5 text-muted hover:text-danger"
@@ -101,7 +103,7 @@ export function ContactSearch({ contacts }: { contacts: Person[] }) {
                     add(c);
                   }}
                 >
-                  <span className="text-xl">{c.avatar}</span>
+                  <span className="text-xl"><Avatar value={c.avatar} /></span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{c.display_name}</span>
                     <span className="block truncate text-xs text-muted">@{c.handle}</span>

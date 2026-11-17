@@ -1,3 +1,4 @@
+import { Avatar } from "@/components/Avatar";
 import { createClient } from "@/lib/supabase/server";
 import { CATEGORY_LABELS, isRequestableCategory } from "@/lib/policy/disclosure";
 import { inboxPayloadOf } from "@/lib/plans/inbox";
@@ -9,8 +10,12 @@ import { QuestionForm } from "./QuestionForm";
 import { IntroductionForm } from "./IntroductionForm";
 import { GroupInviteForm } from "./GroupInviteForm";
 import { z } from "zod";
+import { requireAgent } from "@/lib/auth";
+import { BusinessInvitationForm, BusinessAnswerReview } from "@/components/business/StaffForms";
+import { QuestionAssignment } from "@/components/business/QuestionAssignment";
+import { adminClient } from "@/lib/supabase/admin";
 
-type Kind = "info_request" | "question" | "introduction" | "group_invite";
+type Kind = "info_request" | "question" | "introduction" | "group_invite" | "business_invitation" | "business_answer_review";
 
 /**
  * Things only you can decide, as cards with buttons: an agent asking for
@@ -20,6 +25,7 @@ type Kind = "info_request" | "question" | "introduction" | "group_invite";
  */
 export async function OpenRequests({ title, kinds, hint, excludeIds = [] }: { title: string; kinds?: Kind[]; hint?: string; excludeIds?: string[] }) {
   const supabase = await createClient();
+  const { user, agent } = await requireAgent();
   // RLS: only this user's own requests and own facts.
   const excluded = excludeIds.filter((id) => /^[0-9a-f-]{36}$/i.test(id));
   const [{ data: rawItems }, { data: agents }, { data: facts }] = await Promise.all([
@@ -34,6 +40,17 @@ export async function OpenRequests({ title, kinds, hint, excludeIds = [] }: { ti
   const items = (rawItems ?? []).filter((item) => item.kind !== "group_invite" || previewsById.has(item.id));
   if (!items.length) return null;
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));
+  const businessQuestions = items.filter((item) => { const p = inboxPayloadOf(item); return p.kind === "question" && p.business; });
+  const [{ data: claims }, { data: members }] = agent.type === "business" && businessQuestions.length ? await Promise.all([
+    supabase.from("business_question_claims").select("inbox_id,assigned_to,assigned_name,claimed_at,manager_assigned").in("inbox_id", businessQuestions.map((item) => item.id)),
+    adminClient().from("business_managers").select("user_id,role,require_assignment,require_publication_approval,supervisor_id").eq("business_agent_id", agent.id),
+  ]) : [{ data: [] }, { data: [] }];
+  const memberIds = (members ?? []).map((member) => member.user_id);
+  const { data: people } = memberIds.length ? await adminClient().from("agents").select("owner_id,display_name").in("owner_id", memberIds) : { data: [] };
+  const assignments = (members ?? []).flatMap((member) => { const person = people?.find((person) => person.owner_id === member.user_id); return person ? [{ id: member.user_id, name: person.display_name, role: member.role, supervisorId: member.supervisor_id }] : []; });
+  const actor = user.actorId ?? user.id;
+  const myControls = members?.find((member) => member.user_id === actor);
+  const assignmentRequired = user.businessRole === "staff" && myControls?.require_assignment === true;
 
   return (
     <section className="rounded-2xl border-2 border-accent bg-accent-soft/40 p-3" aria-label={title} data-testid="open-requests">
@@ -45,9 +62,17 @@ export async function OpenRequests({ title, kinds, hint, excludeIds = [] }: { ti
       <ul className="space-y-3">
         {items.map((item) => {
           const from = item.from_agent ? byId.get(item.from_agent) : undefined;
-          const who = from ? `${from.avatar} @${from.handle}` : "Someone";
+          const who = from ? <><Avatar value={from.avatar} /> @{from.handle}</> : "Someone";
           const when = <LocalTime iso={item.created_at} />;
 
+          if (item.kind === "business_invitation") {
+            const p = item.payload as { invite_id?: string; business_name?: string; role?: string };
+            return <li key={item.id} className="card space-y-3" data-testid="staff-invitation"><p className="text-sm"><b>{p.business_name}</b> invited you to its team as <b>{p.role}</b>.</p><p className="hint">{when} · Uses your own login. Personal chats stay separate.</p>{p.invite_id && <BusinessInvitationForm id={p.invite_id} />}</li>;
+          }
+          if (item.kind === "business_answer_review") {
+            const p = item.payload as { draft_id?: string; author?: string; question?: string; answer?: string };
+            return <li key={item.id} className="card space-y-3" data-testid="business-answer-review"><p className="text-sm"><b>{p.author}</b> suggested a reusable answer.</p>{p.draft_id && <BusinessAnswerReview id={p.draft_id} question={p.question ?? ""} answer={p.answer ?? ""} canApprove={user.businessRole === "owner" || user.businessRole === "manager"} />}</li>;
+          }
           if (item.kind === "group_invite") {
             const invite = previewsById.get(item.id)!;
             return (
@@ -72,7 +97,7 @@ export async function OpenRequests({ title, kinds, hint, excludeIds = [] }: { ti
                   <p className="text-sm">
                     🤝 <b>{from?.display_name ?? "A friend"}</b> wants to introduce you to{" "}
                     <b>
-                      {other?.avatar} {other?.display_name ?? "someone"}
+                      <Avatar value={other?.avatar} /> {other?.display_name ?? "someone"}
                     </b>{" "}
                     <span className="text-muted">@{other?.handle}</span>
                   </p>
@@ -97,7 +122,8 @@ export async function OpenRequests({ title, kinds, hint, excludeIds = [] }: { ti
                     {when} · Your agent didn&apos;t find this in your business info. Your answer goes back to them, from the team.
                   </p>
                 </div>
-                <QuestionForm itemId={item.id} variant="business" faqEligible={payload.faq_eligible === true} />
+                <QuestionAssignment id={item.id} actor={actor} claim={claims?.find((claim) => claim.inbox_id === item.id)} role={user.businessRole} members={assignments} assignmentRequired={assignmentRequired} />
+                <QuestionForm itemId={item.id} variant="business" faqEligible={payload.faq_eligible === true} staff={user.businessRole === "staff"} approvalRequired={myControls?.require_publication_approval !== false} disabled={Boolean(claims?.find((claim) => claim.inbox_id === item.id && claim.assigned_to && claim.assigned_to !== actor)) || Boolean(assignmentRequired && !claims?.some((claim) => claim.inbox_id === item.id && claim.assigned_to === actor && claim.manager_assigned))} />
               </li>
             );
           }

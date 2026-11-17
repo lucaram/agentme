@@ -27,13 +27,14 @@ export async function prepareHistory(client: Client, userId: string, agent: Agen
   const metas = messages.map((m) => m.metadata as Meta);
   const taskIds = unique(metas.map((m) => m.task_id)); const proposalIds = unique(metas.map((m) => m.proposal_id));
   const quoteIds = unique(messages.map((m) => m.reply_to));
-  const [{ data: attachments }, { data: tasks }, { data: exchanges }, { data: proposals }, { data: facts }, { data: quotes }] = await Promise.all([
+  const [{ data: attachments }, { data: tasks }, { data: exchanges }, { data: proposals }, { data: facts }, { data: quotes }, { data: mentions }] = await Promise.all([
     messages.length ? client.from("chat_attachments").select("id,message_id,name,mime,kind,bytes").in("message_id", messages.map((m) => m.id)) : { data: [] },
     taskIds.length ? client.from("tasks").select("*").in("id", taskIds) : { data: [] },
     taskIds.length ? client.from("task_exchanges").select("*").in("task_id", taskIds).order("created_at") : { data: [] },
     proposalIds.length ? client.from("proposals").select("*").in("id", proposalIds) : { data: [] },
     client.from("agent_facts").select("*"),
     quoteIds.length ? client.from("messages").select("*").eq("conversation_id", conv.id).in("id", quoteIds) : { data: [] },
+    messages.length ? client.from("message_mentions").select("*").in("message_id", messages.map((m) => m.id)) : { data: [] },
   ]);
   const planIds = unique([...taskIds, ...(proposals ?? []).map((p) => p.task_id)]);
   const { data: steps } = planIds.length ? await client.from("plan_steps").select("*").in("task_id", planIds) : { data: [] };
@@ -44,7 +45,7 @@ export async function prepareHistory(client: Client, userId: string, agent: Agen
     messages.length ? client.rpc("get_message_reactions", { p_ids: messages.map((m) => m.id) }) : { data: [] },
   ]);
   const actors = [...messages, ...(quotes ?? [])];
-  const actorIds = unique([agent.id, ...actors.map((m) => m.sender_agent_id), ...(tasks ?? []).map((t) => t.initiator_agent), ...(exchanges ?? []).flatMap((e) => [e.from_agent, e.to_agent]), ...(responses ?? []).map((r) => r.agent_id), ...(claims ?? []).map((r) => r.agent_id)]);
+  const actorIds = unique([agent.id, ...(mentions ?? []).map((m) => m.agent_id), ...actors.map((m) => m.sender_agent_id), ...(tasks ?? []).map((t) => t.initiator_agent), ...(exchanges ?? []).flatMap((e) => [e.from_agent, e.to_agent]), ...(responses ?? []).map((r) => r.agent_id), ...(claims ?? []).map((r) => r.agent_id)]);
   const ownerIds = unique([userId, ...actors.map((m) => m.sender_user_id)]);
   const handles = unique([...(tasks ?? []).map((t) => t.parsed), ...(proposals ?? []).map((p) => p.content), ...(steps ?? []).map((s) => s.config)].flatMap((value) => { const v = value as { participants?: string[]; voters?: string[] }; return [...(v.participants ?? []), ...(v.voters ?? [])]; })).filter((h) => /^[a-z0-9_-]{1,64}$/i.test(h));
   const { data: agents } = await client.from("agents").select("id,owner_id,handle,display_name,avatar,type,verified_domain").or(`id.in.(${actorIds.join(",")}),owner_id.in.(${ownerIds.join(",")})${handles.length ? `,handle.in.(${handles.join(",")})` : ""}`);
@@ -62,6 +63,10 @@ export async function prepareHistory(client: Client, userId: string, agent: Agen
   const dm = conv.kind === "dm" ? await dmState(conv.id, userId, agent.id) : null;
   const canModerate = conv.kind === "group" ? isGroupAdmin(await groupRole(conv.id, userId)) : conv.kind === "channel" && conv.community_id ? isModerator((await communityMembership(conv.community_id, userId))?.role) : false;
   const { data: suspended } = await client.rpc("space_is_suspended", { p_conversation: conv.id });
-  return { ...page, revision: crypto.randomUUID(), userId, agent: { id: agent.id, handle: agent.handle }, conversationId: conv.id, threadId, kind: conv.kind, suspended: Boolean(suspended), reactions: ReactionSummary.array().safeParse(reactionData).data ?? [],
+  const { data: context } = agent.type === "business" ? await client.rpc("workspace_context") : { data: null };
+  const work = context as { role?: string; actor_id?: string } | null;
+  const { data: ownMessages } = work?.role === "staff" && messages.length ? await client.from("business_message_authors").select("message_id").eq("business_agent_id", agent.id).eq("actor_id", work.actor_id ?? "").in("message_id", messages.map((m) => m.id)) : { data: null };
+  return { ...page, mentions: mentions ?? [], revision: crypto.randomUUID(), userId, agent: { id: agent.id, handle: agent.handle }, conversationId: conv.id, threadId, kind: conv.kind, suspended: Boolean(suspended), reactions: ReactionSummary.array().safeParse(reactionData).data ?? [],
+    ...(work?.role === "staff" ? { canManageBusiness: false, deletableMessageIds: (ownMessages ?? []).map((row) => row.message_id) } : {}),
     canReplyHere: posting.ok && (!dm || dm.state === "open"), canModerate, agents: agents ?? [], attachments: attachments ?? [], tasks: tasks ?? [], exchanges: exchanges ?? [], proposals: proposals ?? [], steps: steps ?? [], responses: responses ?? [], claims: claims ?? [], facts: facts ?? [], quotes: quotes ?? [], receipts: ReceiptSchema.array().safeParse(receiptData).data ?? [], actions: [...actions.actions], legacy: [...actions.legacyIdentities] };
 }

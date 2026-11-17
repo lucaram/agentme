@@ -33,8 +33,10 @@ export async function getFacts(agentId: string): Promise<Fact[]> {
   return (data ?? []) as Fact[];
 }
 
-export async function getTips(agentId: string): Promise<{ topic: string; tip: string }[]> {
-  const { data } = await adminClient().from("agent_tips").select("topic, tip").eq("agent_id", agentId).limit(200);
+/** Only explicitly shareable tips ever enter another agent's reply context. */
+export async function getTips(agentId: string) {
+  const { data, error } = await adminClient().from("agent_tips").select("topic, tip, disclosure").eq("agent_id", agentId).eq("disclosure", "contacts").limit(200);
+  if (error) throw error;
   return data ?? [];
 }
 

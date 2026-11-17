@@ -10,7 +10,7 @@ export type Receipt = z.infer<typeof ReceiptSchema>;
 
 export function receiptDisplay(receipt?: Receipt) {
   if (receipt?.kind === "agent") {
-    if (receipt.owner_seen_at && receipt.owner_seen_shared) return { state: "seen", icon: "eye", label: receipt.agent_business ? "Seen by business owner" : "Seen by agent's owner", text: receipt.agent_business ? "Seen by business owner" : "Seen by agent's owner", green: true } as const;
+    if (receipt.owner_seen_at && receipt.owner_seen_shared) return { state: "seen", icon: "eye", label: receipt.agent_business ? "Seen by team" : "Seen by agent's owner", text: receipt.agent_business ? "Seen by team" : "Seen by agent's owner", green: true } as const;
     if (receipt.agent_received_at) return { state: "agent", icon: "agent", label: "Agent received", text: "Agent received", green: false } as const;
   }
   const allSeen = Boolean(receipt?.total && receipt.seen === receipt.total);

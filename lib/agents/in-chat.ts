@@ -1,4 +1,5 @@
 import "server-only";
+import { preparePersonAsk } from "./ask-person";
 import { canPost, type ConvRow } from "@/lib/social/shared";
 import { adminClient } from "@/lib/supabase/admin";
 import { llm, LLMError } from "@/lib/llm";
@@ -40,6 +41,7 @@ export async function handleAgentCommand(opts: { userId: string; agent: AgentRow
 
   // The command itself is private to the owner (with the message it's about, if one was quoted).
   await postMessage({ conversationId: conversation.id, from: "human", userId, content: text, visibleTo: userId, replyTo: opts.reply?.id, metadata: { kind: "agent_command" } });
+  if (command.mode === "plan" && await preparePersonAsk({ userId, agent, conversationId: conversation.id, text: command.request, privateCard: true })) return;
   // ↩ Reply: "@agent translate" / "draft a reply" about one message in particular (as data).
   const about = opts.reply ? `\n\nThe owner means this message in particular:\n${wrapUntrusted("replying_to", quoteContext(opts.reply.author, opts.reply.text))}` : "";
   const reply = (content: string, metadata: Record<string, unknown> = {}) =>

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireAgent } from "@/lib/auth";
+import { requireBusinessPermission } from "@/lib/business/access";
 import { createClient } from "@/lib/supabase/server";
 import { learnedOf, type Correction } from "@/lib/business/learn";
 import { SiteSetup } from "./SiteSetup";
@@ -11,6 +12,7 @@ import { SiteSetup } from "./SiteSetup";
 export default async function WebsiteSetupPage() {
   const { agent } = await requireAgent();
   if (agent.type !== "business") redirect("/business");
+  await requireBusinessPermission("configure");
   const supabase = await createClient();
   // RLS: the business's own website row.
   const { data: site } = await supabase.from("business_sites").select("*").eq("agent_id", agent.id).maybeSingle();

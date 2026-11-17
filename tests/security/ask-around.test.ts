@@ -9,7 +9,7 @@ import type { Fact } from "@/lib/policy/disclosure";
 
 const paul: RecipientAgent = { id: "paul-id", handle: "paul", type: "personal", contact_policy: "contacts_only", display_name: "Paul", business_info: {}, recommendations_ok: true };
 const facts: Fact[] = [{ category: "notes", value: "PRIVATE: my plumber overcharged me", disclosure: "private" }];
-const tips = [{ topic: "plumber", tip: "Joe's Plumbing, 020 7946 0000" }];
+const tips = [{ topic: "plumber", tip: "Joe's Plumbing, 020 7946 0000", disclosure: "contacts" as const }];
 const ask = (question: string) => ({ type: "agentme.ask_around", question });
 const from = (relationship: "accepted" | "none" | "blocked") => ({ callerHandle: "luca", relationship, text: "", data: ask("Does anyone know a good plumber?") });
 
@@ -29,5 +29,12 @@ describe("ask around (security)", () => {
   it("without a matching tip, the person decides (nothing is shared)", async () => {
     const res = await respondAsAgent(paul, { ...from("accepted"), data: ask("Who can lend me a drill?") }, facts, tips);
     expect(res).toMatchObject({ status: "needs_human", disclosed: [], inbox: { kind: "question", question: "Who can lend me a drill?", ask_around: true } });
+  });
+  it("never includes private tips, even if a caller supplies them alongside shared tips", async () => {
+    const privateTip = { topic: "plumber", tip: "PRIVATE saved recommendation", disclosure: "private" as const };
+    const shared = await respondAsAgent(paul, from("accepted"), facts, [privateTip, ...tips]);
+    expect(shared).toMatchObject({ status: "completed", text: tips[0].tip }); expect(JSON.stringify(shared)).not.toContain("PRIVATE");
+    const privateOnly = await respondAsAgent(paul, from("accepted"), facts, [privateTip]);
+    expect(privateOnly).toMatchObject({ status: "needs_human", disclosed: [] }); expect(JSON.stringify(privateOnly)).not.toContain("PRIVATE");
   });
 });

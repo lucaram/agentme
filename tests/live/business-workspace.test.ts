@@ -8,7 +8,7 @@ import { answerInboxItem } from "@/lib/plans/inbox";
 import { publicBusinessDetails } from "@/lib/business/details";
 
 const auth = vi.hoisted(() => ({ agentId: "" }));
-vi.mock("@/lib/auth", () => ({ requireAgent: async () => { const { getAgentById } = await import("@/lib/data/agents"); const agent = await getAgentById(auth.agentId); if (!agent) throw new Error("Not signed in"); return { agent, user: { id: agent.owner_id } }; } }));
+vi.mock("@/lib/auth", () => ({ requireAgent: async () => { const { getAgentById } = await import("@/lib/data/agents"); const agent = await getAgentById(auth.agentId); if (!agent) throw new Error("Not signed in"); return { agent, user: { id: agent.owner_id, businessRole: "owner" } }; } }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/server", () => ({ after: vi.fn() }));
 
