@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FACILITIES, facilityName, facilityNote, isCustomFacility, type FacilityRow } from "@/lib/business/offerings-shared";
-import { removeFacilityAction, rereadOfferingsAction, saveFacilityAction } from "./actions";
+import { removeFacilityAction, saveFacilityAction } from "./actions";
 
 type Draft = { key: string | null; label: string; status: "yes" | "no"; note: string };
 
@@ -11,7 +11,7 @@ type Draft = { key: string | null; label: string; status: "yes" | "no"; note: st
  * Your facilities: what was read from your website and documents (confirm it with a tap), the common
  * ones to add, and your own ("Live music"). Edit or remove any of them.
  */
-export function FacilitiesEditor({ facilities, hasSources }: { facilities: FacilityRow[]; hasSources: boolean }) {
+export function FacilitiesEditor({ facilities }: { facilities: FacilityRow[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -48,11 +48,6 @@ export function FacilitiesEditor({ facilities, hasSources }: { facilities: Facil
 
   return (
     <div className="space-y-4" data-testid="facilities">
-      {hasSources && (
-        <div className="flex justify-end">
-          <button type="button" className="btn-ghost py-1 text-xs" disabled={pending} onClick={() => act(rereadOfferingsAction, "Looking again. This can take a minute.")}>↻ Look again</button>
-        </div>
-      )}
       {shown.length ? (
         <ul className="card divide-y divide-border p-0">
           {shown.map((f) => {

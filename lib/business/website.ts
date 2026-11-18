@@ -7,7 +7,7 @@ import { readAllOfferings } from "./offerings";
 import { SITE_CHANGES_SYSTEM, SITE_LEARN_SYSTEM, wrapUntrusted } from "@/lib/agents/prompts";
 import { asJson } from "@/lib/data/json";
 import { notify } from "@/lib/social/shared";
-import { htmlToText } from "./extract";
+import { addressKey, htmlToText } from "./extract";
 import { safeFetch, type Fetched } from "./fetch";
 import { readWithAi } from "./sources";
 import { LearnedDraftSchema, clampLearned, learnedOf, type Learned, type PageText } from "./learn";
@@ -63,7 +63,7 @@ const quietly = async (url: string): Promise<Fetched | null> => {
 const mediaType = (f: Fetched) => f.contentType.split(";")[0].trim();
 
 export const THIN_SITE_WARNING =
-  "Your website builds its pages in the browser, so there's very little text for your agent to read. Add a PDF or a photo of your menu or price list in Website & documents instead.";
+  "Your website builds its pages in the browser, so there's very little text for your agent to read. Add a PDF or a photo of your menu or price list in Website & links instead.";
 
 /** Reads (or re-reads) a business's website. Safe to call in the background. */
 export async function readWebsite(agentId: string, reason: Reason): Promise<void> {
@@ -74,7 +74,7 @@ export async function readWebsite(agentId: string, reason: Reason): Promise<void
   if (site.reading_started_at && Date.parse(site.reading_started_at) > Date.now() - STUCK_MINUTES * 60_000) return;
   const { data: agent } = await db.from("agents").select("owner_id").eq("id", agentId).maybeSingle();
   if (!agent || await accountRestricted(agent.owner_id)) return;
-  // The owner sees "Reading…" for a first read or "Re-read now"; the daily check happens quietly.
+  // The owner sees "Scanning" for a first read or "Scan"; the daily check happens quietly.
   const visible = reason !== "refresh";
   await db
     .from("business_sites")
@@ -121,7 +121,7 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
   const homeUrl = base.toString();
   const homeHtml = /html/.test(mediaType(home)) ? home.body.toString("utf8") : "";
   if (!robotsAllows(rules, base.pathname)) {
-    throw new Error("Your website's robots.txt asks bots not to read it, so your agent respects that. You can still add your own documents in Website & documents.");
+    throw new Error("Your website's robots.txt asks bots not to read it, so your agent respects that. You can still add your own documents in Website & links.");
   }
 
   // Candidates: the sitemap(s), then links found on the pages read.
@@ -153,6 +153,8 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
 
   const { data: rows } = await db.from("business_sources").select("url, origin, content, content_hash, title").eq("agent_id", agentId);
   const existing = new Map<string, Existing>((rows ?? []).map((r) => [r.url, r]));
+  // Pages the business added as its own links, however the address is written: read there, not twice.
+  const ownLinks = new Set((rows ?? []).filter((r) => r.origin === "link").map((r) => addressKey(r.url)));
 
   const seen = new Set<string>([homeUrl]);
   let queue: string[] = [];
@@ -195,7 +197,7 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
     progress.push({ title: title.slice(0, 80), url });
     const before = existing.get(url);
     // A link the business added itself keeps being read on its own.
-    if (before?.origin === "link") return { links, ok: true };
+    if (before?.origin === "link" || ownLinks.has(addressKey(url))) return { links, ok: true };
     const h = hash(text);
     if (before && before.content_hash === h) {
       await db.from("business_sources").update({ last_read_at: now, status: "ok", error: null }).eq("agent_id", agentId).eq("url", url);
@@ -245,14 +247,14 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
   const warning = total < THIN_SITE_CHARS ? THIN_SITE_WARNING : null;
   const changed = added.length > 0 || removed.length > 0;
 
-  // Learn (again) on a first read, on "Re-read now", or when the website changed.
+  // Learn (again) on a first read, on "Scan", or when the website changed.
   let learned = previous;
   let learnWarning: string | null = null;
   if (reason !== "refresh" || changed || !previous.summary) {
     try {
       learned = await learnFrom(pages);
     } catch {
-      learnWarning = "Your agent read the pages but couldn't summarise them just now. It still answers from the pages; try Re-read now later.";
+      learnWarning = "Your agent read the pages but couldn't summarise them just now. It still answers from the pages; try Scan later.";
     }
   }
 
@@ -336,7 +338,7 @@ export async function refreshDueSites(limit = 1) {
   const stuck = new Date(Date.now() - STUCK_MINUTES * 60_000).toISOString();
   await db
     .from("business_sites")
-    .update({ status: "error", error: "Reading was interrupted. Tap Re-read now to try again.", reading_started_at: null })
+    .update({ status: "error", error: "Reading was interrupted. Tap Scan to try again.", reading_started_at: null })
     .eq("status", "reading")
     .lt("reading_started_at", stuck);
   const cutoff = new Date(Date.now() - SITE_REFRESH_HOURS * 3600_000).toISOString();

@@ -18,10 +18,11 @@ import { pageSettings } from "@/lib/business/public-page";
 import { currentCover } from "@/lib/business/cover-server";
 import { permanentQr } from "@/lib/people/links";
 import { OpenFromHash } from "@/components/OpenFromHash";
-import { BusinessInfoForm, BusinessDetailsForm, SourcesManager } from "./BusinessForms";
+import { BusinessInfoForm, SourcesManager } from "./BusinessForms";
 import { QuestionsAnswers } from "./QuestionsAnswers";
 import { offeringsOf } from "@/lib/business/offerings";
-import { facilityName, groupItems } from "@/lib/business/offerings-shared";
+import { facilityName, groupItems, readingPrices, readingSource } from "@/lib/business/offerings-shared";
+import { Thinking } from "@/components/Thinking";
 import { AddBusinessIntro } from "./AddBusinessIntro";
 import { WaysEditor } from "./WaysEditor";
 import { TestAgent } from "./TestAgent";
@@ -30,7 +31,6 @@ import { businessDescription, publicBusinessDetails } from "@/lib/business/detai
 import { ActionButton } from "@/components/ActionButton";
 import { answerPartnerInviteAction, leavePlacementAction } from "../social-actions";
 import { linkKey, linksIn } from "@/lib/business/extract";
-import { WebsiteCard } from "./WebsiteCard";
 import { PagedList } from "@/components/PagedList";
 import { verifiesByEmail } from "@/lib/business/site";
 import { emailProofEnforced } from "@/lib/business/verify";
@@ -72,6 +72,13 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const rows = (allRows ?? []).filter((source) => source.origin === "link");
   // Prices & facilities, read from the website and documents (owners and managers only: staff see a different page).
   const offerings = await offeringsOf(agent.id);
+  // Prices and facilities being read right now (a document being fetched counts: its prices come next).
+  const readingOfferings = (allRows ?? []).some((s) => (s.origin === "link" ? readingSource(s) : readingPrices(s)));
+  // Website pages that prices were read from, and whether they're being read now.
+  const sitePages = (allRows ?? []).filter((s) => s.origin === "site");
+  const pricedUrls = new Set(offerings.prices.filter((p) => !p.hidden && !p.added && p.source_url).map((p) => p.source_url));
+  const pricePages = sitePages.filter((s) => pricedUrls.has(s.url)).length;
+  const siteReadingPrices = sitePages.some((s) => readingPrices(s));
   const [{ data: site, error: siteError }, person, { data: changes }, dashboard] = await Promise.all([
     supabase.from("business_sites").select("*").maybeSingle(),
     realPerson(user, agent),
@@ -87,8 +94,8 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const inCustomers = new Set(linksIn(info.customers ?? "").map(linkKey));
   const sources = rows.map((source) => ({
     fromText: inAbout.has(linkKey(source.url)) ? "About your business" : inCustomers.has(linkKey(source.url)) ? "For customers only" : null,
-    id: source.id, url: source.url, visibility: source.visibility, status: source.status, kind: source.kind, error: source.error, offerings_error: source.offerings_error, last_read_at: source.last_read_at,
-    words: (source.content ?? "").split(/\s+/).filter(Boolean).length, preview: (source.content ?? "").slice(0, 1500),
+    id: source.id, url: source.url, visibility: source.visibility, status: source.status, kind: source.kind, error: source.error, offerings_error: source.offerings_error, reading_prices: readingPrices(source), last_read_at: source.last_read_at,
+    prices: new Set(offerings.prices.filter((p) => p.source_url === source.url && !p.hidden && !p.added).map((p) => p.group_id)).size,
   }));
   const faqs = info.faqs ?? [];
   const { data: placementRows } = await supabase.from("business_placements").select("id, conversation_id, community_id, status").order("created_at", { ascending: false });
@@ -106,7 +113,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const communitiesCount = places.filter((p) => p.community_id && p.status !== "invited").length;
   const changeList = changes ?? [];
   const siteSummary = siteError ? "Website status unavailable" : site ? `${site.domain} · ${site.live_at ? "Connected" : site.status === "reading" ? "Reading…" : site.status === "error" ? "Needs attention" : "Ready for review"}` : initialWebsite ? "Website saved · connection needed" : "No website connected";
-  const documentsSummary = `${siteSummary}${sources.length ? ` · ${plural(sources.length, "additional document")}` : ""}`;
+  const documentsSummary = `${siteSummary}${sources.length ? ` · ${plural(sources.length, "link")}` : ""}`;
   const publicPage = { settings: pageSettings(agent.business_info), cover: await currentCover(agent.id), qr: await permanentQr(agent.handle) };
   const { page: _look, ...shownInfo } = (agent.business_info ?? {}) as Record<string, unknown>;
   void _look;
@@ -125,7 +132,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
         <div><h1 className="text-lg font-semibold">My Business</h1><p className="text-xs text-muted">Manage your public profile, customer actions and the information your agent uses.</p></div>
         <TestAgent />
       </div>
-      {live && <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status" data-testid="site-live">Your website information is published. Automatic checks are available approximately daily, and changes appear in Website &amp; documents.</p>}
+      {live && <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status" data-testid="site-live">Your website information is published. Automatic checks are available approximately daily, and changes appear in Website &amp; links.</p>}
       <div className="space-y-3" data-testid="business-sections">
         <Fold name={SECTIONS} id="customer-dashboard" icon="📊" title="Customer dashboard" testId="fold-activity" summary={dashboard ? `${period} days · ${plural(dashboard.totals.received, "recorded question")} · agent answered ${dashboard.totals.automatic}` : "Team performance and activity"}>
           <span id="customer-inbox" /><span id="customer-activity" />
@@ -135,23 +142,19 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
           </div>
           {ownerView && scope === "all" && <CustomerDashboard data={dashboard} approvedAnswers={faqs.length} />}
         </Fold>
-        <Fold name={SECTIONS} id="agent-knows" icon="🧠" title="What your agent knows" testId="fold-knows" summary={knowsSummary} badge={{ count: changeList.length, tone: "new" }}>
+        <Fold name={SECTIONS} id="agent-knows" icon="🧠" title="What your agent knows" testId="fold-knows" summary={site?.status === "reading" ? <Thinking label="Scanning your website" className="text-accent" /> : readingOfferings ? <Thinking label="Finding prices" className="text-accent" /> : knowsSummary} badge={{ count: changeList.length, tone: "new" }}>
           <Tabs
             label="What your agent knows"
             tabs={[
               { id: "about-business", label: "About", testId: "fold-own-words" },
-              { id: "business-information", label: "Details", testId: "fold-book" },
+              { id: "website-documents", label: "Website & links", testId: "fold-documents", badge: { count: changeList.length, tone: "new" } },
               { id: "prices-facilities", label: "Prices & facilities", testId: "fold-offerings" },
-              { id: "website-documents", label: "Website & documents", testId: "fold-documents", badge: { count: changeList.length, tone: "new" } },
               { id: "questions-answers", label: "Q&A", testId: "fold-faqs", badge: { count: faqs.length, tone: "total" } },
             ]}
           >
+            {/* About: the description, hours and address (one save), then the buttons customers tap. */}
             <section className={BODY} aria-label="About your business">
-              <BusinessInfoForm about={about} />
-              <Link href={`/u/${agent.handle}`} target="_blank" className="text-sm text-accent underline">See your public page</Link>
-            </section>
-            <section className={BODY} aria-label="Business information">
-              <BusinessDetailsForm hours={details.hours} address={details.address} fromWebsite={Boolean(site?.live_at && (info.hours === undefined || info.address === undefined))} />
+              <BusinessInfoForm about={about} details={{ hours: details.hours, address: details.address, fromWebsite: Boolean(site?.live_at && (info.hours === undefined || info.address === undefined)) }} />
               <div id="book-or-order" className="scroll-mt-40 border-t border-border pt-4">
                 <h3 className="mb-2 font-medium">Customer actions</h3>
                 <p className="mb-3 text-sm" data-testid="taps-explained">
@@ -159,6 +162,39 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
                 </p>
                 <WaysEditor initial={ways} />
               </div>
+              <Link href={`/u/${agent.handle}`} target="_blank" className="block text-sm text-accent underline">See your public page</Link>
+            </section>
+            <section className={BODY} aria-label="Website and documents">
+              <span id="knows" />
+              {/* One list, one box: your website (the whole site) first, then pages, PDFs and photos. */}
+              <div id="links" className="scroll-mt-40 space-y-3">
+                <span id="website" className="block scroll-mt-40" />
+                <div>
+                  <h3 className="font-medium">Website &amp; links</h3>
+                  <p className="hint" data-testid="knows-explained">Your website, menus, price lists: anything your agent should learn from to answer customers. Customers don&apos;t see these links.</p>
+                </div>
+                {siteError || sourcesError ? (
+                  <p role="alert" className="text-sm text-danger">Your website and links could not be loaded. Refresh this page to try again.</p>
+                ) : (
+                  <SourcesManager
+                    key={`${agent.id}:${site?.url ?? initialWebsite}`}
+                    sources={sources}
+                    website={{
+                      site: site ? { domain: site.domain, url: site.url, status: site.status, pagesRead: site.pages_read, lastReadAt: site.last_read_at, lastSuccessAt: site.last_success_at, autoRefresh: site.auto_refresh, live: Boolean(site.live_at), pricePages, readingPrices: siteReadingPrices, warning: site.warning, error: site.error, verifyToken: site.verify_token } : null,
+                      lookup: (agent.business_info as { lookup?: boolean } | null)?.lookup !== false,
+                      verified: Boolean(site && agent.verified_domain === site.domain),
+                      canVerifyByEmail: Boolean(site && emailProofEnforced() && email.confirmed && verifiesByEmail(email.address, site.domain)),
+                      // A website given at sign-up that couldn't be connected yet.
+                      pending: !site && initialWebsite ? { url: initialWebsite, notice: website_error ? "We couldn't connect the website you gave at sign-up. Check the address and try again." : "Not connected yet. Try again, or remove it." } : null,
+                    }}
+                  />
+                )}
+              </div>
+              {changeList.length > 0 && <div data-testid="site-changes" className="space-y-3 rounded-xl border border-border p-3">
+                <div className="flex items-center justify-between gap-3"><h3 className="font-medium">Website updates</h3><ActionButton action={clearSiteChangesAction} label="Clear" /></div>
+                <ul>{changeList.map((change) => <li key={change.id} className="py-2 text-sm" data-testid="site-change">{change.text}<span className="block text-xs text-muted">{dayBucket(change.created_at)}</span></li>)}</ul>
+              </div>}
+              <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Customer-only information</summary><div className="pt-3"><BusinessInfoForm mode="customers" customers={info.customers ?? ""} /></div></details>
             </section>
             <section className={BODY} aria-label="Prices and facilities">
               {/* Like Settings: a row each, opening its own page. */}
@@ -171,39 +207,12 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
                     <span className="text-xl" aria-hidden>{r.icon}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block font-semibold">{r.title}</span>
-                      <span className="block truncate text-xs text-muted">{r.summary}</span>
+                      <span className="block truncate text-xs text-muted">{readingOfferings ? <Thinking label="Scanning" className="text-accent" /> : r.summary}</span>
                     </span>
                     <span className="text-accent" aria-hidden>›</span>
                   </Link>
                 ))}
               </nav>
-            </section>
-            <section className={BODY} aria-label="Website and documents">
-              <span id="knows" />
-              <p className="text-sm" data-testid="knows-explained">
-                <b>What your agent knows.</b> Your agent reads your website and these documents, and uses what it learns to answer customers.
-              </p>
-              <div id="website" className="scroll-mt-40">
-                {siteError ? <p role="alert" className="text-sm text-danger">Your website connection could not be loaded. Refresh this page before adding another.</p> : <WebsiteCard
-                  key={`${agent.id}:${site?.url ?? initialWebsite}`}
-                  site={site ? { domain: site.domain, url: site.url, status: site.status, pagesRead: site.pages_read, lastReadAt: site.last_read_at, lastSuccessAt: site.last_success_at, autoRefresh: site.auto_refresh, live: Boolean(site.live_at), warning: site.warning, error: site.error, verifyToken: site.verify_token } : null}
-                  lookup={(agent.business_info as { lookup?: boolean } | null)?.lookup !== false}
-                  verified={Boolean(site && agent.verified_domain === site.domain)}
-                  canVerifyByEmail={Boolean(site && emailProofEnforced() && email.confirmed && verifiesByEmail(email.address, site.domain))}
-                  initialValue={initialWebsite}
-                  notice={site ? undefined : website_error ? "We couldn't connect the website you gave at sign-up. Check the address and try again." : initialWebsite ? "We couldn't connect your website yet. Check the address and try again." : undefined}
-                />}
-              </div>
-              {changeList.length > 0 && <div data-testid="site-changes" className="space-y-3 rounded-xl border border-border p-3">
-                <div className="flex items-center justify-between gap-3"><h3 className="font-medium">Website updates</h3><ActionButton action={clearSiteChangesAction} label="Clear" /></div>
-                <ul>{changeList.map((change) => <li key={change.id} className="py-2 text-sm" data-testid="site-change">{change.text}<span className="block text-xs text-muted">{dayBucket(change.created_at)}</span></li>)}</ul>
-              </div>}
-              <div id="links" className="scroll-mt-40 space-y-3 border-t border-border pt-4">
-                <h3 className="font-medium">Additional documents &amp; links</h3>
-                <p className="hint">Pages, PDFs and photos your agent reads and learns from, such as a menu or price list. Customers don&apos;t see them as buttons.</p>
-                {sourcesError ? <p role="alert" className="text-sm text-danger">Documents could not be loaded. Refresh to try again.</p> : <SourcesManager sources={sources} />}
-              </div>
-              <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Customer-only information</summary><div className="pt-3"><BusinessInfoForm mode="customers" customers={info.customers ?? ""} /></div></details>
             </section>
             <section className={BODY} aria-label="Questions and answers">
               <p className="hint">Your approved reusable answers. General answers from your team are added here only when you choose to publish them.</p>
@@ -246,7 +255,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
                       <li><SectionLink id="about-business" className="text-accent underline">Description</SectionLink></li>
                       <li><SectionLink id="business-information" className="text-accent underline">Opening hours and address</SectionLink></li>
                       <li><SectionLink id="book-or-order" className="text-accent underline">Book, order and contact buttons</SectionLink></li>
-                      <li><SectionLink id="website-documents" className="text-accent underline">Website, documents and verified badge</SectionLink></li>
+                      <li><SectionLink id="website-documents" className="text-accent underline">Website, links and verified badge</SectionLink></li>
                     </ul>
                   </div>
                 }

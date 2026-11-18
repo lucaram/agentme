@@ -18,6 +18,16 @@ export function linkKey(raw: string): string | null {
   }
 }
 
+/** One address however it's written: no http(s), no www, no trailing slash, no #part. */
+export function addressKey(raw: string): string {
+  try {
+    const u = new URL(raw.trim());
+    return `${u.hostname.toLowerCase().replace(/^www\./, "")}${u.pathname.replace(/\/+$/, "")}${u.search}`;
+  } catch {
+    return raw.trim().toLowerCase();
+  }
+}
+
 /**
  * Only plain http(s) links to a hostname, no credentials, standard ports.
  * allowLocal (development/tests only) also lets loopback hosts use any port.

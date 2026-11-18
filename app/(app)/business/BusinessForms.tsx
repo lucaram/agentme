@@ -2,14 +2,20 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { LocalTime } from "@/components/LocalTime";
-import { addSourceAction, removeSourceAction, rereadSourceAction, saveBusinessInfoAction, saveBusinessDetailsAction, setSourceVisibilityAction, tryQuestionAction } from "./actions";
+import { sourceLabel } from "@/lib/business/offerings-shared";
+import { MAX_SITE_PAGES } from "@/lib/business/site";
+import { PendingWebsiteRow, WebsiteRow, type WebsiteSummary } from "./WebsiteCard";
+import { startWebsiteAction } from "./website-actions";
+import { Thinking } from "@/components/Thinking";
+import { addSourceAction, removeSourceAction, rereadSourceAction, saveBusinessInfoAction, setSourceVisibilityAction, tryQuestionAction } from "./actions";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { CountedField } from "@/components/CountedField";
 import { BUSINESS_LIMITS } from "@/lib/social/limits";
 
-/** "About your business" (public) and "For customers only", in your own words. */
-export function BusinessInfoForm({ about = "", customers = "", mode = "about" }: { about?: string; customers?: string; mode?: "about" | "customers" }) {
+/** "About your business" with opening hours and address (public), or "For customers only", in your own words. */
+export function BusinessInfoForm({ about = "", customers = "", mode = "about", details }: { about?: string; customers?: string; mode?: "about" | "customers"; details?: { hours: string; address: string; fromWebsite: boolean } }) {
   const [state, action, pending] = useActionState(saveBusinessInfoAction, undefined);
   return (
     <form action={action} className="space-y-4" aria-label={mode === "about" ? "Business description" : "Customer-only information"}>
@@ -27,6 +33,14 @@ export function BusinessInfoForm({ about = "", customers = "", mode = "about" }:
           Introduce your business to customers: what you offer and what makes it special.
         </p>
       </div>}
+      {mode === "about" && details && <div id="business-information" className="scroll-mt-40 space-y-3">
+        {details.fromWebsite && <p className="hint">Hours and address from your published website are filled in. Save to use your own.</p>}
+        <CountedField id="hours" label="Opening hours" max={BUSINESS_LIMITS.hours} maxRows={5} defaultValue={details.hours} />
+        <CountedField id="address" label="Business address" max={BUSINESS_LIMITS.address} maxRows={5} defaultValue={details.address} />
+        {/* What was shown, so hours or an address from the website are only saved as yours when you change them. */}
+        <input type="hidden" name="hours_was" value={details.hours} />
+        <input type="hidden" name="address_was" value={details.address} />
+      </div>}
       {mode === "customers" && <div>
         <label className="label" htmlFor="customers">For customers only <span className="font-normal text-muted">· your contacts</span></label>
         <AutoGrowTextarea id="customers" name="customers" className="input" minRows={2} maxRows={8} maxLength={4000} defaultValue={customers} placeholder="e.g. Private events: £35 per person, minimum 20 people." />
@@ -39,35 +53,41 @@ export function BusinessInfoForm({ about = "", customers = "", mode = "about" }:
       {state?.saved && (
         <p className="text-sm text-accent" role="status">
           Saved. Your agent uses this straight away.
-          {state.addedLinks ? ` ${state.addedLinks} linked ${state.addedLinks === 1 ? "page was" : "pages were"} added to Website & documents with the same visibility.` : ""}
+          {state.addedLinks ? ` ${state.addedLinks} linked ${state.addedLinks === 1 ? "page was" : "pages were"} added to Website & links with the same visibility.` : ""}
         </p>
       )}
-      <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : mode === "about" ? "Save description" : "Save customer information"}</button>
+      <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : mode === "about" ? "Save" : "Save customer information"}</button>
     </form>
   );
 }
 
-export function BusinessDetailsForm({ hours, address, fromWebsite }: { hours: string; address: string; fromWebsite: boolean }) {
-  const [state, action, pending] = useActionState(saveBusinessDetailsAction, undefined);
-  return <form action={action} className="space-y-3" aria-label="Business details">
-    {fromWebsite && <p className="hint">Available details from your published website are filled in. Save your changes to override them.</p>}
-    <CountedField id="hours" label="Opening hours" max={BUSINESS_LIMITS.hours} maxRows={5} defaultValue={hours} />
-    <CountedField id="address" label="Business address" max={BUSINESS_LIMITS.address} maxRows={5} defaultValue={address} />
-    {state?.error && <p role="alert" className="text-sm text-danger">{state.error}</p>}
-    {state?.saved && <p role="status" className="text-sm text-accent">Saved. Your page and agent use these details.</p>}
-    <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : "Save business details"}</button>
-  </form>;
+type Source = { fromText: string | null; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; offerings_error: string | null; reading_prices: boolean; last_read_at: string | null; prices: number };
+
+const KIND: Record<string, { label: string; icon: string }> = { page: { label: "Web page", icon: "🌐" }, pdf: { label: "PDF", icon: "📄" }, image: { label: "Photo", icon: "🖼️" }, text: { label: "Text", icon: "📝" } };
+
+/** "https://" added when left out (people paste "trattoria-camden.co.uk"). */
+const withScheme = (raw: string) => (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw.trim()) ? raw.trim() : `https://${raw.trim()}`);
+/** A site's home address (nothing after the domain): the whole website may be meant. */
+function homeAddress(link: string) {
+  try {
+    const u = new URL(link);
+    return u.pathname.replace(/\/+$/, "") === "" && !u.search;
+  } catch {
+    return false;
+  }
 }
 
-type Source = { fromText: string | null; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; offerings_error: string | null; last_read_at: string | null; words: number; preview: string };
+type WebsiteInfo = { site: WebsiteSummary | null; verified: boolean; canVerifyByEmail: boolean; lookup: boolean; pending: { url: string; notice: string } | null };
 
-const KIND: Record<string, string> = { page: "web page", pdf: "PDF", image: "photo", text: "text" };
-
-/** Links your agent reads: website, PDF menu, menu photos. */
-export function SourcesManager({ sources }: { sources: Source[] }) {
+/**
+ * "Website & links": everything your agent learns from, in one list with one box. Your website comes
+ * first (the whole site, read up to 30 pages); then pages, PDFs and photos, each read on its own.
+ */
+export function SourcesManager({ sources, website }: { sources: Source[]; website: WebsiteInfo }) {
   const router = useRouter();
   const [url, setUrl] = useState("");
   const [visibility, setVisibility] = useState("public");
+  const [ask, setAsk] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const act = (fn: () => Promise<{ error?: string }>) =>
@@ -76,95 +96,115 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
       setError(result.error ?? null);
       router.refresh();
     });
+  const addLink = (link: string) =>
+    act(async () => {
+      const result = await addSourceAction(link, visibility);
+      if (!result.error) { setUrl(""); setAsk(null); }
+      return result;
+    });
+  const add = () => {
+    const link = withScheme(url);
+    if (!website.site && homeAddress(link)) return setAsk(link);
+    addLink(link);
+  };
+  const hasRows = Boolean(website.site || website.pending || sources.length);
 
   return (
     <div className="space-y-3">
-      {sources.length > 0 && (
+      {hasRows && (
         <ul className="divide-y divide-border rounded-xl border border-border">
-          {sources.map((s) => (
-            <li key={s.id} className="space-y-1 px-3 py-2.5" data-testid="business-source">
-              <div className="flex flex-wrap items-center gap-2">
-                <a href={s.url} target="_blank" rel="noreferrer noopener" className="min-w-0 flex-1 truncate text-sm font-medium text-accent hover:underline">
-                  {s.url}
-                </a>
-                <select
-                  className="input w-auto py-1 text-xs"
-                  value={s.visibility}
-                  aria-label="Who can see this"
-                  disabled={pending}
-                  onChange={(e) => act(() => setSourceVisibilityAction(s.id, e.target.value))}
-                >
-                  <option value="public">Public</option>
-                  <option value="customers">Customers only</option>
-                </select>
-              </div>
-              <p className="text-xs" data-testid="source-status">
-                {s.status === "ok" ? (
-                  <span className="text-accent">
-                    ✓ Read <LocalTime iso={s.last_read_at ?? new Date(0).toISOString()} /> · {KIND[s.kind ?? "page"] ?? "page"}
-                  </span>
-                ) : s.status === "error" ? (
-                  <span className="text-danger">⚠️ Couldn&apos;t read it: {s.error}</span>
-                ) : (
-                  <span className="text-muted">⏳ Reading…</span>
-                )}
-                {s.status === "ok" && s.offerings_error && (
-                  <span className="text-danger" data-testid="source-offerings-error"> · ⚠️ {s.offerings_error}</span>
-                )}
-                {s.fromText && (
-                  <span className="text-muted" data-testid="source-from-text" title="This address is also written in your text above, so your agent can give it to customers too.">
-                    {" "}· 📝 from your link in {s.fromText}
-                  </span>
-                )}
-              </p>
-              {s.preview && (
-                <details>
-                  <summary className="cursor-pointer text-xs text-muted">What your agent read</summary>
-                  <p className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg bg-accent-soft px-2 py-1 text-xs">{s.preview}</p>
-                </details>
-              )}
-              <div className="flex gap-3 text-xs">
-                <button type="button" className="text-accent underline" disabled={pending} onClick={() => act(() => rereadSourceAction(s.id))}>
-                  Re-read now
-                </button>
-                <button type="button" className="text-muted underline" disabled={pending} onClick={() => act(() => removeSourceAction(s.id))}>
-                  Remove
-                </button>
-              </div>
-            </li>
-          ))}
+          {website.site ? (
+            <WebsiteRow site={website.site} verified={website.verified} canVerifyByEmail={website.canVerifyByEmail} lookup={website.lookup} />
+          ) : website.pending ? (
+            <PendingWebsiteRow url={website.pending.url} notice={website.pending.notice} />
+          ) : null}
+          {sources.map((s) => {
+            const kind = KIND[s.kind ?? "page"] ?? KIND.page;
+            const scanning = s.status === "pending" || s.status === "reading";
+            return (
+              <li key={s.id} className="flex items-start gap-3 px-3 py-3 sm:items-center" data-testid="business-source">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-base" aria-hidden>{kind.icon}</span>
+                {/* Name and status; on a phone the controls go underneath, so the name has room. */}
+                <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <div className="min-w-0 flex-1">
+                    <a href={s.url} target="_blank" rel="noreferrer noopener" title={s.url} className="block truncate text-sm font-medium hover:text-accent hover:underline">
+                      {sourceLabel(s.url)}
+                    </a>
+                    <p className="mt-0.5 truncate text-xs text-muted" data-testid="source-status">
+                      {scanning ? (
+                        <Thinking label="Scanning" className="text-accent" />
+                      ) : s.status === "error" ? (
+                        <span className="text-danger">Couldn&apos;t read it: {s.error}</span>
+                      ) : (
+                        <>
+                          {kind.label} · Scanned <LocalTime iso={s.last_read_at ?? new Date(0).toISOString()} />
+                          {s.reading_prices ? (
+                            <> · <Thinking label="Finding prices" className="text-accent" /></>
+                          ) : s.offerings_error ? (
+                            <span className="text-danger" data-testid="source-offerings-error"> · {s.offerings_error}</span>
+                          ) : s.prices > 0 ? (
+                            <> · <Link href="/business/prices" className="text-accent hover:underline">{s.prices} {s.prices === 1 ? "price" : "prices"}</Link></>
+                          ) : null}
+                        </>
+                      )}
+                      {s.fromText && (
+                        <span data-testid="source-from-text" title="This address is also written in your text above, so your agent can give it to customers too."> · Linked in {s.fromText}</span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <select
+                      className="input w-auto py-1 text-xs"
+                      value={s.visibility}
+                      aria-label="Who can see this"
+                      disabled={pending}
+                      onChange={(e) => act(() => setSourceVisibilityAction(s.id, e.target.value))}
+                    >
+                      <option value="public">Public</option>
+                      <option value="customers">Customers only</option>
+                    </select>
+                    <button type="button" className="rounded-lg px-2 py-1 text-muted hover:bg-accent-soft hover:text-accent disabled:opacity-40" aria-label={`Scan ${sourceLabel(s.url)}`} title="Scan" disabled={pending || scanning} onClick={() => act(() => rereadSourceAction(s.id))}>↻</button>
+                    <button type="button" className="rounded-lg px-2 py-1 text-muted hover:bg-accent-soft hover:text-danger disabled:opacity-40" aria-label={`Remove ${sourceLabel(s.url)}`} title="Remove" disabled={pending} onClick={() => act(() => removeSourceAction(s.id))}>✕</button>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
-      <div className="flex flex-wrap gap-2">
+      <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); add(); }}>
         <input
-          className="input min-w-0 flex-1"
-          type="url"
+          className="input w-full min-w-0 sm:w-auto sm:flex-1"
+          inputMode="url"
+          autoCapitalize="none"
+          spellCheck={false}
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://your-website.com/menu (page, PDF or photo)"
+          onChange={(e) => { setUrl(e.target.value); setAsk(null); }}
+          placeholder="Paste a link: your website, a menu, a PDF or a photo"
           aria-label="Link to read"
         />
-        <select className="input w-auto" value={visibility} onChange={(e) => setVisibility(e.target.value)} aria-label="Visibility of the new link">
+        <select className="input w-auto flex-1 sm:flex-none" value={visibility} onChange={(e) => setVisibility(e.target.value)} aria-label="Visibility of the new link">
           <option value="public">Public</option>
           <option value="customers">Customers only</option>
         </select>
-        <button
-          type="button"
-          className="btn-primary"
-          disabled={pending || !url.trim()}
-          onClick={() =>
-            act(async () => {
-              const result = await addSourceAction(url, visibility);
-              if (!result.error) setUrl("");
-              return result;
-            })
-          }
-        >
-          Add link
-        </button>
-      </div>
+        <button className="btn-primary" disabled={pending || !url.trim()}>Add link</button>
+      </form>
+      {/* A website's home address: the whole site, or only that page? Asked once, while no website is connected. */}
+      {ask && (
+        <div className="space-y-2 rounded-xl border border-accent/40 bg-accent-soft/40 p-3" data-testid="whole-site-choice">
+          <p className="text-sm font-medium">This looks like your website. What should your agent read?</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className="btn-primary" disabled={pending} onClick={() => start(async () => { setError(null); const r = await startWebsiteAction(ask); if (r.error) setError(r.error); else router.push("/business/setup"); })}>
+              {pending ? "Starting…" : `The whole website (up to ${MAX_SITE_PAGES} pages)`}
+            </button>
+            <button type="button" className="btn-ghost" disabled={pending} onClick={() => addLink(ask)}>Just this page</button>
+            <button type="button" className="text-sm text-muted hover:text-foreground" onClick={() => setAsk(null)}>Cancel</button>
+          </div>
+          <p className="hint">The whole website: you check what your agent learned before it goes live, then it&apos;s scanned again daily and can earn the ✓ Verified badge. A website is always public.</p>
+        </div>
+      )}
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
-      <p className="hint" data-testid="visibility-hint"><b className="font-medium">Public:</b> your agent can use it when answering anyone.<br /><b className="font-medium">Customers only:</b> only in one-to-one chats with your contacts. Links are re-read daily.</p>
+      <p className="hint" data-testid="visibility-hint"><b className="font-medium">Public:</b> used when answering anyone. <b className="font-medium">Customers only:</b> used only in one-to-one chats with your contacts. Scanned again daily.</p>
     </div>
   );
 }

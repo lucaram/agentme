@@ -2,13 +2,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { ChatDialog } from "@/components/chat/ChatDialog";
 import {
   COMMON_TAGS, PRICE_TYPES, PRICE_TYPE_LABEL, TAG_ICON, MAX_TAGS, durationText, formatPrice, groupItems, priceNote, priceText,
   type Item, type Kind, type PriceRow, type PriceType,
 } from "@/lib/business/offerings-shared";
-import { deleteItemAction, hideItemAction, rereadOfferingsAction, saveItemAction } from "./actions";
+import { deleteItemAction, hideItemAction, saveItemAction } from "./actions";
 
 const NO_CATEGORY = "Other";
 type Draft = {
@@ -31,7 +30,7 @@ function Tag({ tag }: { tag: string }) {
  * ("10-inch £7.50 · 12-inch £8.50"), tags, and for services how they're priced, how long they take and
  * whether they need booking. Tap one to change anything.
  */
-export function PricesEditor({ prices, hasSources }: { prices: PriceRow[]; hasSources: boolean }) {
+export function PricesEditor({ prices }: { prices: PriceRow[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -84,7 +83,6 @@ export function PricesEditor({ prices, hasSources }: { prices: PriceRow[]; hasSo
 
       <div className="flex flex-wrap items-center gap-2">
         {inTab.length > 6 && <input className="input w-auto min-w-0 flex-1 py-1 text-sm" placeholder={`Search ${tab === "product" ? "products" : "services"}`} aria-label="Search" value={query} onChange={(e) => setQuery(e.target.value)} />}
-        {hasSources && <button type="button" className="btn-ghost ml-auto py-1 text-xs" disabled={pending} onClick={() => act(rereadOfferingsAction, "Looking again. This can take a minute.")}>↻ Look again</button>}
       </div>
       {categories.length > 1 && (
         <div className="no-scrollbar flex gap-1.5 overflow-x-auto" aria-label="Categories">
@@ -99,8 +97,7 @@ export function PricesEditor({ prices, hasSources }: { prices: PriceRow[]; hasSo
 
       {!inTab.length && (
         <p className="text-sm text-muted">
-          {tab === "product" ? "No products yet." : "No services yet: a haircut, a repair, room hire, a lesson…"}{" "}
-          {tab === "product" && <>{hasSources ? "If your menu or price list is a document or photo, add it in " : "Add your menu or price list in "}<Link href="/business#website-documents" className="text-accent underline">Website &amp; documents</Link>, or add one below.</>}
+          {tab === "product" ? "No products yet. Add your menu above, or one product below." : "No services yet: a haircut, a repair, room hire, a lesson…"}
         </p>
       )}
 

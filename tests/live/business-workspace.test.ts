@@ -20,15 +20,24 @@ describe.skipIf(!dbUp)("business workspace compatibility and privacy", () => {
   const read = async () => (await f.db.from("agents").select("business_info").eq("id", f.business.agent.id).single()).data!.business_info as Record<string, unknown>;
 
   it("separate forms preserve existing FAQs, actions and customer-only information", async () => {
-    const { saveBusinessInfoAction, saveBusinessDetailsAction, saveWaysAction } = await actions();
+    const { saveBusinessInfoAction, saveWaysAction } = await actions();
     await f.db.from("agents").update({ business_info: { ...f.business.agent.business_info as object, customers: "Private events: secret conditions" } }).eq("id", f.business.agent.id);
     const about = new FormData(); about.set("about", "A welcoming public business introduction.");
     expect(await saveBusinessInfoAction(undefined, about)).toMatchObject({ saved: true });
     expect(await read()).toMatchObject({ about: "A welcoming public business introduction.", customers: "Private events: secret conditions", faqs: expect.any(Array), ways: expect.any(Array) });
     const customer = new FormData(); customer.set("customers", "Updated private customer terms");
     expect(await saveBusinessInfoAction(undefined, customer)).toMatchObject({ saved: true });
-    const details = new FormData(); details.set("hours", "Every day 10–8"); details.set("address", "12 Public Street");
-    expect(await saveBusinessDetailsAction(undefined, details)).toMatchObject({ saved: true });
+    // Hours and address are saved with the description (About); shown-but-unchanged ones aren't saved as yours.
+    const withoutDetails = await read();
+    delete withoutDetails.hours;
+    delete withoutDetails.address;
+    await f.db.from("agents").update({ business_info: withoutDetails as never }).eq("id", f.business.agent.id);
+    const details = new FormData(); details.set("about", "A welcoming public business introduction."); details.set("hours", "Every day 10–8"); details.set("hours_was", "Every day 10–8"); details.set("address", "12 Public Street"); details.set("address_was", "");
+    expect(await saveBusinessInfoAction(undefined, details)).toMatchObject({ saved: true });
+    expect(await read()).toMatchObject({ address: "12 Public Street" });
+    expect((await read()).hours).toBeUndefined();
+    details.set("hours_was", "");
+    expect(await saveBusinessInfoAction(undefined, details)).toMatchObject({ saved: true });
     const many = Array.from({ length: 8 }, (_, i) => ({ kind: "book", value: `https://sole.example/book/${i}`, label: `Book ${i}`, primary: i === 7 }));
     expect(await saveWaysAction(many)).toMatchObject({ saved: true });
     const info = await read();

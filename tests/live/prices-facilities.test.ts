@@ -174,4 +174,22 @@ describe.skipIf(!dbUp)("prices & facilities (live)", () => {
     await offerings.readOfferings(doc!.id, { force: true });
     expect((await source()).offerings_error).toBeNull();
   });
+
+  it("Scan shows every document as being read straight away; each one stops showing it when its read ends", async () => {
+    const { offerings, actions } = await lib();
+    const reading = async () => ((await f.db.from("business_sources").select("offerings_reading_at").eq("agent_id", f.business.agent.id).not("content", "is", null)).data ?? []).filter((s) => s.offerings_reading_at).length;
+    expect(await actions.rereadOfferingsAction()).toEqual({});
+    expect(await reading()).toBeGreaterThan(1);
+    await offerings.readAllOfferings(f.business.agent.id, { force: true });
+    expect(await reading()).toBe(0);
+  });
+
+  it("a page the website scan read, added again as a link (written differently), becomes that link: read once, not twice", async () => {
+    const { actions } = await lib();
+    const { data: page } = await f.db.from("business_sources").insert({ agent_id: f.business.agent.id, url: "https://www.sole.example/drinks/", origin: "site", visibility: "public", status: "ok", kind: "page", content: "Drinks\nLemonade £3", last_read_at: new Date().toISOString() }).select("id").single();
+    expect(await actions.addSourceAction("https://sole.example/drinks", "customers")).toEqual({});
+    const rows = (await f.db.from("business_sources").select("id, origin, visibility").eq("agent_id", f.business.agent.id).ilike("url", "%drinks%")).data ?? [];
+    expect(rows).toEqual([{ id: page!.id, origin: "link", visibility: "customers" }]);
+    expect(await actions.addSourceAction("http://www.sole.example/drinks#menu", "public")).toEqual({ error: "That link is already there." });
+  });
 });

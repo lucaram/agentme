@@ -24,6 +24,20 @@ const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 
 /** One source (a document or a website page): read again for prices and facilities if its text changed. */
 export async function readOfferings(sourceId: string, opts: { force?: boolean } = {}) {
+  try {
+    await readNow(sourceId, opts);
+  } finally {
+    // However it ended, it's no longer being read (pages showing "Scanning" update).
+    await adminClient().from("business_sources").update({ offerings_reading_at: null }).eq("id", sourceId).not("offerings_reading_at", "is", null);
+  }
+}
+
+/** Shown as being read straight away (before each one's turn comes). */
+export async function markReading(agentId: string, origin?: "site" | "link") {
+  await adminClient().from("business_sources").update({ offerings_reading_at: new Date().toISOString() }).eq("agent_id", agentId).not("content", "is", null).in("origin", origin ? [origin] : ["link", "site"]);
+}
+
+async function readNow(sourceId: string, opts: { force?: boolean }) {
   const db = adminClient();
   const { data: source } = await db.from("business_sources").select("id, agent_id, url, content, visibility, origin, offerings_hash, last_read_at").eq("id", sourceId).maybeSingle();
   if (!source?.content || !["link", "site"].includes(source.origin)) return;
@@ -33,6 +47,7 @@ export async function readOfferings(sourceId: string, opts: { force?: boolean } 
   const readAt = source.last_read_at ?? new Date().toISOString();
   let found: Offerings = { items: [], facilities: [] };
   if (mentionsOfferings(source.content)) {
+    await db.from("business_sources").update({ offerings_reading_at: new Date().toISOString() }).eq("id", source.id);
     // A long menu is read in parts side by side: one answer for all of it would be cut off.
     const parts = splitForReading(source.content.slice(0, MAX_TEXT));
     const readPart = (text: string, i: number) => {
@@ -51,7 +66,7 @@ export async function readOfferings(sourceId: string, opts: { force?: boolean } 
     try {
       found = tidyOfferings(mergeOfferings(await Promise.all(parts.map((text, i) => readPart(text, i).catch(() => readPart(text, i))))));
     } catch (error) {
-      // What was there stays; the business sees why, and "Look again" tries again.
+      // What was there stays; the business sees why, and "Scan" tries again.
       console.error("[offerings] couldn't read", source.url, error);
       await db.from("business_sources").update({ offerings_error: "Prices couldn't be read from it this time." }).eq("id", source.id);
       return;
@@ -94,8 +109,9 @@ export async function readOfferings(sourceId: string, opts: { force?: boolean } 
   await db.from("business_sources").update({ offerings_hash: digest, offerings_error: null, offerings_read_at: new Date().toISOString() }).eq("id", source.id);
 }
 
-/** Every source of a business, one after another ("Look again", and after the website is read). */
+/** Every source of a business, one after another ("Scan", and after the website is read). */
 export async function readAllOfferings(agentId: string, opts: { force?: boolean; origin?: "site" | "link" } = {}) {
+  await markReading(agentId, opts.origin);
   const query = adminClient().from("business_sources").select("id").eq("agent_id", agentId).not("content", "is", null).in("origin", opts.origin ? [opts.origin] : ["link", "site"]);
   const { data } = await query;
   for (const { id } of data ?? []) await readOfferings(id, opts).catch(() => undefined);

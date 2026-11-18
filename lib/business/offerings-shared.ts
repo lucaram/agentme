@@ -123,6 +123,41 @@ export function cleanTags(tags: string[]): string[] {
   return out.slice(0, MAX_TAGS);
 }
 
+// ------------------------------------------------------------- where prices come from
+
+export type SourceRow = {
+  id: string; url: string; origin: string; status: string; error: string | null;
+  offerings_error: string | null; offerings_reading_at: string | null; offerings_read_at: string | null; last_read_at: string | null;
+};
+/** One row of "Where your prices come from": a document or link, or the website's pages together. */
+export type PriceSource = { key: string; label: string; site: boolean; pages: number; items: number; reading: boolean; error: string | null; readAt: string | null };
+
+/** A read that hasn't ended after this long is taken to have stopped. */
+const READING_MS = 10 * 60_000;
+export const readingPrices = (s: Pick<SourceRow, "offerings_reading_at">, now = Date.now()) => Boolean(s.offerings_reading_at && now - Date.parse(s.offerings_reading_at) < READING_MS);
+/** Being fetched, or being read for prices and facilities. */
+export const readingSource = (s: Pick<SourceRow, "status" | "offerings_reading_at">, now = Date.now()) => s.status === "pending" || s.status === "reading" || readingPrices(s, now);
+
+export function priceSources(sources: SourceRow[], prices: PriceRow[], now: number, siteLabel: string | null): PriceSource[] {
+  const items = new Map<string, Set<string>>();
+  for (const p of prices) if (p.source_url && !p.hidden && !p.added) items.set(p.source_url, (items.get(p.source_url) ?? new Set()).add(p.group_id));
+  const count = (url: string) => items.get(url)?.size ?? 0;
+  const pages = sources.filter((s) => s.origin === "site");
+  const site: PriceSource = {
+    key: "site", label: siteLabel ?? "Your website", site: true,
+    pages: pages.filter((s) => count(s.url) > 0).length,
+    items: pages.reduce((n, s) => n + count(s.url), 0),
+    reading: pages.some((s) => readingPrices(s, now)),
+    error: pages.find((s) => s.offerings_error)?.offerings_error ?? null,
+    readAt: pages.map((s) => s.offerings_read_at).filter((x): x is string => Boolean(x)).sort().at(-1) ?? null,
+  };
+  const links = sources.filter((s) => s.origin === "link").map((s) => ({
+    key: s.id, label: sourceLabel(s.url), site: false, pages: 1, items: count(s.url), reading: readingSource(s, now),
+    error: s.status === "error" ? s.error : s.offerings_error, readAt: s.offerings_read_at ?? s.last_read_at,
+  }));
+  return [...(site.items || site.reading || site.error ? [site] : []), ...links];
+}
+
 // ------------------------------------------------------------- reading long documents
 
 /** Text read in one go; a longer menu is read in parts, side by side. */
