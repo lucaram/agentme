@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- Private local object URLs are used only to review unsent files. */
 import { useEffect, useRef, useState } from "react";
-import { fileSize } from "@/lib/chat/rich";
+import { fileIcon, fileSize } from "@/lib/chat/rich";
 import { ChatDialog } from "./ChatDialog";
 import { VoiceMessage } from "./VoiceMessage";
 
@@ -44,7 +44,7 @@ export function AttachmentPreview({ files, busy, onRemove }: { files: DraftFile[
         {file.kind === "video" && <video src={file.url} controls playsInline preload="metadata" className={multiple ? "h-32 w-full rounded-lg bg-black object-contain" : "max-h-[min(24dvh,12rem)] max-w-[min(20rem,65vw)] rounded-lg bg-black object-contain"} />}
         {file.kind === "audio" && <VoiceMessage src={file.url} name={file.file.name} />}
         {file.kind === "document" ? <div className="flex min-h-12 items-center gap-2 pr-9">
-          <span className="text-2xl" aria-hidden>📄</span><div className="min-w-0"><p className="truncate text-xs font-medium" title={file.file.name}>{file.file.name}</p><p className="mt-1 text-[11px] text-muted">{fileSize(file.file.size)}</p></div>
+          <span className="text-2xl" aria-hidden>{fileIcon(file.file.name)}</span><div className="min-w-0"><p className="truncate text-xs font-medium" title={file.file.name}>{file.file.name}</p><p className="mt-1 text-[11px] text-muted">{fileSize(file.file.size)}</p></div>
         </div> : <div className={`mt-2 ${!multiple && file.kind !== "audio" ? "w-0 min-w-full" : "max-w-48"}`}><p className="truncate text-[11px]" title={file.file.name}>{file.file.name}</p><p className="text-[11px] text-muted">{fileSize(file.file.size)}</p></div>}
       </li>)}
     </ul>

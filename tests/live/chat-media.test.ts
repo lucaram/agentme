@@ -122,7 +122,7 @@ describe.skipIf(!dbUp)("private rich chat messages", () => {
     expect((await long.json()).error).toBe("long.pdf has more than 20 pages. Attach the pages you need.");
     const wav = Buffer.alloc(44 + 1600); wav.write("RIFF"); wav.writeUInt32LE(wav.length - 8, 4); wav.write("WAVEfmt ", 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(16000, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write("data", 36); wav.writeUInt32LE(1600, 40);
     const voice = await upload(f.myAgent, undefined, "voice.wav", new Uint8Array(wav)); expect(voice.status).toBe(400);
-    expect((await voice.json()).error).toMatch(/^Your agent reads photos, PDFs and text files/);
+    expect((await voice.json()).error).toMatch(/^Your agent reads photos, PDFs, Word, Excel, PowerPoint and text files/);
     const toBusiness = await upload(f.direct, undefined, "flyer.pdf", pdf(1)); expect(toBusiness.status).toBe(400);
     expect((await toBusiness.json()).error).toBe("A business's agent reads text only.");
     // Only files: no location or poll for your agent; only your own unsent uploads.
@@ -146,6 +146,13 @@ describe.skipIf(!dbUp)("private rich chat messages", () => {
     // A later question in the same topic: answered from the notes, without the file.
     await withThread({ conversationId: f.myAgent, threadId: thread!.id }, () => handleOwnerMessage({ userId: f.luca.userId, agent: f.luca.agent, conversationId: f.myAgent, text: "How much are the tickets?" }));
     expect(await lastReply()).toContain("Tickets £10");
+    // Documents are read as text (Word, Excel, PowerPoint, OpenDocument, RTF, CSV): no AI needed to read them.
+    const csv = await upload(f.myAgent, undefined, "prices.csv", "item,price\npizza,9\n"); expect(csv.status).toBe(200);
+    const sheet = await agentFilesFrom(f.myAgent, f.luca.userId, { clientId: crypto.randomUUID(), attachments: [(await csv.json()).id] });
+    if ("error" in sheet) throw new Error(sheet.error);
+    expect(sheet.files[0]).toMatchObject({ name: "prices.csv", mime: "text/csv", text: "item,price\npizza,9" });
+    await withThread({ conversationId: f.myAgent, threadId: thread!.id }, () => handleOwnerMessage({ userId: f.luca.userId, agent: f.luca.agent, conversationId: f.myAgent, text: "What does pizza cost?", files: { clientId: sheet.clientId, items: sheet.files } }));
+    expect(await lastReply()).toContain("From prices.csv: item,price\npizza,9");
     // Clients can't read the private notes.
     const { error: hidden } = await (session.client as AuthClient).from("chat_attachments").select("agent_notes").in("id", ids);
     expect(hidden).not.toBeNull();

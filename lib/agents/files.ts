@@ -4,20 +4,30 @@ import { adminClient } from "@/lib/supabase/admin";
 import { llm } from "@/lib/llm";
 import { ATTACHMENT_BUCKET } from "@/lib/chat/files";
 import { AGENT_MAX_FILES } from "@/lib/chat/rich";
-import { agentFileProblem } from "./file-checks";
+import { AGENT_TEXT_CHARS, agentFileProblem, readAsText } from "./file-checks";
+import { officeText, rtfText } from "@/lib/chat/containers";
 export { agentFileProblem, pdfPages } from "./file-checks";
 import { wrapUntrusted } from "./prompts";
 
 /**
- * Photos, PDFs and text files the owner attaches in My Agent. Their agent reads them to answer the
+ * Photos, PDFs and documents (Word, Excel, PowerPoint, OpenDocument, RTF, CSV, text) the owner attaches in My Agent. Their agent reads them to answer the
  * owner; the files themselves are never passed on. What was read is kept as private notes on the file,
  * so later questions in the same topic don't need the file again.
  */
 
-export type AgentFile = { id: string; name: string; mime: string; kind: "image" | "document"; body: Buffer };
+/** `text`: a document read as text (Word, Excel, PowerPoint, OpenDocument, RTF, CSV, plain text). */
+export type AgentFile = { id: string; name: string; mime: string; kind: "image" | "document"; body: Buffer; text?: string };
 export type FileNotes = { name: string; notes: string };
 
-const MAX_TEXT = 12_000;
+/** What's kept as notes (the whole text is used for the answer to the message it came with). */
+const MAX_NOTES = 20_000;
+
+/** A document's words. */
+function documentText(file: { name: string; mime: string }, body: Buffer): string {
+  if (file.mime === "text/plain" || file.mime === "text/csv") return body.toString("utf8");
+  if (file.mime === "application/rtf") return rtfText(body.toString("latin1"));
+  return officeText(body, file.name.split(".").at(-1) ?? "");
+}
 
 const RichFiles = z.object({ clientId: z.uuid(), attachments: z.array(z.uuid()).min(1), location: z.null().optional(), poll: z.null().optional() }).strict();
 
@@ -27,7 +37,7 @@ const RichFiles = z.object({ clientId: z.uuid(), attachments: z.array(z.uuid()).
  */
 export async function agentFilesFrom(conversationId: string, userId: string, raw: unknown): Promise<{ error: string } | { clientId: string; files: AgentFile[] }> {
   const parsed = RichFiles.safeParse(raw);
-  if (!parsed.success) return { error: "Your agent reads photos, PDFs and text files. Share locations and polls in a chat with people." };
+  if (!parsed.success) return { error: "Your agent reads photos, PDFs, Word, Excel, PowerPoint and text files. Share locations and polls in a chat with people." };
   const ids = [...new Set(parsed.data.attachments)];
   if (ids.length > AGENT_MAX_FILES) return { error: `Attach up to ${AGENT_MAX_FILES} files for your agent at a time.` };
   const db = adminClient();
@@ -42,7 +52,12 @@ export async function agentFilesFrom(conversationId: string, userId: string, raw
     const body = Buffer.from(await blob.arrayBuffer());
     const problem = agentFileProblem(row, body);
     if (problem) return { error: problem };
-    files.push({ id: row.id, name: row.name, mime: row.mime, kind: row.kind as AgentFile["kind"], body });
+    let text: string | undefined;
+    if (readAsText(row.mime)) {
+      try { text = documentText(row, body).trim(); } catch { return { error: `Couldn't read ${row.name}. Save it again (or as PDF) and attach it.` }; }
+      if (text.length > AGENT_TEXT_CHARS) return { error: `${row.name} is too long for your agent (more than about 20 pages). Attach the part you need.` };
+    }
+    files.push({ id: row.id, name: row.name, mime: row.mime, kind: row.kind as AgentFile["kind"], body, ...(text !== undefined ? { text } : {}) });
   }
   return { clientId: parsed.data.clientId, files };
 }
@@ -59,7 +74,7 @@ export async function noteFiles(files: AgentFile[]): Promise<FileNotes[]> {
   const db = adminClient();
   return Promise.all(files.map(async (file) => {
     let notes: string;
-    if (file.mime === "text/plain") notes = file.body.toString("utf8").slice(0, MAX_TEXT);
+    if (file.text !== undefined) notes = file.text;
     else {
       try {
         notes = await llm().generateText({
@@ -75,8 +90,8 @@ export async function noteFiles(files: AgentFile[]): Promise<FileNotes[]> {
         notes = "";
       }
     }
-    notes = notes.trim().slice(0, MAX_TEXT) || "(This file couldn't be read.)";
-    await db.from("chat_attachments").update({ agent_notes: notes, agent_notes_at: new Date().toISOString() }).eq("id", file.id);
+    notes = notes.trim() || "(This file couldn't be read.)";
+    await db.from("chat_attachments").update({ agent_notes: notes.slice(0, MAX_NOTES), agent_notes_at: new Date().toISOString() }).eq("id", file.id);
     return { name: file.name, notes };
   }));
 }

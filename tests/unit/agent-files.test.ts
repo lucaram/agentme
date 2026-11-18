@@ -20,7 +20,7 @@ describe("files your agent reads in My Agent", () => {
   });
 
   it("leaves voice messages and videos for chats with people", () => {
-    expect(agentFileProblem({ name: "hello.webm", mime: "audio/webm", kind: "audio", bytes: 30_000 })).toMatch(/^Your agent reads photos, PDFs and text files/);
-    expect(agentFileProblem({ name: "clip.mp4", mime: "video/mp4", kind: "video", bytes: 300_000 })).toMatch(/^Your agent reads photos, PDFs and text files/);
+    expect(agentFileProblem({ name: "hello.webm", mime: "audio/webm", kind: "audio", bytes: 30_000 })).toMatch(/^Your agent reads photos, PDFs, Word, Excel, PowerPoint and text files/);
+    expect(agentFileProblem({ name: "clip.mp4", mime: "video/mp4", kind: "video", bytes: 300_000 })).toMatch(/^Your agent reads photos, PDFs, Word, Excel, PowerPoint and text files/);
   });
 });
