@@ -13,6 +13,8 @@ import { withUsageContext } from "@/lib/usage/context";
 import { describeRetry, hit } from "@/lib/limits";
 import { MAX_FEATURED, normaliseWay, type Way } from "@/lib/business/booking";
 import { patchBusinessInfo } from "@/lib/business/profile";
+import { pruneOfferings, readAllOfferings } from "@/lib/business/offerings";
+import { FACILITY_KEYS, MAX_PRICES } from "@/lib/business/offerings-shared";
 import { requireBusinessPermission } from "@/lib/business/access";
 import { BUSINESS_LIMITS } from "@/lib/social/limits";
 
@@ -116,6 +118,7 @@ export async function removeSourceAction(id: string): Promise<Out> {
   const source = await ownSource(id, agent.id);
   if (!source) return { error: "Not found." };
   await adminClient().from("business_sources").delete().eq("id", source.id).eq("agent_id", agent.id);
+  await pruneOfferings(agent.id);
   revalidatePath(`/u/${agent.handle}`);
   revalidatePath("/business");
   return {};
@@ -125,7 +128,10 @@ export async function setSourceVisibilityAction(id: string, visibility: string):
   const { agent } = await requireBusiness();
   const source = await ownSource(id, agent.id);
   if (!source) return { error: "Not found." };
-  await adminClient().from("business_sources").update({ visibility: visibility === "customers" ? "customers" : "public" }).eq("id", id);
+  const next = visibility === "customers" ? "customers" : "public";
+  await adminClient().from("business_sources").update({ visibility: next }).eq("id", id);
+  await adminClient().from("business_prices").update({ visibility: next }).eq("agent_id", agent.id).eq("source_url", source.url);
+  await adminClient().from("business_facilities").update({ visibility: next }).eq("agent_id", agent.id).eq("source_url", source.url);
   revalidatePath("/business");
   return {};
 }
@@ -207,4 +213,74 @@ export async function saveBusinessDetailsAction(_prev: Out | undefined, form: Fo
   revalidatePath("/business");
   revalidatePath(`/u/${agent.handle}`);
   return { saved: true };
+}
+
+// ------------------------------------------------------------- Prices & facilities (read from your website and documents)
+
+const PriceInput = z.object({ item: z.string().trim().min(1).max(120), variant: z.string().trim().max(60).nullable(), price: z.coerce.number().min(0).max(99999), currency: z.string().trim().regex(/^[A-Za-z]{3}$/) });
+
+/** Correct a price your agent read (a correction wins over the document, and is kept). */
+export async function correctPriceAction(id: string, price: number): Promise<Out> {
+  const { agent } = await requireBusiness();
+  const amount = Number(price);
+  if (!z.uuid().safeParse(id).success || !Number.isFinite(amount) || amount < 0 || amount > 99999) return { error: "Enter a price, e.g. 8.50." };
+  const { error } = await adminClient().from("business_prices").update({ price: Math.round(amount * 100) / 100, corrected: true, updated_at: new Date().toISOString() }).eq("id", id).eq("agent_id", agent.id);
+  revalidatePath("/business");
+  return error ? { error: "Couldn't save that price." } : {};
+}
+
+/** Hide a price from your agent (and show it again). */
+export async function hidePriceAction(id: string, hidden: boolean): Promise<Out> {
+  const { agent } = await requireBusiness();
+  if (!z.uuid().safeParse(id).success) return { error: "Not found." };
+  await adminClient().from("business_prices").update({ hidden: Boolean(hidden), updated_at: new Date().toISOString() }).eq("id", id).eq("agent_id", agent.id);
+  revalidatePath("/business");
+  return {};
+}
+
+/** A price none of your documents mention. */
+export async function addPriceAction(input: { item: string; variant: string | null; price: number; currency: string }): Promise<Out> {
+  const { agent } = await requireBusiness();
+  const parsed = PriceInput.safeParse(input);
+  if (!parsed.success) return { error: "Give the item and its price, e.g. Margherita pizza, 8.50." };
+  const db = adminClient();
+  const { count } = await db.from("business_prices").select("id", { count: "exact", head: true }).eq("agent_id", agent.id);
+  if ((count ?? 0) >= MAX_PRICES) return { error: `You can have up to ${MAX_PRICES} prices.` };
+  const { error } = await db.from("business_prices").insert({ agent_id: agent.id, item: parsed.data.item, variant: parsed.data.variant || null, price: Math.round(parsed.data.price * 100) / 100, currency: parsed.data.currency.toUpperCase(), added: true, visibility: "public" });
+  revalidatePath("/business");
+  return error ? { error: "Couldn't add that price." } : {};
+}
+
+/** Remove a price you added yourself (prices read from a document are hidden instead). */
+export async function removePriceAction(id: string): Promise<Out> {
+  const { agent } = await requireBusiness();
+  if (!z.uuid().safeParse(id).success) return { error: "Not found." };
+  await adminClient().from("business_prices").delete().eq("id", id).eq("agent_id", agent.id).eq("added", true);
+  revalidatePath("/business");
+  return {};
+}
+
+/** Confirm or change a facility: yours wins over anything read later. "unknown" clears it. */
+export async function setFacilityAction(key: string, status: "yes" | "no" | "unknown"): Promise<Out> {
+  const { agent } = await requireBusiness();
+  if (!(FACILITY_KEYS as readonly string[]).includes(key) || !["yes", "no", "unknown"].includes(status)) return { error: "Not found." };
+  const db = adminClient();
+  if (status === "unknown") await db.from("business_facilities").delete().eq("agent_id", agent.id).eq("key", key);
+  else {
+    const { data: current } = await db.from("business_facilities").select("status, evidence, source_url, source_label, visibility").eq("agent_id", agent.id).eq("key", key).maybeSingle();
+    // Confirming what was read keeps its words; changing it replaces them.
+    const same = current?.status === status;
+    await db.from("business_facilities").upsert({ agent_id: agent.id, key, status, evidence: same ? current?.evidence ?? null : null, source_url: same ? current?.source_url ?? null : null, source_label: same ? current?.source_label ?? null : null, visibility: current?.visibility ?? "public", confirmed: true, updated_at: new Date().toISOString() });
+  }
+  revalidatePath("/business");
+  return {};
+}
+
+/** "Look again": read every document and page for prices and facilities now. */
+export async function rereadOfferingsAction(): Promise<Out> {
+  const { user, agent } = await requireBusiness();
+  if (!(await hit("offeringsRereadsPerAgent", agent.id)).allowed) return { error: "You've done this a lot just now. Try again in a few minutes." };
+  after(() => withUsageContext({ agentId: agent.id, userId: user.id }, () => readAllOfferings(agent.id, { force: true })));
+  revalidatePath("/business");
+  return {};
 }

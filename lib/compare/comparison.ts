@@ -61,6 +61,9 @@ const names = (list: string[]) => (list.length <= 1 ? list.join("") : `${list.sl
 
 /** "📄 From trattoria.example/menu.pdf · checked today" at the end of an answer → "menu.pdf"; the answer without it. */
 export function splitSource(answer: string): { text: string; source: string | null } {
+  // From Prices & facilities: "(from menu.pdf, read 18 Nov)" or "(confirmed by the business)".
+  const note = answer.match(/\s*\((from [^()]{1,90}, read [^()]{1,20}|confirmed by the business)\)\.?\s*$/i);
+  if (note) return { text: answer.slice(0, note.index).trim(), source: note[1].replace(/^from /i, "") };
   const m = answer.match(/\n*📄 From (\S+) · checked [^\n]+\s*$/);
   if (!m) return { text: answer.trim(), source: null };
   const path = m[1].replace(/\/+$/, "");

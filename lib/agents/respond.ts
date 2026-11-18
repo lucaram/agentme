@@ -1,3 +1,4 @@
+import { offeringsKnowledgeFor } from "@/lib/business/offerings";
 import { llm } from "@/lib/llm";
 import { canContact, type ContactPolicy, type Relationship } from "@/lib/policy/contactPolicy";
 import { factsByRequest, isRequestableCategory, selectDisclosableFacts, type Fact, type RequestableCategory } from "@/lib/policy/disclosure";
@@ -238,7 +239,7 @@ export type BusinessContext = {
  * one of the business's contacts ("customers"). Also used by "Try it".
  */
 export async function draftBusinessAnswer(
-  recipient: Pick<RecipientAgent, "display_name" | "handle" | "business_info">,
+  recipient: Pick<RecipientAgent, "id" | "display_name" | "handle" | "business_info">,
   question: string,
   sources: KnowledgeSource[],
   audience: "public" | "customers",
@@ -246,7 +247,13 @@ export async function draftBusinessAnswer(
   focus: readonly string[] = [],
 ) {
   const trimmed = question.trim().slice(0, 1000);
-  const { info, websites } = businessKnowledge(recipient, sources, audience, trimmed, focus);
+  const knowledge = businessKnowledge(recipient, sources, audience, trimmed, focus);
+  // Prices & facilities, as read from its website and documents and checked by the business.
+  const offerings = await offeringsKnowledgeFor(recipient.id, audience).catch(() => "");
+  const info = offerings ? `${knowledge.info}
+
+${offerings}` : knowledge.info;
+  const websites = knowledge.websites;
   const raw = await llm().generateObject({
     purpose: "business_faq",
     tier: "fast",

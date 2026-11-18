@@ -15,6 +15,7 @@ import { mockRoute, overlapPick } from "@/lib/research/answer";
 import { isProfileQuestion, mockRecallRoute } from "@/lib/agents/recall-route";
 import { mockProfileUpdates } from "@/lib/profile/mock-updates";
 import { mockCompareCells, mockComparePoints } from "@/lib/compare/mock";
+import { mockOfferings } from "@/lib/business/offerings-shared";
 import { mockBusinessScope, mockPublicationDecision } from "@/lib/business/question-scope";
 
 type Faq = { q: string; a: string };
@@ -120,6 +121,9 @@ export class MockProvider implements LLMProvider {
     const ctx = (req.mockContext ?? {}) as Record<string, unknown>;
     let value: unknown;
     switch (req.purpose) {
+      case "business_offerings":
+        value = mockOfferings(String(ctx.text ?? ""));
+        break;
       case "compare_points":
         value = mockComparePoints(String(ctx.text ?? ""));
         break;

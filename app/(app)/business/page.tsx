@@ -20,6 +20,8 @@ import { permanentQr } from "@/lib/people/links";
 import { OpenFromHash } from "@/components/OpenFromHash";
 import { BusinessInfoForm, BusinessDetailsForm, SourcesManager } from "./BusinessForms";
 import { QuestionsAnswers } from "./QuestionsAnswers";
+import { OfferingsEditor } from "./OfferingsEditor";
+import { offeringsOf } from "@/lib/business/offerings";
 import { AddBusinessIntro } from "./AddBusinessIntro";
 import { WaysEditor } from "./WaysEditor";
 import { TestAgent } from "./TestAgent";
@@ -68,6 +70,8 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const initialWebsite = savedWebsite || (info.website === undefined && typeof website === "string" ? website.slice(0, 300) : "");
   const { data: allRows, error: sourcesError } = await supabase.from("business_sources").select("*").order("created_at");
   const rows = (allRows ?? []).filter((source) => source.origin === "link");
+  // Prices & facilities, read from the website and documents (owners and managers only: staff see a different page).
+  const offerings = await offeringsOf(agent.id);
   const [{ data: site, error: siteError }, person, { data: changes }, dashboard] = await Promise.all([
     supabase.from("business_sites").select("*").maybeSingle(),
     realPerson(user, agent),
@@ -110,7 +114,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
     .update(JSON.stringify([agent.display_name, agent.avatar, agent.verified_domain, agent.bio, shownInfo, site?.live_at ?? null, site?.learned ?? null, site?.hidden ?? null]))
     .digest("hex")
     .slice(0, 16);
-  const knowsSummary = [about ? "About" : "", details.hours || details.address ? "Details" : "", ways.length ? plural(ways.length, "customer action") : "", documentsSummary, faqs.length ? plural(faqs.length, "answer") : ""].filter(Boolean).join(" · ");
+  const knowsSummary = [about ? "About" : "", details.hours || details.address ? "Details" : "", ways.length ? plural(ways.length, "customer action") : "", offerings.prices.length ? plural(offerings.prices.filter((x) => !x.hidden).length, "price") : "", documentsSummary, faqs.length ? plural(faqs.length, "answer") : ""].filter(Boolean).join(" · ");
 
   return (
     <div className="space-y-6">
@@ -137,6 +141,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
             tabs={[
               { id: "about-business", label: "About", testId: "fold-own-words" },
               { id: "business-information", label: "Details", testId: "fold-book" },
+              { id: "prices-facilities", label: "Prices & facilities", testId: "fold-offerings" },
               { id: "website-documents", label: "Website & documents", testId: "fold-documents", badge: { count: changeList.length, tone: "new" } },
               { id: "questions-answers", label: "Q&A", testId: "fold-faqs", badge: { count: faqs.length, tone: "total" } },
             ]}
@@ -154,6 +159,9 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
                 </p>
                 <WaysEditor initial={ways} />
               </div>
+            </section>
+            <section className={BODY} aria-label="Prices and facilities">
+              <OfferingsEditor prices={offerings.prices} facilities={offerings.facilities} hasSources={Boolean(site?.live_at) || rows.length > 0} />
             </section>
             <section className={BODY} aria-label="Website and documents">
               <span id="knows" />

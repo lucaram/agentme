@@ -10,6 +10,8 @@ export const LIMITS = {
   /** Cover images for a business's public page. */
   coverUploadsPerUser: { windowSeconds: 60, max: 6 },
   chatUploadsPerUser: { windowSeconds: 60, max: 12 },
+  /** "Look again" for prices and facilities: every document re-read by the AI, so a few an hour. */
+  offeringsRereadsPerAgent: { windowSeconds: 3600, max: 6 },
   richMessagesPerUser: { windowSeconds: 60, max: 30 },
   businessActionClicksPerIp: { windowSeconds: 60, max: 60 },
   businessActionClicksPerAgent: { windowSeconds: 3600, max: 600 },
