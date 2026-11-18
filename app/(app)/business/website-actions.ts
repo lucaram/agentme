@@ -8,6 +8,7 @@ import { z } from "zod";
 import { requireAgent, requireUser } from "@/lib/auth";
 import { requireBusinessPermission } from "@/lib/business/access";
 import { adminClient } from "@/lib/supabase/admin";
+import { pruneOfferings } from "@/lib/business/offerings";
 import { asJson } from "@/lib/data/json";
 import { allowLocal, safeFetch } from "@/lib/business/fetch";
 import { hasVerifyToken, homePreview, normaliseSite, verifiesByEmail, type SitePreview } from "@/lib/business/site";
@@ -104,6 +105,7 @@ export async function removeWebsiteAction(): Promise<Out> {
   }
   await db.from("business_sources").delete().eq("agent_id", agent.id).eq("origin", "site");
   await db.from("business_sites").delete().eq("agent_id", agent.id);
+  await pruneOfferings(agent.id);
   await db.from("agents").update({ verified_domain: null }).eq("id", agent.id);
   revalidatePath("/business");
   return {};

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { adminClient } from "@/lib/supabase/admin";
 import { llm } from "@/lib/llm";
 import { withUsageContext } from "@/lib/usage/context";
+import { readAllOfferings } from "./offerings";
 import { SITE_CHANGES_SYSTEM, SITE_LEARN_SYSTEM, wrapUntrusted } from "@/lib/agents/prompts";
 import { asJson } from "@/lib/data/json";
 import { notify } from "@/lib/social/shared";
@@ -276,6 +277,9 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
       reading_started_at: null,
     })
     .eq("agent_id", agentId);
+
+  // Prices & facilities from the pages whose text changed (inside this read's usage context).
+  await readAllOfferings(agentId, { origin: "site" }).catch(() => undefined);
 
   // Last, once the owner can already review: the address index (the newest pages the site lists), so pages
   // this scan didn't read can be found when asked about. On a very big site this takes a minute or two.

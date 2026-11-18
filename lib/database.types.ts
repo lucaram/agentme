@@ -507,16 +507,26 @@ isOneToOne: true
       referencedColumns: ["id"]
     }
                   ]
+                },"business_prices": {
+                  Row: { id: string; agent_id: string; item: string; variant: string | null; price: number; currency: string; source_url: string | null; source_label: string | null; visibility: string; found_price: number | null; corrected: boolean; added: boolean; hidden: boolean; read_at: string | null; updated_at: string }
+                  Insert: { id?: string; agent_id: string; item: string; variant?: string | null; price: number; currency?: string; source_url?: string | null; source_label?: string | null; visibility?: string; found_price?: number | null; corrected?: boolean; added?: boolean; hidden?: boolean; read_at?: string | null; updated_at?: string }
+                  Update: { item?: string; variant?: string | null; price?: number; currency?: string; source_url?: string | null; source_label?: string | null; visibility?: string; found_price?: number | null; corrected?: boolean; added?: boolean; hidden?: boolean; read_at?: string | null; updated_at?: string }
+                  Relationships: []
+                },"business_facilities": {
+                  Row: { agent_id: string; key: string; label: string | null; status: string; evidence: string | null; source_url: string | null; source_label: string | null; visibility: string; confirmed: boolean; hidden: boolean; updated_at: string }
+                  Insert: { agent_id: string; key: string; label?: string | null; status: string; evidence?: string | null; source_url?: string | null; source_label?: string | null; visibility?: string; confirmed?: boolean; hidden?: boolean; updated_at?: string }
+                  Update: { label?: string | null; status?: string; evidence?: string | null; source_url?: string | null; source_label?: string | null; visibility?: string; confirmed?: boolean; hidden?: boolean; updated_at?: string }
+                  Relationships: []
                 },"business_sources": {
                   Row: {
-                    "agent_id": string,"content": string | null,"content_hash": string | null,"created_at": string,"error": string | null,"id": string,"kind": string | null,"last_read_at": string | null,"origin": string,"status": string,"title": string | null,"url": string,"visibility": string
+                    "agent_id": string,"content": string | null,"content_hash": string | null,"created_at": string,"error": string | null,"id": string,"kind": string | null,"last_read_at": string | null,"offerings_hash": string | null,"origin": string,"status": string,"title": string | null,"url": string,"visibility": string
                   }
                   ComputedFields: never
                   Insert: {
                     "agent_id": string,"content"?: string | null,"content_hash"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"kind"?: string | null,"last_read_at"?: string | null,"origin"?: string,"status"?: string,"title"?: string | null,"url": string,"visibility"?: string
                   }
                   Update: {
-                    "agent_id"?: string,"content"?: string | null,"content_hash"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"kind"?: string | null,"last_read_at"?: string | null,"origin"?: string,"status"?: string,"title"?: string | null,"url"?: string,"visibility"?: string
+                    "agent_id"?: string,"content"?: string | null,"content_hash"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"kind"?: string | null,"last_read_at"?: string | null,"offerings_hash"?: string | null,"origin"?: string,"status"?: string,"title"?: string | null,"url"?: string,"visibility"?: string
                   }
                   Relationships: [
                     {

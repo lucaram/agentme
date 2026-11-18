@@ -1,4 +1,5 @@
 import "server-only";
+import { readOfferings } from "./offerings";
 import { adminClient } from "@/lib/supabase/admin";
 import { llm } from "@/lib/llm";
 import { withUsageContext } from "@/lib/usage/context";
@@ -59,6 +60,7 @@ export async function readSource(sourceId: string) {
     content = content.replace(/\n{3,}/g, "\n\n").trim().slice(0, MAX_CONTENT);
     if (!content) throw new Error("Nothing readable was found there.");
     await db.from("business_sources").update({ status: "ok", kind, content, error: null, last_read_at: new Date().toISOString() }).eq("id", source.id);
+    await withUsageContext({ agentId: source.agent_id, userId: owner?.owner_id ?? null }, () => readOfferings(source.id)).catch(() => undefined);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Couldn't read it.";
     await db.from("business_sources").update({ status: "error", error: message.slice(0, 300), last_read_at: new Date().toISOString() }).eq("id", source.id);
