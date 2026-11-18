@@ -25,6 +25,8 @@ export const LIMITS = {
   agentMessagesPerUser: { windowSeconds: 60, max: 20 },
   /** Flight searches a user may make (each asks the airlines through the flight provider). */
   flightSearchesPerUser: { windowSeconds: 3600, max: 30 },
+  /** Hotel searches a user may make (each asks for rates across a city's hotels). */
+  hotelSearchesPerUser: { windowSeconds: 3600, max: 30 },
   /** Coordination tasks a user may start. */
   tasksPerUser: { windowSeconds: 3600, max: 20 },
   /** Contact requests an agent may send (anti-spam). */
