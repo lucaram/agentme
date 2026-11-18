@@ -1,10 +1,28 @@
 /**
  * A tiny, safe subset of Markdown for agent messages: paragraphs, "- " bullet
- * lists and **bold**. Parsed into plain data and rendered as React elements,
- * never as HTML, so message text can't inject markup.
+ * lists, **bold** and [links](/settings/about) to a few of the app's own pages.
+ * Parsed into plain data and rendered as React elements, never as HTML, so
+ * message text can't inject markup, and no other link is ever made.
  */
 
-export type Inline = { text: string; bold: boolean };
+export type Inline = { text: string; bold: boolean; href?: string };
+
+/** The only pages an agent message may link to (anything else stays plain text). */
+export const APP_LINKS: readonly string[] = ["/settings/about", "/settings/about/lifestyle", "/contacts", "/business"];
+const LINK = /\[([^\]\n]{1,80})\]\(([^)\s]{1,100})\)/g;
+
+/** Plain text with [label](/page) links: allowed pages become links; anything else keeps just its label. */
+function withLinks(text: string, bold: boolean): Inline[] {
+  const out: Inline[] = [];
+  let at = 0;
+  for (const m of text.matchAll(LINK)) {
+    if (m.index! > at) out.push({ text: text.slice(at, m.index), bold });
+    out.push(APP_LINKS.includes(m[2]) ? { text: m[1], bold, href: m[2] } : { text: m[1], bold });
+    at = m.index! + m[0].length;
+  }
+  if (at < text.length) out.push({ text: text.slice(at), bold });
+  return out;
+}
 export type Block =
   | { type: "paragraph"; content: Inline[] }
   | { type: "list"; items: { label: string | null; content: Inline[] }[] };
@@ -13,7 +31,7 @@ export function parseInline(text: string): Inline[] {
   return text
     .split(/(\*\*[^*]+\*\*)/g)
     .filter(Boolean)
-    .map((part) => (part.startsWith("**") && part.endsWith("**") && part.length > 4 ? { text: part.slice(2, -2), bold: true } : { text: part, bold: false }));
+    .flatMap((part) => (part.startsWith("**") && part.endsWith("**") && part.length > 4 ? withLinks(part.slice(2, -2), true) : withLinks(part, false)));
 }
 
 const BULLET = /^\s*(?:[-•*]|\d+[.)])\s+/;

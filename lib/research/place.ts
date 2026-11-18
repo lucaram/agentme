@@ -75,4 +75,4 @@ export const placeNote = (town: string, now = false) => `📍 For ${town}, where
 
 /** No place named and none saved (or the owner turned this off). */
 export const WHICH_PLACE =
-  "Which place do you mean? Tell me the town, or save where you usually are in Settings → What your agent knows (start it with the town's name, e.g. “Falkirk”) and I'll use it when you don't say.";
+  "Which place do you mean? Tell me the town, or save where you usually are in [What your agent knows about you](/settings/about/lifestyle) (start it with the town's name, e.g. “Falkirk”) and I'll use it when you don't say.";

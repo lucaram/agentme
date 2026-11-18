@@ -166,7 +166,7 @@ export async function createBusinessFor(personId: string, input: { name: string;
     conversationId: conv.id,
     from: "agent",
     agentId: agent.id,
-    content: `Hi! I'm @${handle.handle}, ${name}'s agent. I answer visitors from what you tell me in My Business, and I ask you when I don't know. I never take bookings, orders or payments by myself.`,
+    content: `Hi! I'm @${handle.handle}, ${name}'s agent. I answer visitors from what you tell me in [My Business](/business), and I ask you when I don't know. I never take bookings, orders or payments by myself.`,
   });
   return { ok: true, agentId: agent.id };
 }

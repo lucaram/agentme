@@ -51,7 +51,7 @@ export class MockProvider implements LLMProvider {
         // About yourself: what you saved.
         const profile = (ctx.profile ?? []) as { label: string; value: string }[];
         if (isProfileQuestion(String(ctx.text ?? ""))) {
-          text = profile.length ? `From what you've saved: ${profile.map((p) => `${p.label}: ${p.value}`).join("; ")}.` : "You haven't saved that yet. You can add it in Settings → What your agent knows about you.";
+          text = profile.length ? `From what you've saved: ${profile.map((p) => `${p.label}: ${p.value}`).join("; ")}.` : "You haven't saved that yet. You can add it in [What your agent knows about you](/settings/about).";
           break;
         }
         const recall = (ctx.recall ?? []) as RecallPlan[];
