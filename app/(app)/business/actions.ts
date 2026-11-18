@@ -14,7 +14,7 @@ import { describeRetry, hit } from "@/lib/limits";
 import { MAX_FEATURED, normaliseWay, type Way } from "@/lib/business/booking";
 import { patchBusinessInfo } from "@/lib/business/profile";
 import { pruneOfferings, readAllOfferings } from "@/lib/business/offerings";
-import { FACILITIES, FACILITY_KEYS, MAX_CUSTOM_FACILITIES, MAX_PRICES, isCustomFacility } from "@/lib/business/offerings-shared";
+import { FACILITIES, FACILITY_KEYS, KINDS, MAX_CUSTOM_FACILITIES, MAX_PRICES, MAX_TAGS, PRICE_TYPES, cleanTags, isCustomFacility } from "@/lib/business/offerings-shared";
 import { requireBusinessPermission } from "@/lib/business/access";
 import { BUSINESS_LIMITS } from "@/lib/social/limits";
 
@@ -217,45 +217,80 @@ export async function saveBusinessDetailsAction(_prev: Out | undefined, form: Fo
 
 // ------------------------------------------------------------- Prices & facilities (read from your website and documents)
 
-const PriceInput = z.object({ item: z.string().trim().min(1).max(120), variant: z.string().trim().max(60).nullable(), price: z.coerce.number().min(0).max(99999), currency: z.string().trim().regex(/^[A-Za-z]{3}$/) });
+const ItemInput = z.object({
+  group_id: z.uuid().nullable(),
+  kind: z.enum(KINDS),
+  category: z.string().trim().max(60).nullable(),
+  item: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(200).nullable(),
+  tags: z.array(z.string().trim().max(30)).max(MAX_TAGS),
+  price_type: z.enum(PRICE_TYPES),
+  currency: z.string().trim().regex(/^[A-Za-z]{3}$/),
+  duration_minutes: z.number().int().min(1).max(1440).nullable(),
+  needs_booking: z.boolean(),
+  options: z.array(z.object({ id: z.uuid().nullable(), label: z.string().trim().max(60).nullable(), price: z.number().min(0).max(99999).nullable() })).min(1).max(12),
+});
+export type ItemInputType = z.infer<typeof ItemInput>;
 
-/** Correct a price your agent read (a correction wins over the document, and is kept). */
-export async function correctPriceAction(id: string, price: number): Promise<Out> {
+/**
+ * Add a product or service, or change one (all its details and options at once). What you change wins
+ * over the documents from then on: a later read only notes what they say. An option you take away from
+ * an item read from a document is hidden (so the next read doesn't bring it back); one you added goes.
+ */
+export async function saveItemAction(input: ItemInputType): Promise<Out & { group_id?: string }> {
   const { agent } = await requireBusiness();
-  const amount = Number(price);
-  if (!z.uuid().safeParse(id).success || !Number.isFinite(amount) || amount < 0 || amount > 99999) return { error: "Enter a price, e.g. 8.50." };
-  const { error } = await adminClient().from("business_prices").update({ price: Math.round(amount * 100) / 100, corrected: true, updated_at: new Date().toISOString() }).eq("id", id).eq("agent_id", agent.id);
+  const parsed = ItemInput.safeParse(input);
+  if (!parsed.success) return { error: "Check the name, the options and their prices." };
+  const d = parsed.data;
+  const priced = d.price_type !== "free" && d.price_type !== "on_request";
+  if (priced && d.options.some((o) => o.price === null || !Number.isFinite(o.price))) return { error: "Give each option a price, e.g. 8.50." };
+  const labels = d.options.map((o) => (o.label ?? "").toLowerCase());
+  if (new Set(labels).size !== labels.length) return { error: "Give each option a different name, e.g. 10-inch and 12-inch." };
+  const db = adminClient();
+  const existing = d.group_id ? ((await db.from("business_prices").select("*").eq("agent_id", agent.id).eq("group_id", d.group_id)).data ?? []) : [];
+  if (d.group_id && !existing.length) return { error: "Not found." };
+  const keep = new Set(d.options.flatMap((o) => (o.id ? [o.id] : [])));
+  if ([...keep].some((id) => !existing.some((row) => row.id === id))) return { error: "Not found." };
+  const { count } = await db.from("business_prices").select("id", { count: "exact", head: true }).eq("agent_id", agent.id);
+  const adding = d.options.filter((o) => !o.id).length;
+  if ((count ?? 0) + adding > MAX_PRICES) return { error: `You can have up to ${MAX_PRICES} prices.` };
+  const group = d.group_id ?? crypto.randomUUID();
+  const fields = {
+    kind: d.kind, category: d.category || null, item: d.item, description: d.description || null, tags: cleanTags(d.tags), price_type: d.price_type,
+    currency: d.currency.toUpperCase(), duration_minutes: d.kind === "service" ? d.duration_minutes : null, needs_booking: d.kind === "service" && d.needs_booking,
+    corrected: true, updated_at: new Date().toISOString(),
+  };
+  const amount = (price: number | null) => (d.price_type === "free" ? 0 : d.price_type === "on_request" ? null : Math.round((price ?? 0) * 100) / 100);
+  for (const option of d.options) {
+    if (option.id) await db.from("business_prices").update({ ...fields, variant: option.label || null, price: amount(option.price), hidden: false }).eq("id", option.id).eq("agent_id", agent.id);
+    else await db.from("business_prices").insert({ ...fields, agent_id: agent.id, group_id: group, variant: option.label || null, price: amount(option.price), added: true, visibility: existing[0]?.visibility ?? "public" });
+  }
+  for (const row of existing.filter((r) => !keep.has(r.id))) {
+    if (row.added) await db.from("business_prices").delete().eq("id", row.id);
+    else await db.from("business_prices").update({ ...fields, hidden: true }).eq("id", row.id);
+  }
   revalidatePath("/business", "layout");
-  return error ? { error: "Couldn't save that price." } : {};
+  return { group_id: group };
 }
 
-/** Hide a price from your agent (and show it again). */
-export async function hidePriceAction(id: string, hidden: boolean): Promise<Out> {
+/** Hide a product or service from your agent (and show it again). */
+export async function hideItemAction(groupId: string, hidden: boolean): Promise<Out> {
   const { agent } = await requireBusiness();
-  if (!z.uuid().safeParse(id).success) return { error: "Not found." };
-  await adminClient().from("business_prices").update({ hidden: Boolean(hidden), updated_at: new Date().toISOString() }).eq("id", id).eq("agent_id", agent.id);
+  if (!z.uuid().safeParse(groupId).success) return { error: "Not found." };
+  await adminClient().from("business_prices").update({ hidden: Boolean(hidden), updated_at: new Date().toISOString() }).eq("agent_id", agent.id).eq("group_id", groupId);
   revalidatePath("/business", "layout");
   return {};
 }
 
-/** A price none of your documents mention. */
-export async function addPriceAction(input: { item: string; variant: string | null; price: number; currency: string }): Promise<Out> {
+/** Delete something you added yourself (what was read from a document is hidden instead, so it doesn't come back). */
+export async function deleteItemAction(groupId: string): Promise<Out> {
   const { agent } = await requireBusiness();
-  const parsed = PriceInput.safeParse(input);
-  if (!parsed.success) return { error: "Give the item and its price, e.g. Margherita pizza, 8.50." };
+  if (!z.uuid().safeParse(groupId).success) return { error: "Not found." };
   const db = adminClient();
-  const { count } = await db.from("business_prices").select("id", { count: "exact", head: true }).eq("agent_id", agent.id);
-  if ((count ?? 0) >= MAX_PRICES) return { error: `You can have up to ${MAX_PRICES} prices.` };
-  const { error } = await db.from("business_prices").insert({ agent_id: agent.id, item: parsed.data.item, variant: parsed.data.variant || null, price: Math.round(parsed.data.price * 100) / 100, currency: parsed.data.currency.toUpperCase(), added: true, visibility: "public" });
-  revalidatePath("/business", "layout");
-  return error ? { error: "Couldn't add that price." } : {};
-}
-
-/** Remove a price you added yourself (prices read from a document are hidden instead). */
-export async function removePriceAction(id: string): Promise<Out> {
-  const { agent } = await requireBusiness();
-  if (!z.uuid().safeParse(id).success) return { error: "Not found." };
-  await adminClient().from("business_prices").delete().eq("id", id).eq("agent_id", agent.id).eq("added", true);
+  const { data: rows } = await db.from("business_prices").select("id, added").eq("agent_id", agent.id).eq("group_id", groupId);
+  if (!rows?.length) return { error: "Not found." };
+  if (rows.some((r) => !r.added)) return { error: "This was read from your documents: hide it instead, so it doesn't come back." };
+  await db.from("business_prices").delete().eq("agent_id", agent.id).eq("group_id", groupId);
   revalidatePath("/business", "layout");
   return {};
 }

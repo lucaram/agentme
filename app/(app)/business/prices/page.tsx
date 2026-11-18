@@ -9,7 +9,7 @@ export default async function PricesPage() {
       <div>
         <Link href="/business#prices-facilities" className="text-sm text-accent hover:underline" data-testid="back-to-knows">‹ What your agent knows</Link>
         <h1 className="mt-1 text-lg font-semibold">Prices</h1>
-        <p className="text-xs text-muted">Found in your website and documents. Correct, hide or add a price.</p>
+        <p className="text-xs text-muted">Found in your website and documents, by category. Tap one to change it, or add your own.</p>
       </div>
       <PricesEditor prices={prices} hasSources={hasSources} />
     </div>

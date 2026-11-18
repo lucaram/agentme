@@ -27,6 +27,7 @@ export const CellReadingSchema = z.object({
     stated: z.boolean().describe("True only if the answer actually states it. False if it says it doesn't know, or doesn't say."),
     text: z.string().max(120).describe("The answer in a few words, e.g. '£8.50' or 'Free car park behind the restaurant'."),
     number: z.number().nullable().describe("For a price: the amount (8.5). Otherwise null."),
+    basis: z.enum(["fixed", "from", "per_hour", "per_person"]).nullable().describe("For a price: fixed, or 'from' ('from £30'), per_hour or per_person. Otherwise null."),
     currency: z.string().max(3).nullable().describe("For a price: GBP, EUR or USD. Otherwise null."),
     yes: z.boolean().nullable().describe("For yes/no: true or false when stated. Otherwise null."),
     detail: z.string().max(60).nullable().describe("A detail that matters for comparing, e.g. the size '12-inch'. Otherwise null."),
@@ -40,6 +41,8 @@ export type CompareCell = {
   status: CellStatus;
   text?: string | null;
   number?: number | null;
+  /** How the price is given: only fixed prices (or unstated) are ranked. */
+  basis?: "fixed" | "from" | "per_hour" | "per_person" | null;
   currency?: string | null;
   yes?: boolean | null;
   detail?: string | null;
@@ -80,8 +83,11 @@ export function summarise(c: Pick<Comparison, "points" | "businesses" | "cells">
     const stated = cells.filter((cell) => (cell.status === "answered" || cell.status === "team_answered"));
     const subject = point.label.replace(/:\s*price$/i, "");
     if (point.kind === "price") {
-      const priced = stated.filter((cell) => typeof cell.number === "number");
-      if (!priced.length) return void lines.push(`No business stated a price for ${subject.toLowerCase()}.`);
+      const all = stated.filter((cell) => typeof cell.number === "number");
+      // "from £30" or "£40 per hour" isn't ranked against a fixed price.
+      const priced = all.filter((cell) => !cell.basis || cell.basis === "fixed");
+      const unranked = all.length - priced.length;
+      if (!priced.length) return void lines.push(unranked ? `Prices for ${subject.toLowerCase()} are given as "from" or per hour, so they aren't ranked.` : `No business stated a price for ${subject.toLowerCase()}.`);
       // Only prices in the same currency are compared (the most common one).
       const counts = new Map<string, number>();
       for (const cell of priced) counts.set(cell.currency ?? "", (counts.get(cell.currency ?? "") ?? 0) + 1);
@@ -94,6 +100,7 @@ export function summarise(c: Pick<Comparison, "points" | "businesses" | "cells">
       if (same.length > 1 && sizes.size > 1) line += " Sizes may differ.";
       if (same.length < priced.length) line += " Prices in another currency aren't compared.";
       if (same.length === 1 && cells.length > 1) line = `Only ${name(same[0].business_id)} stated a price for ${subject.toLowerCase()} (${money(low, currency || null)}).`;
+      if (unranked) line += ` ${unranked === 1 ? "One price is" : "Some prices are"} given as "from" or per hour and ${unranked === 1 ? "isn't" : "aren't"} ranked.`;
       lines.push(line);
     } else if (point.kind === "yes_no") {
       const yes = stated.filter((cell) => cell.yes === true).map((cell) => name(cell.business_id));

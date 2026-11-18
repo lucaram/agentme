@@ -20,6 +20,13 @@ describe.skipIf(!dbUp)("prices & facilities (live)", () => {
   const lib = async () => ({ offerings: await import("@/lib/business/offerings"), actions: await import("@/app/(app)/business/actions"), respond: await import("@/lib/agents/respond"), agents: await import("@/lib/data/agents") });
   const prices = async () => (await f.db.from("business_prices").select("*").eq("agent_id", f.business.agent.id).order("item")).data ?? [];
   const facility = async (key: string) => (await f.db.from("business_facilities").select("*").eq("agent_id", f.business.agent.id).eq("key", key).maybeSingle()).data;
+  type Row = Awaited<ReturnType<typeof prices>>[number];
+  /** The editing panel's input for an item, from its saved rows. */
+  const asInput = (rows: Row[], change: Record<string, unknown> = {}) => ({
+    group_id: rows[0].group_id, kind: rows[0].kind as "product" | "service", category: rows[0].category, item: rows[0].item, description: rows[0].description, tags: rows[0].tags,
+    price_type: rows[0].price_type as "fixed", currency: rows[0].currency, duration_minutes: rows[0].duration_minutes, needs_booking: rows[0].needs_booking,
+    options: rows.map((x) => ({ id: x.id, label: x.variant, price: x.price === null ? null : Number(x.price) })), ...change,
+  });
   const setMenu = (content: string) => f.db.from("business_sources").update({ content, last_read_at: new Date().toISOString() }).eq("id", menu);
 
   it("reads a document's prices and facilities, and only reads again when its text changed", async () => {
@@ -38,7 +45,7 @@ describe.skipIf(!dbUp)("prices & facilities (live)", () => {
   it("keeps the business's corrections and confirmations when the document changes", async () => {
     const { offerings, actions } = await lib();
     const margherita = (await prices()).find((p) => p.item === "Margherita pizza")!;
-    expect(await actions.correctPriceAction(margherita.id, 8)).toEqual({});
+    expect(await actions.saveItemAction(asInput([margherita], { options: [{ id: margherita.id, label: "12-inch", price: 8 }] }))).toEqual({ group_id: margherita.group_id });
     expect(await actions.saveFacilityAction({ key: "parking", label: null, status: "no", note: null })).toEqual({ key: "parking" });
     await setMenu("Menu\nMargherita pizza (12-inch) £9\nCalzone £10\nFree car park behind the restaurant.");
     await offerings.readOfferings(menu);
@@ -64,13 +71,16 @@ describe.skipIf(!dbUp)("prices & facilities (live)", () => {
     expect(await offerings.offeringsKnowledgeFor(agent.id, "customers")).toContain("Loyalty lasagne: £5.00");
   });
 
-  it("hide, add and remove prices; removing a document keeps only what the business corrected", async () => {
+  it("hide, add and delete items; removing a document keeps only what the business changed", async () => {
     const { actions } = await lib();
     const calzone = (await prices()).find((p) => p.item === "Calzone")!;
-    expect(await actions.hidePriceAction(calzone.id, true)).toEqual({});
+    expect(await actions.deleteItemAction(calzone.group_id)).toHaveProperty("error"); // read from a document: hidden instead
+    expect(await actions.hideItemAction(calzone.group_id, true)).toEqual({});
     expect(await (await import("@/lib/business/offerings")).offeringsKnowledgeFor(f.business.agent.id, "public")).not.toContain("Calzone");
-    expect(await actions.addPriceAction({ item: "Garlic bread", variant: null, price: 4.5, currency: "gbp" })).toEqual({});
-    expect(await actions.addPriceAction({ item: "", variant: null, price: 4.5, currency: "GBP" })).toHaveProperty("error");
+    const blank = { group_id: null, kind: "product" as const, category: "Sides", item: "Garlic bread", description: null, tags: [], price_type: "fixed" as const, currency: "gbp", duration_minutes: null, needs_booking: false, options: [{ id: null, label: null, price: 4.5 }] };
+    expect(await actions.saveItemAction(blank)).toHaveProperty("group_id");
+    expect(await actions.saveItemAction({ ...blank, item: "" })).toHaveProperty("error");
+    expect(await actions.saveItemAction({ ...blank, item: "Bread", options: [{ id: null, label: null, price: null }] })).toEqual({ error: "Give each option a price, e.g. 8.50." });
     const garlic = (await prices()).find((p) => p.item === "Garlic bread")!;
     expect(garlic).toMatchObject({ added: true, currency: "GBP", source_url: null });
     expect(await actions.removeSourceAction(menu)).toEqual({});
@@ -78,7 +88,7 @@ describe.skipIf(!dbUp)("prices & facilities (live)", () => {
     expect(left.map((p) => p.item).sort()).toEqual(["Garlic bread", "Loyalty lasagne", "Margherita pizza"]);
     expect(left.find((p) => p.item === "Margherita pizza")).toMatchObject({ added: true, source_url: null });
     expect(await facility("parking")).toMatchObject({ confirmed: true }); // what the business confirmed stays
-    expect(await actions.removePriceAction(garlic.id)).toEqual({});
+    expect(await actions.deleteItemAction(garlic.group_id)).toEqual({});
     expect((await prices()).some((p) => p.item === "Garlic bread")).toBe(false);
   });
 
@@ -106,5 +116,32 @@ describe.skipIf(!dbUp)("prices & facilities (live)", () => {
     // Adding it again brings it back.
     await actions.saveFacilityAction({ key: "vegan_options", label: null, status: "yes", note: null });
     expect(await facility("vegan_options")).toMatchObject({ hidden: false, status: "yes" });
+  });
+
+  it("products and services: options, tags, service details; a renamed item is still recognised by the next read", async () => {
+    const { actions, offerings } = await lib();
+    const { data: doc } = await f.db.from("business_sources").insert({ agent_id: f.business.agent.id, url: "https://sole.example/pizza.pdf", origin: "link", visibility: "public", status: "ok", kind: "pdf", content: "Pizza\nDiavola (HOT) £10\nCapricciosa (10-inch) £8\nCapricciosa (12-inch) £9.50", last_read_at: new Date().toISOString() }).select("id").single();
+    await offerings.readOfferings(doc!.id);
+    const capricciosa = (await prices()).filter((x) => x.found_item === "Capricciosa");
+    expect(capricciosa).toHaveLength(2);
+    expect(new Set(capricciosa.map((x) => x.group_id)).size).toBe(1); // one item, two options
+    expect((await prices()).find((x) => x.item === "Diavola")).toMatchObject({ category: "Pizza", tags: ["Spicy"], kind: "product" });
+    // Renamed, one option dropped (hidden, as it came from the document), a tag added.
+    const big = capricciosa.find((x) => x.variant === "12-inch")!;
+    expect(await actions.saveItemAction(asInput(capricciosa, { item: "Capricciosa (house)", tags: ["Popular"], options: [{ id: big.id, label: "12-inch", price: 9.5 }] }))).toEqual({ group_id: big.group_id });
+    const edited = (await prices()).filter((x) => x.group_id === big.group_id);
+    expect(edited.map((x) => [x.item, x.variant, x.hidden, x.corrected]).sort()).toEqual([["Capricciosa (house)", "10-inch", true, true], ["Capricciosa (house)", "12-inch", false, true]]);
+    // The document changes: no second Capricciosa; what it says is noted on the business's own version.
+    await f.db.from("business_sources").update({ content: "Pizza\nDiavola (HOT) £10\nCapricciosa (10-inch) £8\nCapricciosa (12-inch) £9.90" }).eq("id", doc!.id);
+    await offerings.readOfferings(doc!.id);
+    const after = (await prices()).filter((x) => /capricciosa/i.test(x.item));
+    expect(after).toHaveLength(2);
+    expect(after.find((x) => x.variant === "12-inch")).toMatchObject({ item: "Capricciosa (house)", found_price: 9.9 });
+    // A service: priced "from", with how long it takes and booking; the agent knows it.
+    const service = { group_id: null, kind: "service" as const, category: "Events", item: "Room hire", description: "Private room for up to 20", tags: [], price_type: "from" as const, currency: "GBP", duration_minutes: 120, needs_booking: true, options: [{ id: null, label: null, price: 150 }] };
+    expect(await actions.saveItemAction(service)).toHaveProperty("group_id");
+    expect(await offerings.offeringsKnowledgeFor(f.business.agent.id, "public")).toContain("- Events › Room hire: from £150.00, 2 h, booking needed. Private room for up to 20 (confirmed by the business)");
+    // Two options with the same name are refused.
+    expect(await actions.saveItemAction({ ...service, item: "Lessons", options: [{ id: null, label: "Adult", price: 20 }, { id: null, label: "adult", price: 15 }] })).toHaveProperty("error");
   });
 });
