@@ -30,7 +30,7 @@ test("my business: the agent reads the menu link, answers from it, and asks the 
     .getByRole("textbox", { name: /About your business/ })
     .fill(`Family-run Italian restaurant in Camden. Open Tue–Sun 12–15 and 18–23.
 Our menu: ${baseURL}/demo/trattoria-menu.html`);
-  await shop.page.getByRole("button", { name: "Save description" }).click();
+  await shop.page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(shop.page.getByRole("status").filter({ hasText: "1 linked page was added" })).toBeVisible();
   await openSection(shop.page, "fold-documents");
   await expect(shop.page.getByTestId("source-status").first()).toContainText("Scanned", { timeout: 20_000 });
@@ -169,7 +169,7 @@ test("how to book: the business adds its own ways; its page, its agent and frien
   // The business says how customers book (AGENTME never books itself).
   const shop = await as(browser, "trattoria");
   await shop.page.goto("/business");
-  await openSection(shop.page, "fold-book");
+  await openSection(shop.page, "fold-own-words");
   const ways = shop.page.getByRole("form", { name: "How customers book or order" });
   await ways.getByLabel("Way 1: what is it").selectOption("book");
   await ways.getByLabel("Way 1: link or number").fill("trattoria-sole.example/book");

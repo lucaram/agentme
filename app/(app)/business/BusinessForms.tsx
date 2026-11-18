@@ -6,13 +6,13 @@ import Link from "next/link";
 import { LocalTime } from "@/components/LocalTime";
 import { sourceLabel } from "@/lib/business/offerings-shared";
 import { Thinking } from "@/components/Thinking";
-import { addSourceAction, removeSourceAction, rereadSourceAction, saveBusinessInfoAction, saveBusinessDetailsAction, setSourceVisibilityAction, tryQuestionAction } from "./actions";
+import { addSourceAction, removeSourceAction, rereadSourceAction, saveBusinessInfoAction, setSourceVisibilityAction, tryQuestionAction } from "./actions";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { CountedField } from "@/components/CountedField";
 import { BUSINESS_LIMITS } from "@/lib/social/limits";
 
-/** "About your business" (public) and "For customers only", in your own words. */
-export function BusinessInfoForm({ about = "", customers = "", mode = "about" }: { about?: string; customers?: string; mode?: "about" | "customers" }) {
+/** "About your business" with opening hours and address (public), or "For customers only", in your own words. */
+export function BusinessInfoForm({ about = "", customers = "", mode = "about", details }: { about?: string; customers?: string; mode?: "about" | "customers"; details?: { hours: string; address: string; fromWebsite: boolean } }) {
   const [state, action, pending] = useActionState(saveBusinessInfoAction, undefined);
   return (
     <form action={action} className="space-y-4" aria-label={mode === "about" ? "Business description" : "Customer-only information"}>
@@ -30,6 +30,14 @@ export function BusinessInfoForm({ about = "", customers = "", mode = "about" }:
           Introduce your business to customers: what you offer and what makes it special.
         </p>
       </div>}
+      {mode === "about" && details && <div id="business-information" className="scroll-mt-40 space-y-3">
+        {details.fromWebsite && <p className="hint">Hours and address from your published website are filled in. Save to use your own.</p>}
+        <CountedField id="hours" label="Opening hours" max={BUSINESS_LIMITS.hours} maxRows={5} defaultValue={details.hours} />
+        <CountedField id="address" label="Business address" max={BUSINESS_LIMITS.address} maxRows={5} defaultValue={details.address} />
+        {/* What was shown, so hours or an address from the website are only saved as yours when you change them. */}
+        <input type="hidden" name="hours_was" value={details.hours} />
+        <input type="hidden" name="address_was" value={details.address} />
+      </div>}
       {mode === "customers" && <div>
         <label className="label" htmlFor="customers">For customers only <span className="font-normal text-muted">· your contacts</span></label>
         <AutoGrowTextarea id="customers" name="customers" className="input" minRows={2} maxRows={8} maxLength={4000} defaultValue={customers} placeholder="e.g. Private events: £35 per person, minimum 20 people." />
@@ -45,21 +53,9 @@ export function BusinessInfoForm({ about = "", customers = "", mode = "about" }:
           {state.addedLinks ? ` ${state.addedLinks} linked ${state.addedLinks === 1 ? "page was" : "pages were"} added to Website & documents with the same visibility.` : ""}
         </p>
       )}
-      <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : mode === "about" ? "Save description" : "Save customer information"}</button>
+      <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : mode === "about" ? "Save" : "Save customer information"}</button>
     </form>
   );
-}
-
-export function BusinessDetailsForm({ hours, address, fromWebsite }: { hours: string; address: string; fromWebsite: boolean }) {
-  const [state, action, pending] = useActionState(saveBusinessDetailsAction, undefined);
-  return <form action={action} className="space-y-3" aria-label="Business details">
-    {fromWebsite && <p className="hint">Available details from your published website are filled in. Save your changes to override them.</p>}
-    <CountedField id="hours" label="Opening hours" max={BUSINESS_LIMITS.hours} maxRows={5} defaultValue={hours} />
-    <CountedField id="address" label="Business address" max={BUSINESS_LIMITS.address} maxRows={5} defaultValue={address} />
-    {state?.error && <p role="alert" className="text-sm text-danger">{state.error}</p>}
-    {state?.saved && <p role="status" className="text-sm text-accent">Saved. Your page and agent use these details.</p>}
-    <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : "Save business details"}</button>
-  </form>;
 }
 
 type Source = { fromText: string | null; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; offerings_error: string | null; reading_prices: boolean; last_read_at: string | null; prices: number };

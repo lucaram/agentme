@@ -18,7 +18,7 @@ import { pageSettings } from "@/lib/business/public-page";
 import { currentCover } from "@/lib/business/cover-server";
 import { permanentQr } from "@/lib/people/links";
 import { OpenFromHash } from "@/components/OpenFromHash";
-import { BusinessInfoForm, BusinessDetailsForm, SourcesManager } from "./BusinessForms";
+import { BusinessInfoForm, SourcesManager } from "./BusinessForms";
 import { QuestionsAnswers } from "./QuestionsAnswers";
 import { offeringsOf } from "@/lib/business/offerings";
 import { facilityName, groupItems, readingPrices, readingSource } from "@/lib/business/offerings-shared";
@@ -148,18 +148,14 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
             label="What your agent knows"
             tabs={[
               { id: "about-business", label: "About", testId: "fold-own-words" },
-              { id: "business-information", label: "Details", testId: "fold-book" },
               { id: "website-documents", label: "Website & documents", testId: "fold-documents", badge: { count: changeList.length, tone: "new" } },
               { id: "prices-facilities", label: "Prices & facilities", testId: "fold-offerings" },
               { id: "questions-answers", label: "Q&A", testId: "fold-faqs", badge: { count: faqs.length, tone: "total" } },
             ]}
           >
+            {/* About: the description, hours and address (one save), then the buttons customers tap. */}
             <section className={BODY} aria-label="About your business">
-              <BusinessInfoForm about={about} />
-              <Link href={`/u/${agent.handle}`} target="_blank" className="text-sm text-accent underline">See your public page</Link>
-            </section>
-            <section className={BODY} aria-label="Business information">
-              <BusinessDetailsForm hours={details.hours} address={details.address} fromWebsite={Boolean(site?.live_at && (info.hours === undefined || info.address === undefined))} />
+              <BusinessInfoForm about={about} details={{ hours: details.hours, address: details.address, fromWebsite: Boolean(site?.live_at && (info.hours === undefined || info.address === undefined)) }} />
               <div id="book-or-order" className="scroll-mt-40 border-t border-border pt-4">
                 <h3 className="mb-2 font-medium">Customer actions</h3>
                 <p className="mb-3 text-sm" data-testid="taps-explained">
@@ -167,6 +163,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
                 </p>
                 <WaysEditor initial={ways} />
               </div>
+              <Link href={`/u/${agent.handle}`} target="_blank" className="block text-sm text-accent underline">See your public page</Link>
             </section>
             <section className={BODY} aria-label="Website and documents">
               <span id="knows" />

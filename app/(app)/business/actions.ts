@@ -38,10 +38,27 @@ export async function saveBusinessInfoAction(_prev: Out | undefined, form: FormD
   const about = hasAbout ? String(form.get("about") ?? "").trim() : "";
   if (about.length > BUSINESS_LIMITS.about) return { error: `Keep About your business to ${BUSINESS_LIMITS.about.toLocaleString("en-GB")} characters (it has ${about.length.toLocaleString("en-GB")}). Longer details belong in Q&A or Website & documents.` };
   const customers = hasCustomers ? String(form.get("customers") ?? "").trim().slice(0, 4000) : "";
-  if (!hasAbout && !hasCustomers) return { error: "No changes to save." };
+  // Opening hours and address, saved with the description (About).
+  const hours = String(form.get("hours") ?? "").trim();
+  const address = String(form.get("address") ?? "").trim();
+  if (!hasAbout && !hasCustomers && !form.has("hours") && !form.has("address")) return { error: "No changes to save." };
   if (hasAbout && !about) return { error: "Tell your agent a little about your business." };
+  if (hours.length > BUSINESS_LIMITS.hours) return { error: `Keep opening hours to ${BUSINESS_LIMITS.hours} characters.` };
+  if (address.length > BUSINESS_LIMITS.address) return { error: `Keep the address to ${BUSINESS_LIMITS.address} characters.` };
+  // Saved when you set it yourself: hours or an address shown from your website keep following it until you change them.
+  const own = (agent.business_info ?? {}) as { hours?: string; address?: string; corrections?: { label: string; value: string }[] };
+  const yours = (field: "hours" | "address", value: string) => form.has(field) && (own[field] !== undefined || value !== String(form.get(`${field}_was`) ?? "").trim());
+  const details = { ...(yours("hours", hours) ? { hours } : {}), ...(yours("address", address) ? { address } : {}) };
+  const setDetails = Object.keys(details).length > 0;
+  // What you write here replaces the website's version of your hours and address.
+  const corrections = (own.corrections ?? []).filter((correction) => !/^(opening hours|hours|address|business address)$/i.test(correction.label.trim()));
   const db = adminClient();
-  await patchBusinessInfo(agent.id, { ...(hasAbout ? { about, description: about.slice(0, 500) } : {}), ...(hasCustomers ? { customers } : {}) }, hasAbout ? about.split("\n")[0].slice(0, 280) : undefined);
+  await patchBusinessInfo(
+    agent.id,
+    { ...(hasAbout ? { about, description: about.slice(0, 500) } : {}), ...(hasCustomers ? { customers } : {}), ...(setDetails ? { ...details, corrections } : {}) },
+    hasAbout ? about.split("\n")[0].slice(0, 280) : undefined,
+  );
+  if (setDetails) revalidatePath(`/u/${agent.handle}`);
 
   // Links written in either description become documents with the same visibility.
   const { count } = await db.from("business_sources").select("*", { count: "exact", head: true }).eq("agent_id", agent.id).eq("origin", "link");
@@ -206,19 +223,6 @@ export async function saveWaysAction(input: { kind: string; value: string; label
   await patchBusinessInfo(agent.id, { ways });
   revalidatePath("/business");
   revalidatePath("/chats", "layout");
-  revalidatePath(`/u/${agent.handle}`);
-  return { saved: true };
-}
-
-export async function saveBusinessDetailsAction(_prev: Out | undefined, form: FormData): Promise<Out & { saved?: boolean }> {
-  const { agent } = await requireBusiness();
-  const corrections = ((agent.business_info as { corrections?: { label: string; value: string }[] } | null)?.corrections ?? []).filter((correction) => !/^(opening hours|hours|address|business address)$/i.test(correction.label.trim()));
-  const hours = String(form.get("hours") ?? "").trim();
-  const address = String(form.get("address") ?? "").trim();
-  if (hours.length > BUSINESS_LIMITS.hours) return { error: `Keep opening hours to ${BUSINESS_LIMITS.hours} characters.` };
-  if (address.length > BUSINESS_LIMITS.address) return { error: `Keep the address to ${BUSINESS_LIMITS.address} characters.` };
-  await patchBusinessInfo(agent.id, { hours, address, corrections });
-  revalidatePath("/business");
   revalidatePath(`/u/${agent.handle}`);
   return { saved: true };
 }
