@@ -149,8 +149,8 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
             tabs={[
               { id: "about-business", label: "About", testId: "fold-own-words" },
               { id: "business-information", label: "Details", testId: "fold-book" },
-              { id: "prices-facilities", label: "Prices & facilities", testId: "fold-offerings" },
               { id: "website-documents", label: "Website & documents", testId: "fold-documents", badge: { count: changeList.length, tone: "new" } },
+              { id: "prices-facilities", label: "Prices & facilities", testId: "fold-offerings" },
               { id: "questions-answers", label: "Q&A", testId: "fold-faqs", badge: { count: faqs.length, tone: "total" } },
             ]}
           >
@@ -167,24 +167,6 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
                 </p>
                 <WaysEditor initial={ways} />
               </div>
-            </section>
-            <section className={BODY} aria-label="Prices and facilities">
-              {/* Like Settings: a row each, opening its own page. */}
-              <nav aria-label="Prices and facilities" className="space-y-2">
-                {[
-                  { href: "/business/prices", icon: "💷", title: "Prices", testId: "prices-link", summary: (() => { const items = groupItems(offerings.prices).filter((x) => !x.hidden); const products = items.filter((x) => x.kind === "product").length; const services = items.length - products; const from = [...new Set(items.flatMap((x) => (x.source_label && !x.added ? [x.source_label] : [])))]; return items.length ? `${[products ? plural(products, "product") : "", services ? plural(services, "service") : ""].filter(Boolean).join(" · ")}${from.length ? ` · from ${from.slice(0, 2).join(", ")}${from.length > 2 ? ` and ${from.length - 2} more` : ""}` : ""}` : "None yet · products and services from your menu or price list"; })() },
-                  { href: "/business/facilities", icon: "🏷️", title: "Facilities", testId: "facilities-link", summary: (() => { const shownFacilities = offerings.facilities.filter((x) => !x.hidden); const yes = shownFacilities.filter((x) => x.status === "yes").map((x) => facilityName(x).label); return shownFacilities.length ? `${yes.length ? yes.slice(0, 3).join(", ") + (yes.length > 3 ? ` and ${yes.length - 3} more` : "") : "None available"}${shownFacilities.some((x) => !x.confirmed) ? " · some to check" : ""}` : "None yet · parking, step-free access, your own…"; })() },
-                ].map((r) => (
-                  <Link key={r.href} href={r.href} className="card flex items-center gap-3 hover:bg-accent-soft" data-testid={r.testId}>
-                    <span className="text-xl" aria-hidden>{r.icon}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-semibold">{r.title}</span>
-                      <span className="block truncate text-xs text-muted">{readingOfferings ? <Thinking label="Scanning" className="text-accent" /> : r.summary}</span>
-                    </span>
-                    <span className="text-accent" aria-hidden>›</span>
-                  </Link>
-                ))}
-              </nav>
             </section>
             <section className={BODY} aria-label="Website and documents">
               <span id="knows" />
@@ -212,6 +194,24 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
                 {sourcesError ? <p role="alert" className="text-sm text-danger">Documents could not be loaded. Refresh to try again.</p> : <SourcesManager sources={sources} />}
               </div>
               <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Customer-only information</summary><div className="pt-3"><BusinessInfoForm mode="customers" customers={info.customers ?? ""} /></div></details>
+            </section>
+            <section className={BODY} aria-label="Prices and facilities">
+              {/* Like Settings: a row each, opening its own page. */}
+              <nav aria-label="Prices and facilities" className="space-y-2">
+                {[
+                  { href: "/business/prices", icon: "💷", title: "Prices", testId: "prices-link", summary: (() => { const items = groupItems(offerings.prices).filter((x) => !x.hidden); const products = items.filter((x) => x.kind === "product").length; const services = items.length - products; const from = [...new Set(items.flatMap((x) => (x.source_label && !x.added ? [x.source_label] : [])))]; return items.length ? `${[products ? plural(products, "product") : "", services ? plural(services, "service") : ""].filter(Boolean).join(" · ")}${from.length ? ` · from ${from.slice(0, 2).join(", ")}${from.length > 2 ? ` and ${from.length - 2} more` : ""}` : ""}` : "None yet · products and services from your menu or price list"; })() },
+                  { href: "/business/facilities", icon: "🏷️", title: "Facilities", testId: "facilities-link", summary: (() => { const shownFacilities = offerings.facilities.filter((x) => !x.hidden); const yes = shownFacilities.filter((x) => x.status === "yes").map((x) => facilityName(x).label); return shownFacilities.length ? `${yes.length ? yes.slice(0, 3).join(", ") + (yes.length > 3 ? ` and ${yes.length - 3} more` : "") : "None available"}${shownFacilities.some((x) => !x.confirmed) ? " · some to check" : ""}` : "None yet · parking, step-free access, your own…"; })() },
+                ].map((r) => (
+                  <Link key={r.href} href={r.href} className="card flex items-center gap-3 hover:bg-accent-soft" data-testid={r.testId}>
+                    <span className="text-xl" aria-hidden>{r.icon}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-semibold">{r.title}</span>
+                      <span className="block truncate text-xs text-muted">{readingOfferings ? <Thinking label="Scanning" className="text-accent" /> : r.summary}</span>
+                    </span>
+                    <span className="text-accent" aria-hidden>›</span>
+                  </Link>
+                ))}
+              </nav>
             </section>
             <section className={BODY} aria-label="Questions and answers">
               <p className="hint">Your approved reusable answers. General answers from your team are added here only when you choose to publish them.</p>
