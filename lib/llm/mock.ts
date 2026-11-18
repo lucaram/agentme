@@ -12,7 +12,7 @@ import { mockChanges, mockLearn, type PageText } from "@/lib/business/learn";
 import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest, type LLMFindRequest, type LLMFindResult, type LLMResearchRequest, type LLMResearchResult } from "./types";
 import { mockResearch } from "@/lib/research/mock";
 import { mockRoute, overlapPick } from "@/lib/research/answer";
-import { mockRecallRoute } from "@/lib/agents/recall-route";
+import { isProfileQuestion, mockRecallRoute } from "@/lib/agents/recall-route";
 import { mockBusinessScope, mockPublicationDecision } from "@/lib/business/question-scope";
 
 type Faq = { q: string; a: string };
@@ -47,6 +47,12 @@ export class MockProvider implements LLMProvider {
         // A file attached (now or earlier in this topic): answer from what was read in it.
         const files = (ctx.files ?? []) as { name: string; notes: string }[];
         if (files.length) { text = files.map((f) => `From ${f.name}: ${f.notes}`).join(" "); break; }
+        // About yourself: what you saved.
+        const profile = (ctx.profile ?? []) as { label: string; value: string }[];
+        if (isProfileQuestion(String(ctx.text ?? ""))) {
+          text = profile.length ? `From what you've saved: ${profile.map((p) => `${p.label}: ${p.value}`).join("; ")}.` : "You haven't saved that yet. You can add it in Settings → What your agent knows about you.";
+          break;
+        }
         const recall = (ctx.recall ?? []) as RecallPlan[];
         const asksAboutPlans = /\b(what time|when|who|replied|answer|agree|poll|vote|result|plan|coming)\b/i.test(String(ctx.text ?? ""));
         text =

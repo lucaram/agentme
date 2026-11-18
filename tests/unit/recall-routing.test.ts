@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { describeRecall, type RecallPlan } from "@/lib/agents/recall-format";
-import { mockRecallRoute, recallChoice } from "@/lib/agents/recall-route";
+import { isProfileQuestion, mockRecallRoute, recallChoice } from "@/lib/agents/recall-route";
 
 const dinner: RecallPlan = { id: "dinner", title: "Saturday Italian Dinner", kind: "coordinate", organiser: "luca", status: "accepted", createdAt: "", when: "Saturday 21 November 2026 at 7:00 PM", venue: { agent_id: "restaurant", handle: "trattoria", name: "Trattoria Sole" }, rsvp: { in: ["luca", "marco", "paul"], out: [], waiting: [] } };
 
@@ -25,5 +25,18 @@ describe("plan intent precedes business handles", () => {
     expect(mockRecallRoute("Organise dinner at @trattoria with @marco", [dinner]).kind).toBe("other");
     expect(mockRecallRoute("Organise our dinner at @trattoria with @marco", [dinner]).kind).toBe("other");
     expect(mockRecallRoute("@trattoria Who is in charge of deliveries?", [dinner]).kind).toBe("other");
+  });
+});
+
+describe("questions about yourself are not plan lookups", () => {
+  it.each(["do you know when I am free during the week?", "When am I usually free?", "What food do I like?", "Am I vegetarian?", "what's my budget for going out?", "Where do I usually live?"])("%s → about me", (text) => {
+    expect(isProfileQuestion(text)).toBe(true);
+    expect(mockRecallRoute(text, [dinner])).toEqual({ kind: "profile", matches: [] });
+  });
+  it.each(["When is our dinner at @trattoria?", "Who is coming on Saturday?", "Organise dinner with @marco", "What is the weather in London?"])("%s → not about me", (text) => {
+    expect(isProfileQuestion(text)).toBe(false);
+  });
+  it("asks which plan without mentioning a business that wasn't involved", () => {
+    expect(recallChoice([dinner], [])).toEqual({ text: "I couldn't find a matching plan in your saved plans. Which event and date do you mean?", choices: [] });
   });
 });

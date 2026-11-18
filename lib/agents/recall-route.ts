@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { RecallPlan } from "./recall-format";
 
 export const RecallRouteSchema = z.object({
-  kind: z.enum(["recall", "other"]).describe("recall: asking about an existing personal/group plan, agreement, attendance, votes, assignments or answers. other: creating/changing a plan, or asking public/business information. A venue @handle identifies a place; it is not an instruction to contact it."),
+  kind: z.enum(["recall", "profile", "other"]).describe("recall: asking about an existing personal/group plan, agreement, attendance, votes, assignments or answers. profile: asking about the owner's own details or preferences, not a particular plan (when they're usually free, what they eat, where they are, their budget, interests). other: creating/changing a plan, asking public/business information, or anything else. A venue @handle identifies a place; it is not an instruction to contact it."),
   matches: z.array(z.number().int().positive()).describe("All plans that could match, numbered from 1. Include every plausible match; never choose arbitrarily between similar plans. Empty when no saved plan matches, or kind is other."),
 });
 
@@ -12,7 +12,14 @@ export function isRecallQuestion(text: string): boolean {
   return /\b(what time (did we|have we|is our|are we)|when (did we|are we|is our)|who('s| is| are)? (coming|going|replied)|who.*(voted|bringing|assigned)|what.*(we agree|we agreed|we decide|we decided)|our (dinner|lunch|meeting|plan)|poll results?|who (has|hasn't|has not) (replied|answered|voted))\b|\bwho('s| is| are)? in\s*[?.!]*$/i.test(text);
 }
 
+/** "When am I free?", "What food do I like?": the owner asking about their own saved details, not a plan. */
+export function isProfileQuestion(text: string): boolean {
+  if (isRecallQuestion(text)) return false;
+  return /\b(am i|do i|i am|i'm|my|me)\b/i.test(text) && /\b(free|available|busy|eat|food|like|likes|allerg\w*|vegetarian|vegan|diet|budget|afford|live|usually|prefer\w*|hobb\w*|interests?|needs?)\b/i.test(text);
+}
+
 export function mockRecallRoute(text: string, plans: RecallPlan[]) {
+  if (isProfileQuestion(text)) return { kind: "profile" as const, matches: [] };
   if (!isRecallQuestion(text)) return { kind: "other" as const, matches: [] };
   const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const q = clean(text);
@@ -27,6 +34,6 @@ export function mockRecallRoute(text: string, plans: RecallPlan[]) {
 export function recallChoice(plans: RecallPlan[], matches: number[]): { plan: RecallPlan } | { text: string; choices: RecallPlan[] } {
   const found = [...new Set(matches)].map((n) => plans[n - 1]).filter((p): p is RecallPlan => Boolean(p));
   if (found.length === 1) return { plan: found[0] };
-  if (!found.length) return { text: "I couldn't find a matching plan in your saved plans. Which event and date do you mean? I haven't contacted the business.", choices: [] };
+  if (!found.length) return { text: "I couldn't find a matching plan in your saved plans. Which event and date do you mean?", choices: [] };
   return { text: `Which plan do you mean?\n${found.map((p, i) => `${i + 1}. ${p.title}${p.when ? ` — ${p.when}` : ""}${p.venue ? ` at ${p.venue.name}` : ""}`).join("\n")}`, choices: found };
 }

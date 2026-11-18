@@ -86,6 +86,26 @@ describe.skipIf(!dbUp)("personal recall and explicit business handoffs (isolated
     } finally { await f.db.from("tasks").delete().eq("id", second!.id); }
   });
 
+  it("answers questions about yourself from what you saved, not as a plan lookup", async () => {
+    await f.db.from("agent_facts").insert([
+      { agent_id: f.luca.agent.id, category: "availability", value: "Saturdays after 7 PM; Sundays all day", disclosure: "contacts" },
+      { agent_id: f.luca.agent.id, category: "food", value: "Italian, no seafood", disclosure: "contacts" },
+    ]);
+    const { data: thread } = await f.db.from("agent_threads").insert({ owner_id: f.luca.userId, conversation_id: f.myAgent, title: "About me" }).select("id").single();
+    try {
+      const ask = async (text: string) => {
+        await withThread({ conversationId: f.myAgent, threadId: thread!.id }, () => handleOwnerMessage({ userId: f.luca.userId, agent: f.luca.agent, conversationId: f.myAgent, text }));
+        return (await f.db.from("messages").select("content").eq("thread_id", thread!.id).eq("sender_agent_id", f.luca.agent.id).order("created_at", { ascending: false }).limit(1).single()).data!.content;
+      };
+      for (const question of ["do you know when I am free during the week?", "What food do I like?"]) {
+        const answer = await ask(question);
+        expect(answer).toContain("Saturdays after 7 PM; Sundays all day");
+        expect(answer).toContain("Italian, no seafood");
+        expect(answer).not.toMatch(/matching plan|contacted the business/);
+      }
+    } finally { await f.db.from("agent_facts").delete().eq("agent_id", f.luca.agent.id); }
+  });
+
   it("does not expose the handoff RPC to anonymous or authenticated database clients", async () => {
     const client = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
     const args = { p_exchange: crypto.randomUUID(), p_caller: f.luca.agent.id };
