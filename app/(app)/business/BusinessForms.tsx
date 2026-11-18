@@ -3,6 +3,7 @@
 import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LocalTime } from "@/components/LocalTime";
+import { Thinking } from "@/components/Thinking";
 import { addSourceAction, removeSourceAction, rereadSourceAction, saveBusinessInfoAction, saveBusinessDetailsAction, setSourceVisibilityAction, tryQuestionAction } from "./actions";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
 import { CountedField } from "@/components/CountedField";
@@ -59,7 +60,7 @@ export function BusinessDetailsForm({ hours, address, fromWebsite }: { hours: st
   </form>;
 }
 
-type Source = { fromText: string | null; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; offerings_error: string | null; last_read_at: string | null; words: number; preview: string };
+type Source = { fromText: string | null; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; offerings_error: string | null; reading_prices: boolean; last_read_at: string | null; words: number; preview: string };
 
 const KIND: Record<string, string> = { page: "web page", pdf: "PDF", image: "photo", text: "text" };
 
@@ -106,9 +107,10 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
                 ) : s.status === "error" ? (
                   <span className="text-danger">⚠️ Couldn&apos;t read it: {s.error}</span>
                 ) : (
-                  <span className="text-muted">⏳ Reading…</span>
+                  <Thinking label="Reading" className="text-muted" />
                 )}
-                {s.status === "ok" && s.offerings_error && (
+                {s.status === "ok" && s.reading_prices && <> · <Thinking label="Reading prices" className="text-accent" /></>}
+                {s.status === "ok" && !s.reading_prices && s.offerings_error && (
                   <span className="text-danger" data-testid="source-offerings-error"> · ⚠️ {s.offerings_error}</span>
                 )}
                 {s.fromText && (

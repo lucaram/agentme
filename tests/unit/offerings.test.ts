@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  cleanTags, facilityNote, groupItems, mentionsOfferings, mergeOfferings, mockOfferings, offeringsKnowledge, planPrices, priceNote, priceText, sourceLabel, splitForReading, tidyOfferings,
-  type FacilityRow, type FoundItem, type PriceRow,
+  cleanTags, facilityNote, groupItems, mentionsOfferings, mergeOfferings, mockOfferings, offeringsKnowledge, planPrices, priceNote, priceSources, priceText, readingPrices, sourceLabel, splitForReading, tidyOfferings,
+  type FacilityRow, type FoundItem, type PriceRow, type SourceRow,
 } from "@/lib/business/offerings-shared";
+import { addressKey } from "@/lib/business/extract";
 import { splitSource, summarise, type Comparison } from "@/lib/compare/comparison";
 
 const NOW = Date.parse("2026-11-18T12:00:00Z");
@@ -122,6 +123,27 @@ describe("products & services", () => {
     expect(tidy.items[0].description).toMatch(/…$/);
     expect(tidy.items[0]).toMatchObject({ currency: "GBP", duration_minutes: 30, tags: ["Vegetarian"] });
     expect(tidy.facilities[0].evidence.length).toBeLessThanOrEqual(300);
+  });
+
+  it("where prices come from: each document, the website's pages together, what's being read now", () => {
+    const now = Date.parse("2026-11-18T12:00:00Z");
+    const src = (s: Partial<SourceRow>): SourceRow => ({ id: crypto.randomUUID(), url: "https://sole.example/menu.pdf", origin: "link", status: "ok", error: null, offerings_error: null, offerings_reading_at: null, offerings_read_at: "2026-11-18T11:00:00Z", last_read_at: "2026-11-18T11:00:00Z", ...s });
+    const prices = [row({}), row({ variant: "10-inch" }), row({ group_id: "g-dosa", source_url: "https://sole.example/food" }), row({ group_id: "g-x", source_url: "https://sole.example/food", hidden: true })];
+    const list = priceSources([
+      src({ id: "menu" }),
+      src({ id: "terms", url: "https://sole.example/terms.pdf" }),
+      src({ id: "new", url: "https://sole.example/drinks.pdf", status: "reading" }),
+      src({ id: "p1", origin: "site", url: "https://sole.example/food" }),
+      src({ id: "p2", origin: "site", url: "https://sole.example/about", offerings_reading_at: "2026-11-18T11:59:30Z" }),
+    ], prices, now, "sole.example");
+    expect(list.map((s) => [s.label, s.items, s.reading])).toEqual([["sole.example", 1, true], ["menu.pdf", 1, false], ["terms.pdf", 0, false], ["drinks.pdf", 0, true]]);
+    expect(list[0]).toMatchObject({ site: true, pages: 1 });
+    // A read that never ended isn't shown as going on for ever; no website row when it has nothing to show.
+    expect(readingPrices({ offerings_reading_at: "2026-11-18T11:00:00Z" }, now)).toBe(false);
+    expect(priceSources([src({ origin: "site", url: "https://sole.example/about" })], [], now, null)).toEqual([]);
+    // One address however it's written.
+    expect(addressKey("https://www.Sole.example/menu/")).toBe(addressKey("http://sole.example/menu#top"));
+    expect(addressKey("https://sole.example/menu?page=2")).not.toBe(addressKey("https://sole.example/menu"));
   });
 
   it("only pages that mention prices or facilities are read; the test stand-in reads simple menus and price lists", () => {

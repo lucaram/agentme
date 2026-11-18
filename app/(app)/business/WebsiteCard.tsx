@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LocalTime } from "@/components/LocalTime";
+import { Thinking } from "@/components/Thinking";
 import { MAX_SITE_PAGES, verifyTag } from "@/lib/business/site";
 import { removeWebsiteAction, rereadWebsiteAction, setSiteLookupAction, setAutomaticRefreshAction, startWebsiteAction, verifyWebsiteAction } from "./website-actions";
 
@@ -16,6 +17,9 @@ export type WebsiteSummary = {
   lastSuccessAt?: string | null;
   autoRefresh?: boolean;
   live: boolean;
+  /** Pages that prices were read from (shown with a link to Prices), and whether they're being read now. */
+  pricePages?: number;
+  readingPrices?: boolean;
   warning: string | null;
   error: string | null;
   verifyToken: string;
@@ -94,12 +98,17 @@ export function WebsiteCard({ site, verified, canVerifyByEmail, lookup = true, i
 
       <p className="text-sm text-muted" data-testid="website-status">
         {site.status === "reading" ? (
-          <>Reading your website… <Link href="/business/setup" className="text-accent underline">See progress</Link></>
+          <><Thinking label="Reading your website" /> <Link href="/business/setup" className="text-accent underline">See progress</Link></>
         ) : site.status === "error" ? (
           <span className="text-danger">{site.error}</span>
         ) : (
           <>
             {site.pagesRead} {site.pagesRead === 1 ? "page" : "pages"} read
+            {site.readingPrices ? (
+              <> · <Thinking label="Reading prices" className="text-accent" /></>
+            ) : site.pricePages ? (
+              <> · <Link href="/business/prices" className="text-accent underline" data-testid="site-price-pages">💷 Prices found on {site.pricePages} {site.pricePages === 1 ? "page" : "pages"}</Link></>
+            ) : null}
           </>
         )}
       </p>

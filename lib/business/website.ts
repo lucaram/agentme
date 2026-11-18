@@ -7,7 +7,7 @@ import { readAllOfferings } from "./offerings";
 import { SITE_CHANGES_SYSTEM, SITE_LEARN_SYSTEM, wrapUntrusted } from "@/lib/agents/prompts";
 import { asJson } from "@/lib/data/json";
 import { notify } from "@/lib/social/shared";
-import { htmlToText } from "./extract";
+import { addressKey, htmlToText } from "./extract";
 import { safeFetch, type Fetched } from "./fetch";
 import { readWithAi } from "./sources";
 import { LearnedDraftSchema, clampLearned, learnedOf, type Learned, type PageText } from "./learn";
@@ -153,6 +153,8 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
 
   const { data: rows } = await db.from("business_sources").select("url, origin, content, content_hash, title").eq("agent_id", agentId);
   const existing = new Map<string, Existing>((rows ?? []).map((r) => [r.url, r]));
+  // Pages the business added as its own links, however the address is written: read there, not twice.
+  const ownLinks = new Set((rows ?? []).filter((r) => r.origin === "link").map((r) => addressKey(r.url)));
 
   const seen = new Set<string>([homeUrl]);
   let queue: string[] = [];
@@ -195,7 +197,7 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
     progress.push({ title: title.slice(0, 80), url });
     const before = existing.get(url);
     // A link the business added itself keeps being read on its own.
-    if (before?.origin === "link") return { links, ok: true };
+    if (before?.origin === "link" || ownLinks.has(addressKey(url))) return { links, ok: true };
     const h = hash(text);
     if (before && before.content_hash === h) {
       await db.from("business_sources").update({ last_read_at: now, status: "ok", error: null }).eq("agent_id", agentId).eq("url", url);

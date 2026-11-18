@@ -519,14 +519,14 @@ isOneToOne: true
                   Relationships: []
                 },"business_sources": {
                   Row: {
-                    "agent_id": string,"content": string | null,"content_hash": string | null,"created_at": string,"error": string | null,"id": string,"kind": string | null,"last_read_at": string | null,"offerings_hash": string | null,"offerings_error": string | null,"offerings_read_at": string | null,"origin": string,"status": string,"title": string | null,"url": string,"visibility": string
+                    "agent_id": string,"content": string | null,"content_hash": string | null,"created_at": string,"error": string | null,"id": string,"kind": string | null,"last_read_at": string | null,"offerings_hash": string | null,"offerings_error": string | null,"offerings_read_at": string | null,"offerings_reading_at": string | null,"origin": string,"status": string,"title": string | null,"url": string,"visibility": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "agent_id": string,"content"?: string | null,"content_hash"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"kind"?: string | null,"last_read_at"?: string | null,"offerings_error"?: string | null,"offerings_hash"?: string | null,"offerings_read_at"?: string | null,"origin"?: string,"status"?: string,"title"?: string | null,"url": string,"visibility"?: string
+                    "agent_id": string,"content"?: string | null,"content_hash"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"kind"?: string | null,"last_read_at"?: string | null,"offerings_error"?: string | null,"offerings_hash"?: string | null,"offerings_read_at"?: string | null,"offerings_reading_at"?: string | null,"origin"?: string,"status"?: string,"title"?: string | null,"url": string,"visibility"?: string
                   }
                   Update: {
-                    "agent_id"?: string,"content"?: string | null,"content_hash"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"kind"?: string | null,"last_read_at"?: string | null,"offerings_hash"?: string | null,"offerings_error"?: string | null,"offerings_read_at"?: string | null,"origin"?: string,"status"?: string,"title"?: string | null,"url"?: string,"visibility"?: string
+                    "agent_id"?: string,"content"?: string | null,"content_hash"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"kind"?: string | null,"last_read_at"?: string | null,"offerings_hash"?: string | null,"offerings_error"?: string | null,"offerings_read_at"?: string | null,"offerings_reading_at"?: string | null,"origin"?: string,"status"?: string,"title"?: string | null,"url"?: string,"visibility"?: string
                   }
                   Relationships: [
                     {

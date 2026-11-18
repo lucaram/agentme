@@ -21,7 +21,8 @@ import { OpenFromHash } from "@/components/OpenFromHash";
 import { BusinessInfoForm, BusinessDetailsForm, SourcesManager } from "./BusinessForms";
 import { QuestionsAnswers } from "./QuestionsAnswers";
 import { offeringsOf } from "@/lib/business/offerings";
-import { facilityName, groupItems } from "@/lib/business/offerings-shared";
+import { facilityName, groupItems, readingPrices, readingSource } from "@/lib/business/offerings-shared";
+import { Thinking } from "@/components/Thinking";
 import { AddBusinessIntro } from "./AddBusinessIntro";
 import { WaysEditor } from "./WaysEditor";
 import { TestAgent } from "./TestAgent";
@@ -72,6 +73,13 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const rows = (allRows ?? []).filter((source) => source.origin === "link");
   // Prices & facilities, read from the website and documents (owners and managers only: staff see a different page).
   const offerings = await offeringsOf(agent.id);
+  // Prices and facilities being read right now (a document being fetched counts: its prices come next).
+  const readingOfferings = (allRows ?? []).some((s) => (s.origin === "link" ? readingSource(s) : readingPrices(s)));
+  // Website pages that prices were read from, and whether they're being read now.
+  const sitePages = (allRows ?? []).filter((s) => s.origin === "site");
+  const pricedUrls = new Set(offerings.prices.filter((p) => !p.hidden && !p.added && p.source_url).map((p) => p.source_url));
+  const pricePages = sitePages.filter((s) => pricedUrls.has(s.url)).length;
+  const siteReadingPrices = sitePages.some((s) => readingPrices(s));
   const [{ data: site, error: siteError }, person, { data: changes }, dashboard] = await Promise.all([
     supabase.from("business_sites").select("*").maybeSingle(),
     realPerson(user, agent),
@@ -87,7 +95,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const inCustomers = new Set(linksIn(info.customers ?? "").map(linkKey));
   const sources = rows.map((source) => ({
     fromText: inAbout.has(linkKey(source.url)) ? "About your business" : inCustomers.has(linkKey(source.url)) ? "For customers only" : null,
-    id: source.id, url: source.url, visibility: source.visibility, status: source.status, kind: source.kind, error: source.error, offerings_error: source.offerings_error, last_read_at: source.last_read_at,
+    id: source.id, url: source.url, visibility: source.visibility, status: source.status, kind: source.kind, error: source.error, offerings_error: source.offerings_error, reading_prices: readingPrices(source), last_read_at: source.last_read_at,
     words: (source.content ?? "").split(/\s+/).filter(Boolean).length, preview: (source.content ?? "").slice(0, 1500),
   }));
   const faqs = info.faqs ?? [];
@@ -135,7 +143,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
           </div>
           {ownerView && scope === "all" && <CustomerDashboard data={dashboard} approvedAnswers={faqs.length} />}
         </Fold>
-        <Fold name={SECTIONS} id="agent-knows" icon="🧠" title="What your agent knows" testId="fold-knows" summary={knowsSummary} badge={{ count: changeList.length, tone: "new" }}>
+        <Fold name={SECTIONS} id="agent-knows" icon="🧠" title="What your agent knows" testId="fold-knows" summary={site?.status === "reading" ? <Thinking label="Reading your website" className="text-accent" /> : readingOfferings ? <Thinking label="Reading prices" className="text-accent" /> : knowsSummary} badge={{ count: changeList.length, tone: "new" }}>
           <Tabs
             label="What your agent knows"
             tabs={[
@@ -171,7 +179,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
                     <span className="text-xl" aria-hidden>{r.icon}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block font-semibold">{r.title}</span>
-                      <span className="block truncate text-xs text-muted">{r.summary}</span>
+                      <span className="block truncate text-xs text-muted">{readingOfferings ? <Thinking label={r.href.endsWith("prices") ? "Reading prices" : "Reading facilities"} className="text-accent" /> : r.summary}</span>
                     </span>
                     <span className="text-accent" aria-hidden>›</span>
                   </Link>
@@ -186,7 +194,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
               <div id="website" className="scroll-mt-40">
                 {siteError ? <p role="alert" className="text-sm text-danger">Your website connection could not be loaded. Refresh this page before adding another.</p> : <WebsiteCard
                   key={`${agent.id}:${site?.url ?? initialWebsite}`}
-                  site={site ? { domain: site.domain, url: site.url, status: site.status, pagesRead: site.pages_read, lastReadAt: site.last_read_at, lastSuccessAt: site.last_success_at, autoRefresh: site.auto_refresh, live: Boolean(site.live_at), warning: site.warning, error: site.error, verifyToken: site.verify_token } : null}
+                  site={site ? { domain: site.domain, url: site.url, status: site.status, pagesRead: site.pages_read, lastReadAt: site.last_read_at, lastSuccessAt: site.last_success_at, autoRefresh: site.auto_refresh, live: Boolean(site.live_at), pricePages, readingPrices: siteReadingPrices, warning: site.warning, error: site.error, verifyToken: site.verify_token } : null}
                   lookup={(agent.business_info as { lookup?: boolean } | null)?.lookup !== false}
                   verified={Boolean(site && agent.verified_domain === site.domain)}
                   canVerifyByEmail={Boolean(site && emailProofEnforced() && email.confirmed && verifiesByEmail(email.address, site.domain))}

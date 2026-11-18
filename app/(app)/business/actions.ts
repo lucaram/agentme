@@ -4,7 +4,7 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { adminClient } from "@/lib/supabase/admin";
-import { checkUrl, linksIn } from "@/lib/business/extract";
+import { addressKey, checkUrl, linksIn } from "@/lib/business/extract";
 import { businessSources, readSource } from "@/lib/business/sources";
 import { lookUpOnSite } from "@/lib/business/lookup";
 import { allowLocal } from "@/lib/business/fetch";
@@ -13,7 +13,7 @@ import { withUsageContext } from "@/lib/usage/context";
 import { describeRetry, hit } from "@/lib/limits";
 import { MAX_FEATURED, normaliseWay, type Way } from "@/lib/business/booking";
 import { patchBusinessInfo } from "@/lib/business/profile";
-import { pruneOfferings, readAllOfferings } from "@/lib/business/offerings";
+import { markReading, pruneOfferings, readAllOfferings } from "@/lib/business/offerings";
 import { FACILITIES, FACILITY_KEYS, KINDS, MAX_CUSTOM_FACILITIES, MAX_PRICES, MAX_TAGS, PRICE_TYPES, cleanTags, isCustomFacility } from "@/lib/business/offerings-shared";
 import { requireBusinessPermission } from "@/lib/business/access";
 import { BUSINESS_LIMITS } from "@/lib/social/limits";
@@ -81,18 +81,26 @@ export async function addSourceAction(url: string, visibility: string): Promise<
   const check = checkUrl(String(url ?? ""), { allowLocal: allowLocal() });
   if (!check.ok) return { error: check.error };
   const db = adminClient();
-  const { count } = await db.from("business_sources").select("*", { count: "exact", head: true }).eq("agent_id", agent.id).eq("origin", "link");
-  if ((count ?? 0) >= MAX_LINKS) return { error: `You can add up to ${MAX_LINKS} links.` };
-  const { data, error } = await db
-    .from("business_sources")
-    .insert({ agent_id: agent.id, url: check.url.toString(), visibility: visibility === "customers" ? "customers" : "public" })
-    .select("id")
-    .single();
+  const { data: existing } = await db.from("business_sources").select("id, url, origin").eq("agent_id", agent.id);
+  const same = (existing ?? []).find((s) => addressKey(s.url) === addressKey(check.url.toString()));
+  if (same?.origin === "link") return { error: "That link is already there." };
+  if ((existing ?? []).filter((s) => s.origin === "link").length >= MAX_LINKS) return { error: `You can add up to ${MAX_LINKS} links.` };
+  const shown = visibility === "customers" ? "customers" : "public";
+  if (same) {
+    // A page your website scan already read becomes your link: read once, not twice; what was read stays.
+    await db.from("business_sources").update({ origin: "link", visibility: shown, status: "pending" }).eq("id", same.id);
+    await db.from("business_prices").update({ visibility: shown }).eq("agent_id", agent.id).eq("source_url", same.url);
+    await db.from("business_facilities").update({ visibility: shown }).eq("agent_id", agent.id).eq("source_url", same.url);
+    after(() => readSource(same.id));
+    revalidatePath("/business", "layout");
+    return {};
+  }
+  const { data, error } = await db.from("business_sources").insert({ agent_id: agent.id, url: check.url.toString(), visibility: shown }).select("id").single();
   if (error || !data) {
     return { error: error?.code === "23505" ? "That link is already there." : "Couldn't add that link." };
   }
   after(() => readSource(data.id));
-  revalidatePath("/business");
+  revalidatePath("/business", "layout");
   return {};
 }
 
@@ -366,6 +374,7 @@ export async function removeFacilityAction(key: string): Promise<Out> {
 export async function rereadOfferingsAction(): Promise<Out> {
   const { user, agent } = await requireBusiness();
   if (!(await hit("offeringsRereadsPerAgent", agent.id)).allowed) return { error: "You've done this a lot just now. Try again in a few minutes." };
+  await markReading(agent.id); // the pages show it straight away
   after(() => withUsageContext({ agentId: agent.id, userId: user.id }, () => readAllOfferings(agent.id, { force: true })));
   revalidatePath("/business", "layout");
   return {};
