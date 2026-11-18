@@ -28,4 +28,17 @@ describe("agent message formatting", () => {
       { type: "paragraph", content: [{ text: "<b>hi</b> ", bold: false }, { text: "bold", bold: true }] },
     ]);
   });
+
+  it("links only to the app's own allowed pages; any other link keeps just its words", () => {
+    expect(parseRichText("You can add it in [What your agent knows about you](/settings/about).")).toEqual([
+      { type: "paragraph", content: [{ text: "You can add it in ", bold: false }, { text: "What your agent knows about you", bold: false, href: "/settings/about" }, { text: ".", bold: false }] },
+    ]);
+    for (const href of ["https://evil.example", "javascript:alert(1)", "//evil.example/settings/about", "/settings/about/../../logout", "/admin"]) {
+      const [block] = parseRichText(`Open [this](${href})`);
+      const parts = block.type === "paragraph" ? block.content : [];
+      expect(parts.some((part) => part.href), href).toBe(false);
+      expect(parts.map((part) => part.text).join(""), href).toMatch(/^Open this/);
+    }
+    expect(parseRichText("**See [Lifestyle](/settings/about/lifestyle)**")[0]).toEqual({ type: "paragraph", content: [{ text: "See ", bold: true }, { text: "Lifestyle", bold: true, href: "/settings/about/lifestyle" }] });
+  });
 });

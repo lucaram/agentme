@@ -1,10 +1,15 @@
+import Link from "next/link";
 import { parseRichText, type Inline } from "@/lib/richtext";
 
 function Spans({ content }: { content: Inline[] }) {
   return (
     <>
       {content.map((part, i) =>
-        part.bold ? (
+        part.href ? (
+          <Link key={i} href={part.href} className={`text-accent underline${part.bold ? " font-semibold" : ""}`}>
+            {part.text}
+          </Link>
+        ) : part.bold ? (
           <strong key={i} className="font-semibold">
             {part.text}
           </strong>
@@ -16,7 +21,7 @@ function Spans({ content }: { content: Inline[] }) {
   );
 }
 
-/** Readable agent messages: a heading line, labelled bullet points, bold text. Rendered as elements, never raw HTML. */
+/** Readable agent messages: a heading line, labelled bullet points, bold text, links to the app's own pages. Rendered as elements, never raw HTML. */
 export function RichText({ text }: { text: string }) {
   const blocks = parseRichText(text);
   return (
