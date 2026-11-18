@@ -23,6 +23,8 @@ export const LIMITS = {
   a2aAnonymousPerAgent: { windowSeconds: 3600, max: 300 },
   /** Messages a user sends to their own agent or to another agent (each costs AI). */
   agentMessagesPerUser: { windowSeconds: 60, max: 20 },
+  /** Flight searches a user may make (each asks the airlines through the flight provider). */
+  flightSearchesPerUser: { windowSeconds: 3600, max: 30 },
   /** Coordination tasks a user may start. */
   tasksPerUser: { windowSeconds: 3600, max: 20 },
   /** Contact requests an agent may send (anti-spam). */

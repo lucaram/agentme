@@ -39,6 +39,8 @@ import { filesBlock, noteFiles, threadFileNotes, type AgentFile, type FileNotes 
 import { waysOf, waysText, type Way } from "@/lib/business/booking";
 import { routeRequest, researchWeb } from "@/lib/research";
 import { answerMessage, lookedUpNote, routePages } from "@/lib/research/answer";
+import { flightsConfigured } from "@/lib/travel/duffel";
+import { answerFlightRequest } from "@/lib/travel/answer";
 import { WHICH_PLACE, placeNote } from "@/lib/research/place";
 import { placeFor } from "@/lib/research/usual-place";
 import type { Proposal } from "./schemas";
@@ -427,11 +429,38 @@ async function answerFromWeb(
   const thread = threadFor(conversationId);
   const lastQuery = db.from("messages").select("metadata").eq("conversation_id", conversationId).not("sender_agent_id", "is", null);
   const { data: last } = await (thread ? lastQuery.eq("thread_id", thread) : lastQuery).order("created_at", { ascending: false }).limit(1).maybeSingle();
-  const before = (last?.metadata ?? {}) as { kind?: string; research?: string; question?: string };
+  const before = (last?.metadata ?? {}) as { kind?: string; research?: string; question?: string; request?: string };
   const pending = before.kind === "research_answer" && before.research === "needs_clarification" && before.question ? before.question : null;
+  // "Which day do you want to fly?" → "Friday": the reply completes the flight request asked before.
+  const flightAsked = before.kind === "flights_ask" && typeof before.request === "string" ? before.request : null;
 
-  const route = pending ? { kind: "research" as const, question: `${pending} (${text.trim().slice(0, 200)})`, time: "none" as const, place: "" } : await routeRequest(text, quoted);
-  if (route.kind !== "research" || !route.question.trim()) return false;
+  let request = text;
+  let route = pending
+    ? { kind: "research" as const, question: `${pending} (${text.trim().slice(0, 200)})`, time: "none" as const, place: "" }
+    : await routeRequest(text, quoted);
+  if (flightAsked && "flight" in route) {
+    // A new, complete flight request (or something else entirely) stands on its own; a short answer
+    // ("on Friday", "Gatwick") or a partial flight request completes the one asked about.
+    const newTrip = route.kind === "flights" && Boolean(route.flight.from && route.flight.to);
+    const answers = !newTrip && (route.kind === "flights" || (route.kind === "chat" && text.trim().length <= 80));
+    if (answers) {
+      request = `${flightAsked}\n${text}`;
+      route = await routeRequest(request, quoted);
+    }
+  }
+  // Flight prices: asked of the airlines through the flight provider (when set up), answered by code.
+  if (route.kind === "flights" && "flight" in route && flightsConfigured()) {
+    const limit = await hit("flightSearchesPerUser", userId);
+    if (!limit.allowed) {
+      await say(`You've searched a lot of flights in the last hour. Try again in ${describeRetry(limit.retryAfterSeconds)}.`);
+      return true;
+    }
+    const reply = await answerFlightRequest(route.flight, request);
+    await say(reply.content, reply.metadata);
+    return true;
+  }
+  // Without a flight provider, a flight question is looked up on the web like any other.
+  if ((route.kind !== "research" && route.kind !== "flights") || !route.question.trim()) return false;
   const limit = await hit("researchPerUser", userId);
   if (!limit.allowed) {
     await say(`You've looked up a lot in the last hour. Try again in ${describeRetry(limit.retryAfterSeconds)}.`);

@@ -7,6 +7,7 @@
  *  - an unclear request becomes a question with options, not a guess.
  */
 import { z } from "zod";
+import { FlightQuerySchema, NO_FLIGHT } from "@/lib/travel/flights";
 
 export type ResearchSource = { url: string; title: string; quote?: string; retrievedAt?: string; pageAge?: string; /** The answer itself cites this page. */ cited?: boolean };
 
@@ -27,13 +28,23 @@ export type Answer = {
 export type TimeClass = "now" | "recent" | "past" | "none";
 
 export const RouteSchema = z.object({
-  kind: z.enum(["chat", "research"]).describe("research = needs current or specific public facts from the web (weather, news, scores, prices, reviews, opening times of places, facts about organisations or products). chat = everything else: ideas, wording, opinions, the user's own plans, general knowledge that doesn't change."),
-  question: z.string().describe("research only: the request rewritten as one standalone question a search engine could answer, with nothing private in it. Otherwise empty."),
+  kind: z.enum(["chat", "research", "flights"]).describe("flights = prices or times of flights between two places (cheapest flight, fares, flights on a day). research = needs current or specific public facts from the web (weather, news, scores, other prices including hotels, reviews, opening times of places, facts about organisations or products). chat = everything else: ideas, wording, opinions, the user's own plans, general knowledge that doesn't change."),
+  question: z.string().describe("research and flights: the request rewritten as one standalone question a search engine could answer, with nothing private in it. Otherwise empty."),
   time: z.enum(["now", "recent", "past", "none"]).describe("now = current conditions or today/tomorrow; recent = news from the last weeks; past = a dated event or an older article; none otherwise."),
   place: z.string().describe("A city or place named in the request (for weather or local results), or empty."),
   pages: z.array(z.string()).describe("research only: when the request names a website, publisher or organisation whose own page answers it directly, up to 2 full addresses of those pages (e.g. 'the latest BBC news' → https://www.bbc.co.uk/news; 'Guardian headlines' → https://www.theguardian.com/uk). Otherwise empty."),
+  flight: FlightQuerySchema.describe("flights only: the trip asked about. Otherwise empty values."),
 });
 export type Route = z.infer<typeof RouteSchema>;
+
+const FLIGHT_HINT = /\b(flights?|fly|flying|fares?|voli?|volare)\b/i;
+/** The stand-in router's flight: "flights from London to Rome on 2026-12-12 (return 2026-12-15) for 2". */
+function mockFlight(text: string): Route["flight"] {
+  const trip = text.match(/\bfrom\s+([\p{L} ]+?)\s+to\s+([\p{L} ]+?)(?=\s+(?:on|for|in|next|this|returning)\b|[?.!,]|$)/iu);
+  const dates = text.match(/\d{4}-\d{2}-\d{2}/g) ?? [];
+  const people = Number(text.match(/\bfor\s+(\d)\b/i)?.[1] ?? 1);
+  return { from: trip?.[1]?.trim() ?? "", to: trip?.[2]?.trim() ?? "", depart: dates[0] ?? "", return: dates[1] ?? "", adults: people, cabin: /\bbusiness\b/i.test(text) ? "business" : "economy" };
+}
 
 const RESEARCH_HINT =
   /\b(weather|forecast|temperature|rain(ing)?|snow(ing)?|news|headlines?|latest|score|result|who won|review(s|ed)?|rating|price of|how much (is|are|does)|release date|opening (hours|times)|meteo|notizie|recensione|punteggio|voto|prezzo)\b/i;
@@ -43,16 +54,18 @@ const RECENT_HINT = /\b(news|headlines?|latest|this week|notizie|ultime)\b/i;
 /** Deterministic stand-in for the router (tests, no API key). */
 export function mockRoute(text: string, quoted = ""): Route {
   // Whether it's a look-up is decided from the request itself; a quoted message only completes the subject.
-  const research = RESEARCH_HINT.test(text);
+  const flights = FLIGHT_HINT.test(text);
+  const research = flights || RESEARCH_HINT.test(text);
   const about = quoted.trim().replace(/\s+/g, " ").slice(0, 120);
   const placed = /\b(?:in|at|near|a|ad)\s+([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+)?)/u;
-  const place = text.match(placed)?.[1] ?? (research ? about.match(placed)?.[1] : undefined) ?? "";
+  const place = flights ? "" : text.match(placed)?.[1] ?? (research ? about.match(placed)?.[1] : undefined) ?? "";
   return {
-    kind: research ? "research" : "chat",
+    kind: flights ? "flights" : research ? "research" : "chat",
     question: research ? `${text.trim().slice(0, 300)}${about ? ` (about: ${about})` : ""}` : "",
     time: NOW_HINT.test(text) ? "now" : RECENT_HINT.test(text) ? "recent" : "none",
     place,
     pages: [],
+    flight: flights ? mockFlight(text) : NO_FLIGHT,
   };
 }
 
