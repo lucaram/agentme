@@ -2,6 +2,7 @@ import { Avatar } from "@/components/Avatar";
 import Link from "next/link";
 import { OUTCOMES, describeIncoming, type Outcome } from "@/lib/activity/incoming";
 import { getOrCreateMyAgentConversation } from "@/lib/data/chat";
+import { LoadMore } from "./LoadMore";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { CATEGORY_LABELS, type FactCategory } from "@/lib/policy/disclosure";
@@ -55,7 +56,8 @@ export default async function HistoryPage({ searchParams }: PageProps<"/history"
     const nextShow = next.show ?? show;
     if (nextShow !== "all") params.set("show", nextShow);
     if (next.n && next.n > PAGE) params.set("n", String(next.n));
-    return `/history${params.size ? `?${params}` : ""}#asked`;
+    // A filter jumps to the list; more rows load in place.
+    return `/history${params.size ? `?${params}` : ""}${next.n ? "" : "#asked"}`;
   };
 
   const usageRows = (usage ?? []) as UsageRow[];
@@ -184,7 +186,7 @@ export default async function HistoryPage({ searchParams }: PageProps<"/history"
           })}
         </ul>
         {listed.length > count && (
-          <Link href={href({ n: count + PAGE })} className="mt-2 inline-block text-sm text-accent hover:underline" scroll={false}>Show more ({listed.length - count} left)</Link>
+          <LoadMore href={href({ n: count + PAGE })} left={listed.length - count} />
         )}
       </section>
     </div>
