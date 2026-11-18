@@ -17,9 +17,9 @@ export function QuestionAssignment({ id, actor, claim, role, members, assignment
     try { const result = await claimBusinessQuestion(id, assignee, release); setError(result.error); }
     catch { setError("Couldn't update assignment. Please try again."); }
   });
-  return <div className="rounded-xl border border-border p-3 text-sm space-y-2">
-    <p>{claim?.assigned_to ? <><b>{claim.assigned_name ?? "Team member"}</b> is handling this{claim.claimed_at && <> · <LocalTime iso={claim.claimed_at} /></>}</> : "Available for the team"}</p>
-    <div className="flex flex-wrap gap-2 items-center">
+  return <div className="space-y-2 rounded-xl bg-accent-soft/50 px-3 py-2 text-sm">
+    <div className="flex flex-wrap items-center gap-2">
+    <p className="mr-auto">{claim?.assigned_to ? <><b>{claim.assigned_name ?? "Team member"}</b> is handling this{claim.claimed_at && <> · <LocalTime iso={claim.claimed_at} /></>}</> : "Available for the team"}</p>
       {!claim?.assigned_to && !assignmentRequired && <button className="btn-ghost" disabled={pending} onClick={() => run(actor)}>I&apos;ll handle this</button>}
       {claim?.assigned_to && (claim.assigned_to === actor || canAssign) && <button className="btn-ghost" disabled={pending} onClick={() => run(undefined, true)}>Release</button>}
       {choices.length > 0 && <select aria-label="Assign customer question" className="input w-auto" disabled={pending} value="" onChange={(e) => { if (e.target.value) run(e.target.value); }}><option value="">Assign to…</option>{choices.map((member) => <option key={member.id} value={member.id}>{member.name} — {teamRoleLabel(member.role)}</option>)}</select>}

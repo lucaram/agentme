@@ -10,12 +10,43 @@ import { QuestionForm } from "./QuestionForm";
 import { IntroductionForm } from "./IntroductionForm";
 import { GroupInviteForm } from "./GroupInviteForm";
 import { z } from "zod";
+import type { ReactNode } from "react";
 import { requireAgent } from "@/lib/auth";
 import { BusinessInvitationForm, BusinessAnswerReview } from "@/components/business/StaffForms";
 import { QuestionAssignment } from "@/components/business/QuestionAssignment";
 import { adminClient } from "@/lib/supabase/admin";
 
 type Kind = "info_request" | "question" | "introduction" | "group_invite" | "business_invitation" | "business_answer_review";
+
+/**
+ * One colour per kind of decision: approving something, answering someone, accepting an invitation.
+ * Fixed colours (not the identity's accent, which may be any of them), so the kinds never look alike.
+ */
+const TONES = {
+  approve: { bar: "border-l-amber-500", label: "text-amber-700 dark:text-amber-400" },
+  answer: { bar: "border-l-sky-500", label: "text-sky-700 dark:text-sky-400" },
+  invite: { bar: "border-l-emerald-500", label: "text-emerald-700 dark:text-emerald-400" },
+} as const;
+
+/**
+ * One request: a coloured bar down its left edge, then what kind it is, from whom and when,
+ * and what you're asked to do; then its details and buttons.
+ */
+function RequestCard({ tone, icon, kind, from, when, action, testId, children }: { tone: keyof typeof TONES; icon: string; kind: string; from?: ReactNode; when: ReactNode; action: ReactNode; testId: string; children: ReactNode }) {
+  return (
+    <li className={`card space-y-3 border-l-4 ${TONES[tone].bar}`} data-testid={testId}>
+      <div>
+        <p className={`text-[11px] font-semibold uppercase tracking-wide ${TONES[tone].label}`} data-testid="request-kind">
+          <span aria-hidden>{icon}</span> {kind}
+          {from && <span className="font-normal normal-case tracking-normal text-muted"> · {from}</span>}
+          <span className="font-normal normal-case tracking-normal text-muted"> · {when}</span>
+        </p>
+        <p className="mt-0.5 font-semibold">{action}</p>
+      </div>
+      {children}
+    </li>
+  );
+}
 
 /**
  * Things only you can decide, as cards with buttons: an agent asking for
@@ -59,7 +90,7 @@ export async function OpenRequests({ title, kinds, hint, excludeIds = [] }: { ti
         🔔 {title} <span className="rounded-full bg-accent px-2 text-xs text-white dark:text-black">{items.length}</span>
       </h2>
       {hint && <p className="mb-2 text-xs text-muted">{hint}</p>}
-      <ul className="space-y-3">
+      <ul className="space-y-5">
         {items.map((item) => {
           const from = item.from_agent ? byId.get(item.from_agent) : undefined;
           const who = from ? <><Avatar value={from.avatar} /> @{from.handle}</> : "Someone";
@@ -67,24 +98,21 @@ export async function OpenRequests({ title, kinds, hint, excludeIds = [] }: { ti
 
           if (item.kind === "business_invitation") {
             const p = item.payload as { invite_id?: string; business_name?: string; role?: string };
-            return <li key={item.id} className="card space-y-3" data-testid="staff-invitation"><p className="text-sm"><b>{p.business_name}</b> invited you to its team as <b>{p.role}</b>.</p><p className="hint">{when} · Uses your own login. Personal chats stay separate.</p>{p.invite_id && <BusinessInvitationForm id={p.invite_id} />}</li>;
+            return <RequestCard key={item.id} tone="invite" icon="👥" kind="Team invitation" from={p.business_name} when={when} action={<>Join {p.business_name}&apos;s team as {p.role}?</>} testId="staff-invitation"><p className="hint">Uses your own login. Personal chats stay separate.</p>{p.invite_id && <BusinessInvitationForm id={p.invite_id} />}</RequestCard>;
           }
           if (item.kind === "business_answer_review") {
             const p = item.payload as { draft_id?: string; author?: string; question?: string; answer?: string };
-            return <li key={item.id} className="card space-y-3" data-testid="business-answer-review"><p className="text-sm"><b>{p.author}</b> suggested a reusable answer.</p>{p.draft_id && <BusinessAnswerReview id={p.draft_id} question={p.question ?? ""} answer={p.answer ?? ""} canApprove={user.businessRole === "owner" || user.businessRole === "manager"} />}</li>;
+            return <RequestCard key={item.id} tone="approve" icon="✅" kind="Answer to approve" from={p.author} when={when} action={<>Approve or decline {p.author ?? "a team member"}&apos;s answer</>} testId="business-answer-review">{p.draft_id && <BusinessAnswerReview id={p.draft_id} question={p.question ?? ""} answer={p.answer ?? ""} canApprove={user.businessRole === "owner" || user.businessRole === "manager"} />}</RequestCard>;
           }
           if (item.kind === "group_invite") {
             const invite = previewsById.get(item.id)!;
             return (
-              <li key={item.id} className="card space-y-3" data-testid="inbox-item">
-                <p className="text-sm">
-                  👥 <b>{from?.display_name ?? "Someone"}</b> invited you to <b>“{invite.title ?? "a group"}”</b>.
-                </p>
+              <RequestCard key={item.id} tone="invite" icon="👥" kind="Group invitation" from={who} when={when} action={<>{from?.display_name ?? "Someone"} invited you to “{invite.title ?? "a group"}”</>} testId="inbox-item">
                 {invite.description && <p className="text-sm text-muted">{invite.description}</p>}
                 <p className="hint">{invite.members} {invite.members === 1 ? "member" : "members"} · {invite.earlierHistory ? "Earlier messages will be shared." : "Messages from joining, plus current shared plans and polls."}</p>
                 <p className="hint">Expires <LocalTime iso={invite.expires} /> · Joining does not RSVP to an event.</p>
                 <GroupInviteForm itemId={item.id} />
-              </li>
+              </RequestCard>
             );
           }
 
@@ -92,71 +120,46 @@ export async function OpenRequests({ title, kinds, hint, excludeIds = [] }: { ti
             const intro = item.payload as unknown as IntroductionPayload;
             const other = byId.get(intro.other_agent);
             return (
-              <li key={item.id} className="card space-y-3" data-testid="inbox-item">
-                <div>
-                  <p className="text-sm">
-                    🤝 <b>{from?.display_name ?? "A friend"}</b> wants to introduce you to{" "}
-                    <b>
-                      <Avatar value={other?.avatar} /> {other?.display_name ?? "someone"}
-                    </b>{" "}
-                    <span className="text-muted">@{other?.handle}</span>
-                  </p>
-                  {intro.note && <p className="mt-1 rounded-lg bg-accent-soft px-3 py-2 text-sm">“{intro.note}”</p>}
-                  <p className="hint mt-1">{when}</p>
-                </div>
+              <RequestCard key={item.id} tone="invite" icon="🤝" kind="Introduction" from={who} when={when} action={<>{from?.display_name ?? "A friend"} wants to introduce you to <Avatar value={other?.avatar} /> {other?.display_name ?? "someone"} <span className="font-normal text-muted">@{other?.handle}</span></>} testId="inbox-item">
+                {intro.note && <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm">“{intro.note}”</p>}
                 <IntroductionForm itemId={item.id} name={other?.display_name ?? "them"} />
-              </li>
+              </RequestCard>
             );
           }
 
           const payload = inboxPayloadOf(item);
           if (payload.kind === "question" && payload.business) {
             return (
-              <li key={item.id} className="card space-y-3" data-testid="inbox-item">
+              <RequestCard key={item.id} tone="answer" icon="❓" kind="Customer question" from={who} when={when} action={<>Answer {from?.display_name ?? "the customer"}&apos;s question</>} testId="inbox-item">
                 <div>
-                  <p className="text-sm">
-                    🏪 <b>{who}</b> asked your business:
-                  </p>
-                  <p className="mt-1 rounded-lg bg-accent-soft px-3 py-2 text-sm" data-staff-question={item.id}>“{payload.question}”</p>
-                  <p className="hint mt-1">
-                    {when} · Your agent didn&apos;t find this in your business info. Your answer goes back to them, from the team.
-                  </p>
+                  <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm" data-staff-question={item.id}>“{payload.question}”</p>
+                  <p className="hint mt-1">Your agent didn&apos;t find this in your business info. Your answer goes back to them, from the team.</p>
                 </div>
                 <QuestionAssignment id={item.id} actor={actor} claim={claims?.find((claim) => claim.inbox_id === item.id)} role={user.businessRole} members={assignments} assignmentRequired={assignmentRequired} />
                 <QuestionForm itemId={item.id} variant="business" faqEligible={payload.faq_eligible === true} staff={user.businessRole === "staff"} approvalRequired={myControls?.require_publication_approval !== false} disabled={Boolean(claims?.find((claim) => claim.inbox_id === item.id && claim.assigned_to && claim.assigned_to !== actor)) || Boolean(assignmentRequired && !claims?.some((claim) => claim.inbox_id === item.id && claim.assigned_to === actor && claim.manager_assigned))} />
-              </li>
+              </RequestCard>
             );
           }
           if (payload.kind === "question" && payload.ask_around) {
             return (
-              <li key={item.id} className="card space-y-3" data-testid="inbox-item">
+              <RequestCard key={item.id} tone="answer" icon="🔎" kind="Asking around" from={who} when={when} action={<>Share a tip with {from?.display_name ?? "them"}?</>} testId="inbox-item">
                 <div>
-                  <p className="text-sm">
-                    🔎 <b>{who}</b> is asking around:
-                  </p>
-                  <p className="mt-1 rounded-lg bg-accent-soft px-3 py-2 text-sm">“{payload.question}”</p>
-                  <p className="hint mt-1">
-                    {when} · Share a tip if you have one. If you tap “I don&apos;t know”, @{from?.handle ?? "they"} isn&apos;t told.
-                  </p>
+                  <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm">“{payload.question}”</p>
+                  <p className="hint mt-1">Share a tip if you have one. If you tap “I don&apos;t know”, @{from?.handle ?? "they"} isn&apos;t told.</p>
                 </div>
                 <QuestionForm itemId={item.id} variant="askAround" />
-              </li>
+              </RequestCard>
             );
           }
           if (payload.kind === "question") {
             return (
-              <li key={item.id} className="card space-y-3" data-testid="inbox-item">
+              <RequestCard key={item.id} tone="answer" icon="❓" kind="Question for you" from={who} when={when} action={<>Answer {from?.display_name ?? "their"}{from ? "'s" : ""} question</>} testId="inbox-item">
                 <div>
-                  <p className="text-sm">
-                    <b>{who}</b> asks you:
-                  </p>
-                  <p className="mt-1 rounded-lg bg-accent-soft px-3 py-2 text-sm">“{payload.question}”</p>
-                  <p className="hint mt-1">
-                    {when} · Only @{from?.handle ?? "they"} will see your answer.
-                  </p>
+                  <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm">“{payload.question}”</p>
+                  <p className="hint mt-1">Only @{from?.handle ?? "they"} will see your answer.</p>
                 </div>
                 <QuestionForm itemId={item.id} />
-              </li>
+              </RequestCard>
             );
           }
 
@@ -172,16 +175,15 @@ export async function OpenRequests({ title, kinds, hint, excludeIds = [] }: { ti
             };
           });
           return (
-            <li key={item.id} className="card space-y-3" data-testid="inbox-item">
+            <RequestCard key={item.id} tone="answer" icon="📅" kind="Plan details" from={who} when={when} action={<>Share your {fields.map((f) => f.label.toLowerCase()).join(" and ")} for {payload.event}?</>} testId="inbox-item">
               <div>
                 <p className="text-sm">
-                  <b>{who}&apos;s agent</b> is organising <b>{payload.event}</b> ({payload.window}) and asks for your{" "}
-                  {fields.map((f) => f.label.toLowerCase()).join(" and ")}.
+                  <b>{who}&apos;s agent</b> is organising <b>{payload.event}</b> ({payload.window}).
                 </p>
-                <p className="hint">{when} · Your agent didn&apos;t answer because some of this isn&apos;t set to be shared.</p>
+                <p className="hint">Your agent didn&apos;t answer because some of this isn&apos;t set to be shared.</p>
               </div>
               <InboxItemForm itemId={item.id} fields={fields} />
-            </li>
+            </RequestCard>
           );
         })}
       </ul>

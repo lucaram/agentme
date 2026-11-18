@@ -68,7 +68,7 @@ Our menu: ${baseURL}/demo/trattoria-menu.html`);
   // The business answers under Needs your answer; it goes back to Luca and into the business info.
   await shop.page.goto("/chats");
   await shop.page.getByTestId("my-agent-card").click();
-  const item = shop.page.getByTestId("inbox-item").filter({ hasText: "asked your business" });
+  const item = shop.page.getByTestId("inbox-item").filter({ hasText: "Customer question" });
   await item.getByLabel(/Your answer/).fill("Yes, a public car park two minutes away on Pratt Street.");
   await expect(item.getByRole("checkbox", { name: /Publish this as a public FAQ/ })).not.toBeChecked();
   await item.getByRole("checkbox", { name: /Publish this as a public FAQ/ }).check();

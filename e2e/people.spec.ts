@@ -211,7 +211,7 @@ test("ask around: a saved tip answers by itself, a friend answers personally, th
   // Marco has no saved tip: he's asked personally, under Needs your answer.
   const marco = await as(browser, "marco");
   await marco.page.getByRole("link", { name: /My Agent/ }).click();
-  const item = marco.page.getByTestId("inbox-item").filter({ hasText: "is asking around" });
+  const item = marco.page.getByTestId("inbox-item").filter({ hasText: "Asking around" });
   await item.getByLabel("Your tip").fill("Mario at Camden Plumbing, very reliable");
   await item.getByRole("button", { name: "Share tip" }).click();
   await expect(luca.page.getByText("💡 @marco: “Mario at Camden Plumbing, very reliable”")).toBeVisible({ timeout: 20_000 });
