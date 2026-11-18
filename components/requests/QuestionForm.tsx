@@ -66,7 +66,7 @@ export function QuestionForm({ itemId, variant = "question", faqEligible = false
           {staff && variant === "business" ? approvalRequired ? "Suggest this as a reusable answer for approval" : "Add this to Questions & Answers" : t.remember}
         </label>
       )}
-      {variant === "business" && !faqEligible && <p className="hint">This answer stays private to this question and can&apos;t be added to your <Link href="/business#questions-answers" className="text-accent underline">“Questions &amp; Answers”</Link></p>}
+      {variant === "business" && !faqEligible && <p className="hint">This answer stays private to this question and can&apos;t be added to your <Link href="/business#questions-answers" className="text-accent underline">Questions &amp; Answers</Link></p>}
       {error && <p role="alert" className="text-xs text-danger">{error}</p>}
       <div className="flex gap-2">
         <button className="btn-primary" disabled={pending || disabled}>{pending ? "Sending…" : t.send}</button>

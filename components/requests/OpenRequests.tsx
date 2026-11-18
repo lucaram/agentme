@@ -134,7 +134,7 @@ export async function OpenRequests({ title, kinds, hint, excludeIds = [] }: { ti
               <RequestCard key={item.id} tone="answer" icon="❓" kind="Customer question" from={who} when={when} action={<>Answer {from?.display_name ?? "the customer"}&apos;s question</>} testId="inbox-item">
                 <div>
                   <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm" data-staff-question={item.id}>“{payload.question}”</p>
-                  <p className="hint mt-1">Your agent couldn&apos;t answer this from <Link href="/business#agent-knows" className="text-accent underline">“What your agent knows”</Link></p>
+                  <p className="hint mt-1">Your agent couldn&apos;t answer this from <Link href="/business#agent-knows" className="text-accent underline">What your agent knows</Link></p>
                 </div>
                 <QuestionAssignment id={item.id} actor={actor} claim={claims?.find((claim) => claim.inbox_id === item.id)} role={user.businessRole} members={assignments} assignmentRequired={assignmentRequired} />
                 <QuestionForm itemId={item.id} variant="business" faqEligible={payload.faq_eligible === true} staff={user.businessRole === "staff"} approvalRequired={myControls?.require_publication_approval !== false} disabled={Boolean(claims?.find((claim) => claim.inbox_id === item.id && claim.assigned_to && claim.assigned_to !== actor)) || Boolean(assignmentRequired && !claims?.some((claim) => claim.inbox_id === item.id && claim.assigned_to === actor && claim.manager_assigned))} />
