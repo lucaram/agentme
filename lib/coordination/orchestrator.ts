@@ -42,6 +42,7 @@ import { answerMessage, lookedUpNote, routePages } from "@/lib/research/answer";
 import { flightsConfigured } from "@/lib/travel/duffel";
 import { hotelsConfigured } from "@/lib/travel/liteapi";
 import { answerFlightRequest, answerHotelRequest } from "@/lib/travel/answer";
+import { answerEnergyRequest } from "@/lib/energy/answer";
 import { WHICH_PLACE, placeNote } from "@/lib/research/place";
 import { placeFor } from "@/lib/research/usual-place";
 import type { Proposal } from "./schemas";
@@ -433,7 +434,7 @@ async function answerFromWeb(
   const before = (last?.metadata ?? {}) as { kind?: string; research?: string; question?: string; request?: string };
   const pending = before.kind === "research_answer" && before.research === "needs_clarification" && before.question ? before.question : null;
   // "Which day do you want to fly?" → "Friday": the reply completes the flight or hotel request asked before.
-  const travelAsked = (before.kind === "flights_ask" || before.kind === "hotels_ask") && typeof before.request === "string" ? before.request : null;
+  const travelAsked = ["flights_ask", "hotels_ask", "energy_ask"].includes(before.kind ?? "") && typeof before.request === "string" ? before.request : null;
 
   let request = text;
   let route = pending
@@ -441,23 +442,24 @@ async function answerFromWeb(
     : await routeRequest(text, quoted);
   if (travelAsked && "flight" in route) {
     // A new, complete request (or something else entirely) stands on its own; a short answer
-    // ("on Friday", "Gatwick", "3 nights") or a partial travel request completes the one asked about.
-    const newTrip = (route.kind === "flights" && Boolean(route.flight.from && route.flight.to)) || (route.kind === "hotels" && Boolean(route.hotel.city));
-    const answers = !newTrip && (route.kind === "flights" || route.kind === "hotels" || (route.kind === "chat" && text.trim().length <= 80));
+    // ("on Friday", "Gatwick", "3 nights", "NW1") or a partial request of the same kind completes the one asked about.
+    const fresh =
+      (route.kind === "flights" && Boolean(route.flight.from && route.flight.to)) || (route.kind === "hotels" && Boolean(route.hotel.city)) || (route.kind === "energy" && Boolean(route.energy.postcode));
+    const answers = !fresh && (route.kind === "flights" || route.kind === "hotels" || route.kind === "energy" || (route.kind === "chat" && text.trim().length <= 80));
     if (answers) {
       request = `${travelAsked}\n${text}`;
       route = await routeRequest(request, quoted);
     }
   }
-  // Flight and hotel prices: asked of the providers (when set up), answered by code.
-  const travel = "flight" in route && route.kind === "flights" && flightsConfigured() ? "flights" : "hotel" in route && route.kind === "hotels" && hotelsConfigured() ? "hotels" : null;
-  if (travel && "flight" in route) {
-    const limit = await hit(travel === "flights" ? "flightSearchesPerUser" : "hotelSearchesPerUser", userId);
+  // Flight and hotel prices, and the energy check: asked of the providers (when set up), answered by code.
+  const check = !("flight" in route) ? null : route.kind === "flights" && flightsConfigured() ? "flights" : route.kind === "hotels" && hotelsConfigured() ? "hotels" : route.kind === "energy" ? "energy" : null;
+  if (check && "flight" in route) {
+    const limit = await hit(check === "flights" ? "flightSearchesPerUser" : check === "hotels" ? "hotelSearchesPerUser" : "energyChecksPerUser", userId);
     if (!limit.allowed) {
-      await say(`You've searched a lot of ${travel} in the last hour. Try again in ${describeRetry(limit.retryAfterSeconds)}.`);
+      await say(`You've checked a lot of ${check === "energy" ? "energy prices" : check} in the last hour. Try again in ${describeRetry(limit.retryAfterSeconds)}.`);
       return true;
     }
-    const reply = travel === "flights" ? await answerFlightRequest(route.flight, request) : await answerHotelRequest(route.hotel, request);
+    const reply = check === "flights" ? await answerFlightRequest(route.flight, request) : check === "hotels" ? await answerHotelRequest(route.hotel, request) : await answerEnergyRequest(route.energy, request);
     await say(reply.content, reply.metadata);
     return true;
   }
