@@ -9,6 +9,7 @@
 import { z } from "zod";
 import { FlightQuerySchema, NO_FLIGHT } from "@/lib/travel/flights";
 import { HotelQuerySchema, NO_HOTEL } from "@/lib/travel/hotels";
+import { EnergyQuerySchema, NO_ENERGY } from "@/lib/energy/check";
 
 export type ResearchSource = { url: string; title: string; quote?: string; retrievedAt?: string; pageAge?: string; /** The answer itself cites this page. */ cited?: boolean };
 
@@ -29,15 +30,25 @@ export type Answer = {
 export type TimeClass = "now" | "recent" | "past" | "none";
 
 export const RouteSchema = z.object({
-  kind: z.enum(["chat", "research", "flights", "hotels"]).describe("flights = prices or times of flights between two places (cheapest flight, fares, flights on a day). hotels = hotel rooms and their prices in a city for some nights (cheapest or best hotels, accommodation); 'where to stay in <city>' with dates, nights or a weekend is hotels too. research = needs current or specific public facts from the web (weather, news, scores, other prices, reviews, opening times of places, facts about organisations or products). chat = everything else: ideas, wording, opinions, the user's own plans, general knowledge that doesn't change."),
+  kind: z.enum(["chat", "research", "flights", "hotels", "energy"]).describe("flights = prices or times of flights between two places (cheapest flight, fares, flights on a day). hotels = hotel rooms and their prices in a city for some nights (cheapest or best hotels, accommodation); 'where to stay in <city>' with dates, nights or a weekend is hotels too. energy = the owner's own gas or electricity deal in Great Britain: am I paying too much, cheaper energy, should I switch or fix, how my rates compare. research = needs current or specific public facts from the web (weather, news, scores, other prices, reviews, opening times of places, facts about organisations or products). chat = everything else: ideas, wording, opinions, the user's own plans, general knowledge that doesn't change."),
   question: z.string().describe("research, flights and hotels: the request rewritten as one standalone question a search engine could answer, with nothing private in it. Otherwise empty."),
   time: z.enum(["now", "recent", "past", "none"]).describe("now = current conditions or today/tomorrow; recent = news from the last weeks; past = a dated event or an older article; none otherwise."),
   place: z.string().describe("A city or place named in the request (for weather or local results), or empty."),
   pages: z.array(z.string()).describe("research only: when the request names a website, publisher or organisation whose own page answers it directly, up to 2 full addresses of those pages (e.g. 'the latest BBC news' → https://www.bbc.co.uk/news; 'Guardian headlines' → https://www.theguardian.com/uk). Otherwise empty."),
   flight: FlightQuerySchema.describe("flights only: the trip asked about. Otherwise empty values."),
   hotel: HotelQuerySchema.describe("hotels only: the stay asked about. Otherwise empty values."),
+  energy: EnergyQuerySchema.describe("energy only: their supply and what they pay. Otherwise empty values."),
 });
 export type Route = z.infer<typeof RouteSchema>;
+
+const ENERGY_HINT = /\b(energy (bill|deal|tariff|supplier)s?|electricity|gas (bill|deal|tariff)|tariffs?|standing charge|unit rate|price cap|bollett[ae])\b/i;
+/** The stand-in router's energy check: "am I paying too much for electricity? NW1, 27.5p and 45p a day". */
+function mockEnergy(text: string): Route["energy"] {
+  const postcode = text.match(/\b([A-Z]{1,2}\d[A-Z\d]?)(?:\s*\d[A-Z]{2})?\b/)?.[0] ?? "";
+  const pence = [...text.matchAll(/(\d+(?:\.\d+)?)p\b/gi)].map((m) => Number(m[1]));
+  const fuel = /\bgas\b/i.test(text) && !/\belectricity\b/i.test(text) ? "gas" : /\belectricity\b/i.test(text) && !/\bgas\b/i.test(text) ? "electricity" : "both";
+  return { ...NO_ENERGY, fuel, postcode, elec_rate: fuel === "electricity" ? pence[0] ?? 0 : 0, elec_standing: fuel === "electricity" ? pence[1] ?? 0 : 0, yearly_cost: Number(text.match(/£\s?(\d[\d,]*)\s*(?:a|per)\s*year/i)?.[1]?.replace(/,/g, "") ?? 0) };
+}
 
 const HOTEL_HINT = /\b(hotels?|accommodation|where to stay|albergh?[io]|hostels?)\b/i;
 /** The stand-in router's hotel: "hotels in Rome, Italy from 2026-12-12 to 2026-12-14 for 2 under £150". */
@@ -68,18 +79,20 @@ export function mockRoute(text: string, quoted = ""): Route {
   // Whether it's a look-up is decided from the request itself; a quoted message only completes the subject.
   const flights = FLIGHT_HINT.test(text);
   const hotels = !flights && HOTEL_HINT.test(text);
-  const research = flights || hotels || RESEARCH_HINT.test(text);
+  const energy = !flights && !hotels && ENERGY_HINT.test(text);
+  const research = flights || hotels || energy || RESEARCH_HINT.test(text);
   const about = quoted.trim().replace(/\s+/g, " ").slice(0, 120);
   const placed = /\b(?:in|at|near|a|ad)\s+([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+)?)/u;
-  const place = flights || hotels ? "" : text.match(placed)?.[1] ?? (research ? about.match(placed)?.[1] : undefined) ?? "";
+  const place = flights || hotels || energy ? "" : text.match(placed)?.[1] ?? (research ? about.match(placed)?.[1] : undefined) ?? "";
   return {
-    kind: flights ? "flights" : hotels ? "hotels" : research ? "research" : "chat",
+    kind: flights ? "flights" : hotels ? "hotels" : energy ? "energy" : research ? "research" : "chat",
     question: research ? `${text.trim().slice(0, 300)}${about ? ` (about: ${about})` : ""}` : "",
     time: NOW_HINT.test(text) ? "now" : RECENT_HINT.test(text) ? "recent" : "none",
     place,
     pages: [],
     flight: flights ? mockFlight(text) : NO_FLIGHT,
     hotel: hotels ? mockHotel(text) : NO_HOTEL,
+    energy: energy ? mockEnergy(text) : NO_ENERGY,
   };
 }
 

@@ -7,6 +7,7 @@ import { MISS_SECONDS, PickSchema, RouteSchema, WordsSchema, buildAnswer, cacheS
 import { wrapUntrusted } from "@/lib/agents/prompts";
 import { NO_FLIGHT } from "@/lib/travel/flights";
 import { NO_HOTEL } from "@/lib/travel/hotels";
+import { NO_ENERGY } from "@/lib/energy/check";
 import { htmlToText } from "@/lib/business/extract";
 import { safeFetch } from "@/lib/business/fetch";
 import { clipPage, pageTitle, siteDomain } from "@/lib/business/site";
@@ -58,7 +59,7 @@ export async function routeRequest(
       mockContext: { text, quoted: quote ?? "" },
     });
   } catch {
-    return { kind: "chat", question: "", time: "none", place: "", pages: [], flight: NO_FLIGHT, hotel: NO_HOTEL };
+    return { kind: "chat", question: "", time: "none", place: "", pages: [], flight: NO_FLIGHT, hotel: NO_HOTEL, energy: NO_ENERGY };
   }
 }
 

@@ -27,6 +27,8 @@ export const LIMITS = {
   flightSearchesPerUser: { windowSeconds: 3600, max: 30 },
   /** Hotel searches a user may make (each asks for rates across a city's hotels). */
   hotelSearchesPerUser: { windowSeconds: 3600, max: 30 },
+  /** Energy checks a user may make (each reads the supplier's public prices). */
+  energyChecksPerUser: { windowSeconds: 3600, max: 30 },
   /** Coordination tasks a user may start. */
   tasksPerUser: { windowSeconds: 3600, max: 20 },
   /** Contact requests an agent may send (anti-spam). */
