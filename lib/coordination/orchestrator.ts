@@ -40,7 +40,8 @@ import { waysOf, waysText, type Way } from "@/lib/business/booking";
 import { routeRequest, researchWeb } from "@/lib/research";
 import { answerMessage, lookedUpNote, routePages } from "@/lib/research/answer";
 import { flightsConfigured } from "@/lib/travel/duffel";
-import { answerFlightRequest } from "@/lib/travel/answer";
+import { hotelsConfigured } from "@/lib/travel/liteapi";
+import { answerFlightRequest, answerHotelRequest } from "@/lib/travel/answer";
 import { WHICH_PLACE, placeNote } from "@/lib/research/place";
 import { placeFor } from "@/lib/research/usual-place";
 import type { Proposal } from "./schemas";
@@ -431,36 +432,37 @@ async function answerFromWeb(
   const { data: last } = await (thread ? lastQuery.eq("thread_id", thread) : lastQuery).order("created_at", { ascending: false }).limit(1).maybeSingle();
   const before = (last?.metadata ?? {}) as { kind?: string; research?: string; question?: string; request?: string };
   const pending = before.kind === "research_answer" && before.research === "needs_clarification" && before.question ? before.question : null;
-  // "Which day do you want to fly?" → "Friday": the reply completes the flight request asked before.
-  const flightAsked = before.kind === "flights_ask" && typeof before.request === "string" ? before.request : null;
+  // "Which day do you want to fly?" → "Friday": the reply completes the flight or hotel request asked before.
+  const travelAsked = (before.kind === "flights_ask" || before.kind === "hotels_ask") && typeof before.request === "string" ? before.request : null;
 
   let request = text;
   let route = pending
     ? { kind: "research" as const, question: `${pending} (${text.trim().slice(0, 200)})`, time: "none" as const, place: "" }
     : await routeRequest(text, quoted);
-  if (flightAsked && "flight" in route) {
-    // A new, complete flight request (or something else entirely) stands on its own; a short answer
-    // ("on Friday", "Gatwick") or a partial flight request completes the one asked about.
-    const newTrip = route.kind === "flights" && Boolean(route.flight.from && route.flight.to);
-    const answers = !newTrip && (route.kind === "flights" || (route.kind === "chat" && text.trim().length <= 80));
+  if (travelAsked && "flight" in route) {
+    // A new, complete request (or something else entirely) stands on its own; a short answer
+    // ("on Friday", "Gatwick", "3 nights") or a partial travel request completes the one asked about.
+    const newTrip = (route.kind === "flights" && Boolean(route.flight.from && route.flight.to)) || (route.kind === "hotels" && Boolean(route.hotel.city));
+    const answers = !newTrip && (route.kind === "flights" || route.kind === "hotels" || (route.kind === "chat" && text.trim().length <= 80));
     if (answers) {
-      request = `${flightAsked}\n${text}`;
+      request = `${travelAsked}\n${text}`;
       route = await routeRequest(request, quoted);
     }
   }
-  // Flight prices: asked of the airlines through the flight provider (when set up), answered by code.
-  if (route.kind === "flights" && "flight" in route && flightsConfigured()) {
-    const limit = await hit("flightSearchesPerUser", userId);
+  // Flight and hotel prices: asked of the providers (when set up), answered by code.
+  const travel = "flight" in route && route.kind === "flights" && flightsConfigured() ? "flights" : "hotel" in route && route.kind === "hotels" && hotelsConfigured() ? "hotels" : null;
+  if (travel && "flight" in route) {
+    const limit = await hit(travel === "flights" ? "flightSearchesPerUser" : "hotelSearchesPerUser", userId);
     if (!limit.allowed) {
-      await say(`You've searched a lot of flights in the last hour. Try again in ${describeRetry(limit.retryAfterSeconds)}.`);
+      await say(`You've searched a lot of ${travel} in the last hour. Try again in ${describeRetry(limit.retryAfterSeconds)}.`);
       return true;
     }
-    const reply = await answerFlightRequest(route.flight, request);
+    const reply = travel === "flights" ? await answerFlightRequest(route.flight, request) : await answerHotelRequest(route.hotel, request);
     await say(reply.content, reply.metadata);
     return true;
   }
-  // Without a flight provider, a flight question is looked up on the web like any other.
-  if ((route.kind !== "research" && route.kind !== "flights") || !route.question.trim()) return false;
+  // Without a provider, a flight or hotel question is looked up on the web like any other.
+  if ((route.kind !== "research" && route.kind !== "flights" && route.kind !== "hotels") || !route.question.trim()) return false;
   const limit = await hit("researchPerUser", userId);
   if (!limit.allowed) {
     await say(`You've looked up a lot in the last hour. Try again in ${describeRetry(limit.retryAfterSeconds)}.`);

@@ -8,6 +8,7 @@
  */
 import { z } from "zod";
 import { FlightQuerySchema, NO_FLIGHT } from "@/lib/travel/flights";
+import { HotelQuerySchema, NO_HOTEL } from "@/lib/travel/hotels";
 
 export type ResearchSource = { url: string; title: string; quote?: string; retrievedAt?: string; pageAge?: string; /** The answer itself cites this page. */ cited?: boolean };
 
@@ -28,14 +29,25 @@ export type Answer = {
 export type TimeClass = "now" | "recent" | "past" | "none";
 
 export const RouteSchema = z.object({
-  kind: z.enum(["chat", "research", "flights"]).describe("flights = prices or times of flights between two places (cheapest flight, fares, flights on a day). research = needs current or specific public facts from the web (weather, news, scores, other prices including hotels, reviews, opening times of places, facts about organisations or products). chat = everything else: ideas, wording, opinions, the user's own plans, general knowledge that doesn't change."),
-  question: z.string().describe("research and flights: the request rewritten as one standalone question a search engine could answer, with nothing private in it. Otherwise empty."),
+  kind: z.enum(["chat", "research", "flights", "hotels"]).describe("flights = prices or times of flights between two places (cheapest flight, fares, flights on a day). hotels = hotel rooms and their prices in a city for some nights (cheapest or best hotels, accommodation); 'where to stay in <city>' with dates, nights or a weekend is hotels too. research = needs current or specific public facts from the web (weather, news, scores, other prices, reviews, opening times of places, facts about organisations or products). chat = everything else: ideas, wording, opinions, the user's own plans, general knowledge that doesn't change."),
+  question: z.string().describe("research, flights and hotels: the request rewritten as one standalone question a search engine could answer, with nothing private in it. Otherwise empty."),
   time: z.enum(["now", "recent", "past", "none"]).describe("now = current conditions or today/tomorrow; recent = news from the last weeks; past = a dated event or an older article; none otherwise."),
   place: z.string().describe("A city or place named in the request (for weather or local results), or empty."),
   pages: z.array(z.string()).describe("research only: when the request names a website, publisher or organisation whose own page answers it directly, up to 2 full addresses of those pages (e.g. 'the latest BBC news' → https://www.bbc.co.uk/news; 'Guardian headlines' → https://www.theguardian.com/uk). Otherwise empty."),
   flight: FlightQuerySchema.describe("flights only: the trip asked about. Otherwise empty values."),
+  hotel: HotelQuerySchema.describe("hotels only: the stay asked about. Otherwise empty values."),
 });
 export type Route = z.infer<typeof RouteSchema>;
+
+const HOTEL_HINT = /\b(hotels?|accommodation|where to stay|albergh?[io]|hostels?)\b/i;
+/** The stand-in router's hotel: "hotels in Rome, Italy from 2026-12-12 to 2026-12-14 for 2 under £150". */
+function mockHotel(text: string): Route["hotel"] {
+  const city = text.match(/\bin\s+([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+)?)/u)?.[1] ?? "";
+  const country = ({ rome: "IT", milan: "IT", paris: "FR", london: "GB", barcelona: "ES" } as Record<string, string>)[city.toLowerCase()] ?? "";
+  const dates = text.match(/\d{4}-\d{2}-\d{2}/g) ?? [];
+  const budget = Number(text.match(/\bunder\s+[£€$]?(\d+)/i)?.[1] ?? 0);
+  return { city, country, checkin: dates[0] ?? "", checkout: dates[1] ?? "", adults: Number(text.match(/\bfor\s+(\d)\b/i)?.[1] ?? 1), max_per_night: budget, currency: /€/.test(text) ? "EUR" : "GBP", sort: /\b(best|top)\b/i.test(text) ? "rating" : "price" };
+}
 
 const FLIGHT_HINT = /\b(flights?|fly|flying|fares?|voli?|volare)\b/i;
 /** The stand-in router's flight: "flights from London to Rome on 2026-12-12 (return 2026-12-15) for 2". */
@@ -55,17 +67,19 @@ const RECENT_HINT = /\b(news|headlines?|latest|this week|notizie|ultime)\b/i;
 export function mockRoute(text: string, quoted = ""): Route {
   // Whether it's a look-up is decided from the request itself; a quoted message only completes the subject.
   const flights = FLIGHT_HINT.test(text);
-  const research = flights || RESEARCH_HINT.test(text);
+  const hotels = !flights && HOTEL_HINT.test(text);
+  const research = flights || hotels || RESEARCH_HINT.test(text);
   const about = quoted.trim().replace(/\s+/g, " ").slice(0, 120);
   const placed = /\b(?:in|at|near|a|ad)\s+([A-Z][\p{L}'-]+(?:\s+[A-Z][\p{L}'-]+)?)/u;
-  const place = flights ? "" : text.match(placed)?.[1] ?? (research ? about.match(placed)?.[1] : undefined) ?? "";
+  const place = flights || hotels ? "" : text.match(placed)?.[1] ?? (research ? about.match(placed)?.[1] : undefined) ?? "";
   return {
-    kind: flights ? "flights" : research ? "research" : "chat",
+    kind: flights ? "flights" : hotels ? "hotels" : research ? "research" : "chat",
     question: research ? `${text.trim().slice(0, 300)}${about ? ` (about: ${about})` : ""}` : "",
     time: NOW_HINT.test(text) ? "now" : RECENT_HINT.test(text) ? "recent" : "none",
     place,
     pages: [],
     flight: flights ? mockFlight(text) : NO_FLIGHT,
+    hotel: hotels ? mockHotel(text) : NO_HOTEL,
   };
 }
 

@@ -95,8 +95,8 @@ export async function handleAgentCommand(opts: { userId: string; agent: AgentRow
     // ↩ Reply: the quoted message only helps complete the question ("what's the score?" → which match).
     const quoted = opts.reply?.text;
     const route = await routeRequest(request, quoted);
-    // In a chat, a flight question is looked up on the web (flight search is in My Agent).
-    if ((route.kind !== "research" && route.kind !== "flights") || !route.question.trim()) return false;
+    // In a chat, a flight or hotel question is looked up on the web (flight and hotel search are in My Agent).
+    if ((route.kind !== "research" && route.kind !== "flights" && route.kind !== "hotels") || !route.question.trim()) return false;
     const limit = await hit("researchPerUser", userId);
     if (!limit.allowed) {
       await keepOwn(`You've looked up a lot in the last hour. Try again in ${describeRetry(limit.retryAfterSeconds)}.`);

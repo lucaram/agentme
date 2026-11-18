@@ -6,6 +6,7 @@ import { asJson } from "@/lib/data/json";
 import { MISS_SECONDS, PickSchema, RouteSchema, WordsSchema, buildAnswer, cacheSeconds, cacheText, chosenPages, feedLink, feedText, overlapPick, type Answer, type ResearchSource, type Route, type TimeClass } from "./answer";
 import { wrapUntrusted } from "@/lib/agents/prompts";
 import { NO_FLIGHT } from "@/lib/travel/flights";
+import { NO_HOTEL } from "@/lib/travel/hotels";
 import { htmlToText } from "@/lib/business/extract";
 import { safeFetch } from "@/lib/business/fetch";
 import { clipPage, pageTitle, siteDomain } from "@/lib/business/site";
@@ -57,7 +58,7 @@ export async function routeRequest(
       mockContext: { text, quoted: quote ?? "" },
     });
   } catch {
-    return { kind: "chat", question: "", time: "none", place: "", pages: [], flight: NO_FLIGHT };
+    return { kind: "chat", question: "", time: "none", place: "", pages: [], flight: NO_FLIGHT, hotel: NO_HOTEL };
   }
 }
 
