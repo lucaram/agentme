@@ -123,6 +123,33 @@ export function cleanTags(tags: string[]): string[] {
   return out.slice(0, MAX_TAGS);
 }
 
+// ------------------------------------------------------------- what a business sells (is a question about it?)
+
+const shownTo = (audience: "public" | "customers") => (p: PriceRow) => !p.hidden && (p.visibility === "public" || audience === "customers");
+const words = (s: string) => ` ${norm(s)} `;
+
+/**
+ * The question names something on the business's price list (a dish, product or service, or one of
+ * its categories): it's about this business, whatever its description says.
+ */
+export function asksAboutOffering(question: string, prices: PriceRow[], audience: "public" | "customers"): boolean {
+  const q = words(question);
+  const names = new Set(prices.filter(shownTo(audience)).flatMap((p) => [p.item, p.category ?? ""]).map(norm).filter((n) => n.length >= 3));
+  for (const name of names) if (q.includes(` ${name} `)) return true;
+  return false;
+}
+
+/** What it sells, by category, for this audience: "Breads: Butter Roti, Naan; Curries: …" (capped). */
+export function offeringsIndex(prices: PriceRow[], audience: "public" | "customers", max = 1500): string {
+  const byCategory = new Map<string, Set<string>>();
+  for (const p of prices.filter(shownTo(audience))) {
+    const key = p.category ?? (p.kind === "service" ? "Services" : "Other");
+    byCategory.set(key, (byCategory.get(key) ?? new Set()).add(p.item));
+  }
+  const text = [...byCategory].map(([c, items]) => `${c}: ${[...items].join(", ")}`).join("; ");
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
 // ------------------------------------------------------------- where prices come from
 
 export type SourceRow = {

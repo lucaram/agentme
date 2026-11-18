@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  cleanTags, facilityNote, groupItems, mentionsOfferings, mergeOfferings, mockOfferings, offeringsKnowledge, planPrices, priceNote, priceSources, priceText, readingPrices, sourceLabel, splitForReading, tidyOfferings,
+  asksAboutOffering, cleanTags, facilityNote, offeringsIndex, groupItems, mentionsOfferings, mergeOfferings, mockOfferings, offeringsKnowledge, planPrices, priceNote, priceSources, priceText, readingPrices, sourceLabel, splitForReading, tidyOfferings,
   type FacilityRow, type FoundItem, type PriceRow, type SourceRow,
 } from "@/lib/business/offerings-shared";
 import { addressKey } from "@/lib/business/extract";
@@ -144,6 +144,21 @@ describe("products & services", () => {
     // One address however it's written.
     expect(addressKey("https://www.Sole.example/menu/")).toBe(addressKey("http://sole.example/menu#top"));
     expect(addressKey("https://sole.example/menu?page=2")).not.toBe(addressKey("https://sole.example/menu"));
+  });
+
+  it("a question naming something on the price list is about the business, whatever its description says", () => {
+    const prices = [
+      row({ group_id: "g-roti", category: "Breads", item: "Butter Roti", variant: null }),
+      row({ group_id: "g-old", category: "Specials", item: "Lamb Shank", variant: null, hidden: true }),
+      row({ group_id: "g-staff", category: "Staff", item: "Staff Curry", variant: null, visibility: "customers" }),
+    ];
+    expect(asksAboutOffering("how much a butter roti at the @trattoria", prices, "public")).toBe(true);
+    expect(asksAboutOffering("What breads do you have?", prices, "public")).toBe(true);
+    expect(asksAboutOffering("Is the lamb shank good?", prices, "public")).toBe(false); // hidden
+    expect(asksAboutOffering("How much is the staff curry?", prices, "public")).toBe(false); // customers only
+    expect(asksAboutOffering("How much is the staff curry?", prices, "customers")).toBe(true);
+    expect(asksAboutOffering("Will it rain tomorrow?", prices, "public")).toBe(false);
+    expect(offeringsIndex(prices, "public")).toBe("Breads: Butter Roti");
   });
 
   it("only pages that mention prices or facilities are read; the test stand-in reads simple menus and price lists", () => {

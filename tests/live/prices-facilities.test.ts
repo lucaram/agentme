@@ -192,4 +192,26 @@ describe.skipIf(!dbUp)("prices & facilities (live)", () => {
     expect(rows).toEqual([{ id: page!.id, origin: "link", visibility: "customers" }]);
     expect(await actions.addSourceAction("http://www.sole.example/drinks#menu", "public")).toEqual({ error: "That link is already there." });
   });
+
+  it("a question about something on the price list is answered, even when the description doesn't mention it", async () => {
+    const { respond, agents, actions } = await lib();
+    const { llm, setLLMProviderForTesting } = await import("@/lib/llm");
+    const blank = { group_id: null, kind: "product" as const, category: "Breads", item: "Butter Roti", description: null, tags: [], price_type: "fixed" as const, currency: "GBP", duration_minutes: null, needs_booking: false, options: [{ id: null, label: null, price: 3.5 }] };
+    expect(await actions.saveItemAction(blank)).toHaveProperty("group_id");
+    const agent = (await agents.getAgentById(f.business.agent.id))!;
+    // The model judges from the description (a pizzeria) that roti isn't this business's: as real Claude did.
+    const real = llm();
+    const scopes: string[] = [];
+    setLLMProviderForTesting({ ...real, name: real.name, generateText: real.generateText.bind(real), generateObject: (async (req: Parameters<typeof real.generateObject>[0]) => { if (req.purpose === "business_scope") { scopes.push(req.purpose); return { scope: "unrelated" }; } return real.generateObject(req); }) as typeof real.generateObject } as typeof real);
+    try {
+      const ask = (question: string) => respond.respondAsAgent(agent, { callerHandle: "visitor", relationship: "none", text: question, data: { type: "agentme.question", question } }, []);
+      const roti = await ask("how much a butter roti at the @" + agent.handle);
+      expect(roti).toMatchObject({ status: "completed" });
+      expect(roti.text).toContain("£3.50");
+      expect(scopes).toEqual([]); // named on the price list: no guess needed
+      // Something it doesn't sell is still up to the model.
+      expect((await ask("Will it rain tomorrow?")).text).toContain("Your personal agent can help with that question.");
+      expect(scopes).toHaveLength(1);
+    } finally { setLLMProviderForTesting(undefined); }
+  });
 });
