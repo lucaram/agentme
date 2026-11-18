@@ -38,7 +38,7 @@ import { MIN_COMPARE } from "@/lib/compare/comparison";
 import { filesBlock, noteFiles, threadFileNotes, type AgentFile, type FileNotes } from "@/lib/agents/files";
 import { waysOf, waysText, type Way } from "@/lib/business/booking";
 import { routeRequest, researchWeb } from "@/lib/research";
-import { answerMessage, lookedUpNote } from "@/lib/research/answer";
+import { answerMessage, lookedUpNote, routePages } from "@/lib/research/answer";
 import { WHICH_PLACE, placeNote } from "@/lib/research/place";
 import { placeFor } from "@/lib/research/usual-place";
 import type { Proposal } from "./schemas";
@@ -443,7 +443,7 @@ async function answerFromWeb(
     await say(WHICH_PLACE);
     return true;
   }
-  const answer = await researchWeb({ question: where.question, time: route.time, place: where.place });
+  const answer = await researchWeb({ question: where.question, time: route.time, place: where.place, seedUrls: routePages("pages" in route ? route.pages : []) });
   // What was taken from a quoted message is shown: the question that actually went out.
   const notes = [quoted && !pending ? lookedUpNote(where.question) : "", where.assumed ? placeNote(where.assumed, where.now) : ""].filter(Boolean);
   await say([...notes, answerMessage(answer)].join("\n\n"), { kind: "research_answer", research: answer.status, question: route.question.slice(0, 500), sources: answer.sources.slice(0, 3) });
