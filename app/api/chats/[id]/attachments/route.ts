@@ -5,6 +5,7 @@ import { chatWriteAccess } from "@/lib/chat/access";
 import { ATTACHMENT_BUCKET, validateChatFile } from "@/lib/chat/files";
 import { MAX_FILE_BYTES } from "@/lib/chat/rich";
 import { hit } from "@/lib/limits";
+import { agentFileProblem } from "@/lib/agents/file-checks";
 
 export const runtime = "nodejs";
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -14,7 +15,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) return Response.json({ error: "Not found." }, { status: 404 });
   try {
-    await chatWriteAccess(id, user.id, agent.id);
+    const conv = await chatWriteAccess(id, user.id, agent.id);
+    if (conv.kind === "agent_chat") throw new Error("A business's agent reads text only.");
     if (!(await hit("chatUploadsPerUser", user.id)).allowed) return Response.json({ error: "Too many uploads. Try again in a minute." }, { status: 429 });
     // Bound the stream before multipart parsing; Content-Length is not trusted.
     const reader = request.body?.getReader(); if (!reader) throw new Error("Choose a file.");
@@ -24,6 +26,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const form = await multipart.formData(); const file = form.get("file");
     if (!(file instanceof File)) throw new Error("Choose a file.");
     const checked = await validateChatFile(file, String(form.get("kind") ?? ""));
+    if (conv.kind === "my_agent") {
+      const problem = agentFileProblem({ name: checked.name, mime: checked.mime, kind: checked.kind, bytes: checked.body.length }, checked.body);
+      if (problem) throw new Error(problem);
+    }
     const attachmentId = crypto.randomUUID(); const path = `${user.id}/${attachmentId}`;
     const db = adminClient();
     const { error } = await db.storage.from(ATTACHMENT_BUCKET).upload(path, checked.body, { contentType: checked.mime, upsert: false });

@@ -11,6 +11,9 @@ import { chatWriteAccess } from "@/lib/chat/access";
 import { ATTACHMENT_BUCKET, pruneChatAttachments } from "@/lib/chat/files";
 import type { Database } from "@/lib/database.types";
 import { createCommunity } from "@/lib/social/communities";
+import { agentFilesFrom } from "@/lib/agents/files";
+import { handleOwnerMessage } from "@/lib/coordination/orchestrator";
+import { withThread } from "@/lib/agents/thread-context";
 type AuthClient = ReturnType<typeof createClient<Database>>;
 
 const session = vi.hoisted(() => ({ user: null as { id: string } | null, agent: null as unknown, client: null as unknown }));
@@ -78,11 +81,11 @@ describe.skipIf(!dbUp)("private rich chat messages", () => {
     await f.db.from("chat_upload_usage").delete().eq("user_id", f.luca.userId);
   });
   it("prevents attaching another conversation's draft and permits discarding one's own pending upload", async () => {
-    await as(f.luca); const other = await (await upload(f.direct)).json();
+    await as(f.luca); const other = await (await upload(f.myAgent)).json();
     expect(await send({ clientId: crypto.randomUUID(), attachments: [other.id] })).toHaveProperty("error");
-    await as(f.marco); await DELETE(new Request(`http://localhost:3000/api/chats/${f.direct}/attachments?file=${other.id}`, { method: "DELETE", headers: { Origin: "http://localhost:3000" } }), { params: Promise.resolve({ id: f.direct }) });
+    await as(f.marco); await DELETE(new Request(`http://localhost:3000/api/chats/${f.myAgent}/attachments?file=${other.id}`, { method: "DELETE", headers: { Origin: "http://localhost:3000" } }), { params: Promise.resolve({ id: f.myAgent }) });
     expect((await f.db.from("chat_attachments").select("id").eq("id", other.id)).data).toHaveLength(1);
-    await as(f.luca); await DELETE(new Request(`http://localhost:3000/api/chats/${f.direct}/attachments?file=${other.id}`, { method: "DELETE", headers: { Origin: "http://localhost:3000" } }), { params: Promise.resolve({ id: f.direct }) });
+    await as(f.luca); await DELETE(new Request(`http://localhost:3000/api/chats/${f.myAgent}/attachments?file=${other.id}`, { method: "DELETE", headers: { Origin: "http://localhost:3000" } }), { params: Promise.resolve({ id: f.myAgent }) });
     expect((await f.db.from("chat_attachments").select("id").eq("id", other.id)).data).toEqual([]);
   });
   it("revokes attachment access on message removal and queues object cleanup", async () => {
@@ -101,12 +104,51 @@ describe.skipIf(!dbUp)("private rich chat messages", () => {
     const textOnly = { error: "Your agent reads text only. Nothing has been sent." };
     expect(await send({ clientId: crypto.randomUUID(), poll: { question: "Friday dinner?", options: ["Yes", "No"], people: [f.marco.agent.id] } }, f.myAgent)).toEqual(textOnly);
     expect(await send({ clientId: crypto.randomUUID(), location: { lat: 51.5, lon: -0.12 } }, f.myAgent)).toEqual(textOnly);
+    // (My Agent's files go through sendMessage to your own agent: see the next test.)
     expect(await send({ clientId: crypto.randomUUID(), location: { lat: 51.5, lon: -0.12 } }, f.direct)).toEqual(textOnly);
     const toAgent = await sendRichMessage({ conv: (await getConversation(f.group))!, userId: f.luca.userId, agent: f.luca.agent, text: "@agent where is this?", raw: { clientId: crypto.randomUUID(), location: { lat: 51.5, lon: -0.12 } } });
     expect(toAgent.error).toMatch(/^@agent reads text only/);
     // Nothing was posted by any of them.
     const { count } = await f.db.from("messages").select("id", { count: "exact", head: true }).in("conversation_id", [f.myAgent, f.direct]).eq("metadata->>kind", "rich_message");
     expect(count).toBe(0);
+  });
+  it("My Agent reads photos, PDFs and text files for its owner, keeps notes, and never takes voice or video", async () => {
+    await as(f.luca);
+    const pdf = (pages: number) => `%PDF-1.4\n1 0 obj<</Type /Catalog /Pages 2 0 R>>endobj\n2 0 obj<</Type /Pages /Count ${pages}>>endobj\n${Array.from({ length: pages }, (_, i) => `${i + 3} 0 obj<</Type /Page /Parent 2 0 R>>endobj`).join("\n")}\ntrailer<</Root 1 0 R>>\n%%EOF`;
+    // Uploads: what your agent can read; never to a business's agent.
+    const flyer = await upload(f.myAgent, undefined, "flyer.pdf", pdf(2)); expect(flyer.status).toBe(200);
+    const sign = await upload(f.myAgent, undefined, "sign.png"); expect(sign.status).toBe(200);
+    const long = await upload(f.myAgent, undefined, "long.pdf", pdf(21)); expect(long.status).toBe(400);
+    expect((await long.json()).error).toBe("long.pdf has more than 20 pages. Attach the pages you need.");
+    const wav = Buffer.alloc(44 + 1600); wav.write("RIFF"); wav.writeUInt32LE(wav.length - 8, 4); wav.write("WAVEfmt ", 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(16000, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write("data", 36); wav.writeUInt32LE(1600, 40);
+    const voice = await upload(f.myAgent, undefined, "voice.wav", new Uint8Array(wav)); expect(voice.status).toBe(400);
+    expect((await voice.json()).error).toMatch(/^Your agent reads photos, PDFs and text files/);
+    const toBusiness = await upload(f.direct, undefined, "flyer.pdf", pdf(1)); expect(toBusiness.status).toBe(400);
+    expect((await toBusiness.json()).error).toBe("A business's agent reads text only.");
+    // Only files: no location or poll for your agent; only your own unsent uploads.
+    const ids = [(await flyer.json()).id, (await sign.json()).id];
+    expect(await agentFilesFrom(f.myAgent, f.luca.userId, { clientId: crypto.randomUUID(), attachments: ids, location: { lat: 51.5, lon: -0.12 } })).toHaveProperty("error");
+    expect(await agentFilesFrom(f.myAgent, f.marco.userId, { clientId: crypto.randomUUID(), attachments: ids })).toHaveProperty("error");
+    const loaded = await agentFilesFrom(f.myAgent, f.luca.userId, { clientId: crypto.randomUUID(), attachments: ids });
+    if ("error" in loaded) throw new Error(loaded.error);
+    expect(loaded.files.map((file) => file.name).sort()).toEqual(["flyer.pdf", "sign.webp"]);
+    // Your agent reads them once (notes kept with each file) and answers from them, in this topic.
+    const { data: thread } = await f.db.from("agent_threads").insert({ owner_id: f.luca.userId, conversation_id: f.myAgent, title: "Files" }).select("id").single();
+    await withThread({ conversationId: f.myAgent, threadId: thread!.id }, () => handleOwnerMessage({ userId: f.luca.userId, agent: f.luca.agent, conversationId: f.myAgent, text: "What are these?", files: { clientId: loaded.clientId, items: loaded.files } }));
+    const { data: sent } = await f.db.from("messages").select("id").eq("conversation_id", f.myAgent).eq("metadata->>client_id", loaded.clientId).single();
+    const { data: notes } = await f.db.from("chat_attachments").select("name,message_id,agent_notes").in("id", ids).order("name");
+    expect(notes).toEqual([
+      { name: "flyer.pdf", message_id: sent!.id, agent_notes: "Flyer: Jazz night, Friday 21 November, 8pm, at the Blue Room. Tickets £10." },
+      { name: "sign.webp", message_id: sent!.id, agent_notes: "A road sign: no entry for vehicles over 7.5 tonnes." },
+    ]);
+    const lastReply = async () => (await f.db.from("messages").select("content").eq("conversation_id", f.myAgent).eq("thread_id", thread!.id).not("sender_agent_id", "is", null).order("created_at", { ascending: false }).limit(1).single()).data!.content;
+    expect(await lastReply()).toContain("From flyer.pdf: Flyer: Jazz night");
+    // A later question in the same topic: answered from the notes, without the file.
+    await withThread({ conversationId: f.myAgent, threadId: thread!.id }, () => handleOwnerMessage({ userId: f.luca.userId, agent: f.luca.agent, conversationId: f.myAgent, text: "How much are the tickets?" }));
+    expect(await lastReply()).toContain("Tickets £10");
+    // Clients can't read the private notes.
+    const { error: hidden } = await (session.client as AuthClient).from("chat_attachments").select("agent_notes").in("id", ids);
+    expect(hidden).not.toBeNull();
   });
   it("does not let attachments bypass a community's no-media house rule", async () => {
     const made = await createCommunity({ userId: f.luca.userId, agent: f.luca.agent }, { name: `Text discussion ${f.luca.agent.handle}`, description: "A temporary community for text discussion only.", avatar: "📚", visibility: "private", houseRules: ["no_media"] });

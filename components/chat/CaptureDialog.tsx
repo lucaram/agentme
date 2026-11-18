@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { recordingMime, recordingName } from "@/lib/client/media";
 import { ChatDialog } from "./ChatDialog";
 
-export function CaptureDialog({ mode, onFile, onClose }: { mode: "camera" | "audio"; onFile: (file: File, kind: "image" | "video" | "audio") => void; onClose: () => void }) {
+/** `photoOnly`: the camera takes photos only (e.g. for your agent, which can't watch videos). */
+export function CaptureDialog({ mode, onFile, onClose, photoOnly = false }: { mode: "camera" | "audio"; onFile: (file: File, kind: "image" | "video" | "audio") => void; onClose: () => void; photoOnly?: boolean }) {
   const video = useRef<HTMLVideoElement>(null); const stream = useRef<MediaStream | null>(null); const recorder = useRef<MediaRecorder | null>(null); const cancelled = useRef(false);
   const [ready, setReady] = useState(false); const [recording, setRecording] = useState(false); const [seconds, setSeconds] = useState(0); const [error, setError] = useState("");
   useEffect(() => {
@@ -46,8 +47,8 @@ export function CaptureDialog({ mode, onFile, onClose }: { mode: "camera" | "aud
       {mode === "camera" ? <video ref={video} autoPlay muted playsInline className="max-h-[50vh] w-full rounded-2xl bg-black" /> : <div className={`rounded-2xl bg-accent-soft p-8 text-center ${recording ? "animate-pulse" : ""}`}><span className="text-4xl" aria-hidden>🎙️</span><p className="mt-3 tabular-nums" role="status">{recording ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} · Recording` : "Ready when you are"}</p></div>}
       {mode === "camera" && recording && <p role="status" className="text-sm tabular-nums text-danger">● {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")} · Recording</p>}
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-      <p className="hint">{mode === "camera" ? "Compressed photos and videos · videos up to 2 minutes" : "Compressed audio · up to 5 minutes"}. Review it before sending.</p>
-      <div className="flex flex-wrap gap-2">{recording ? <button type="button" className="btn-primary" onClick={stop}>Stop &amp; review</button> : <>{mode === "camera" && <button type="button" className="btn-primary" disabled={!ready} onClick={photo}>Take photo</button>}<button type="button" className={mode === "camera" ? "btn-ghost" : "btn-primary"} disabled={!ready} onClick={record}>{mode === "camera" ? "Record video" : "Start recording"}</button></>}</div>
+      <p className="hint">{mode === "camera" ? (photoOnly ? "A compressed photo" : "Compressed photos and videos · videos up to 2 minutes") : "Compressed audio · up to 5 minutes"}. Review it before sending.</p>
+      <div className="flex flex-wrap gap-2">{recording ? <button type="button" className="btn-primary" onClick={stop}>Stop &amp; review</button> : <>{mode === "camera" && <button type="button" className="btn-primary" disabled={!ready} onClick={photo}>Take photo</button>}{!photoOnly && <button type="button" className={mode === "camera" ? "btn-ghost" : "btn-primary"} disabled={!ready} onClick={record}>{mode === "camera" ? "Record video" : "Start recording"}</button>}</>}</div>
     </section>
   </ChatDialog>;
 }

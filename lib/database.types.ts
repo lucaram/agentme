@@ -458,9 +458,9 @@ isOneToOne: false
                   Update: { revision?: number }
                   Relationships: []
                 },"chat_attachments": {
-                  Row: { id:string; conversation_id:string; uploader_id:string; message_id:string|null; path:string; name:string; mime:string; kind:string; bytes:number; created_at:string }
+                  Row: { id:string; conversation_id:string; uploader_id:string; message_id:string|null; path:string; name:string; mime:string; kind:string; bytes:number; created_at:string; agent_notes:string|null; agent_notes_at:string|null }
                   Insert: { id?:string; conversation_id:string; uploader_id:string; message_id?:string|null; path:string; name:string; mime:string; kind:string; bytes:number; created_at?:string }
-                  Update: { message_id?:string|null }
+                  Update: { message_id?:string|null; agent_notes?:string|null; agent_notes_at?:string|null }
                   Relationships: []
                 },"chat_attachment_gc": {
                   Row: { path:string; created_at:string }

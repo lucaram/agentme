@@ -44,6 +44,9 @@ export class MockProvider implements LLMProvider {
     let text: string;
     switch (req.purpose) {
       case "owner_chat": {
+        // A file attached (now or earlier in this topic): answer from what was read in it.
+        const files = (ctx.files ?? []) as { name: string; notes: string }[];
+        if (files.length) { text = files.map((f) => `From ${f.name}: ${f.notes}`).join(" "); break; }
         const recall = (ctx.recall ?? []) as RecallPlan[];
         const asksAboutPlans = /\b(what time|when|who|replied|answer|agree|poll|vote|result|plan|coming)\b/i.test(String(ctx.text ?? ""));
         text =
@@ -78,6 +81,10 @@ export class MockProvider implements LLMProvider {
         text = line ? `STATUS: answered\n${line.trim()}` : "STATUS: not_found\nThe pages don't say.";
         break;
       }
+      case "file_notes":
+        // Deterministic stand-ins for reading a photo or a document.
+        text = ctx.kind === "image" ? "A road sign: no entry for vehicles over 7.5 tonnes." : "Flyer: Jazz night, Friday 21 November, 8pm, at the Blue Room. Tickets £10.";
+        break;
       case "business_ingest":
         // Deterministic stand-in for reading a PDF or photo.
         text = `(Read from ${String(ctx.kind ?? "file")}) ${String(ctx.hint ?? "Menu items and prices")}`;

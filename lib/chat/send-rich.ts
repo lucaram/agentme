@@ -28,7 +28,7 @@ export async function sendRichMessage({ conv, userId, agent, text, replyTo, conf
   const { data: existing } = await db.from("messages").select("thread_id").eq("conversation_id", conv.id).eq("sender_user_id", userId).eq("metadata->>client_id", rich.clientId).maybeSingle();
   if (existing) return existing.thread_id ? { threadId: existing.thread_id } : {};
   if (!(await hit("richMessagesPerUser", userId)).allowed) return { error: "You're sending too quickly. Try again in a minute." };
-  // Only an agent reads these chats, and it reads text only.
+  // Only an agent reads these chats: a business's agent reads text only; your own agent reads files through sendMessage.
   if (conv.kind === "my_agent" || conv.kind === "agent_chat") return { error: "Your agent reads text only. Nothing has been sent." };
   if (summonsAgent(text)) return { error: "@agent reads text only. Send your files as a separate message, without @agent. Nothing has been shared." };
   if (rich.poll && (rich.attachments.length || rich.location)) return { error: "Send the poll separately from files and location." };
