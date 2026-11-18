@@ -80,7 +80,7 @@ export async function handleOwnerMessage(opts: {
   const fresh = attached.length ? await noteFiles(attached) : [];
   const earlier = await threadFileNotes(conversationId, threadFor(conversationId));
   const files: OwnerFiles | null = earlier.length || fresh.length
-    ? { notes: [...earlier.filter((e) => !fresh.some((f) => f.name === e.name)), ...fresh], attachments: attached.filter((f) => f.mime !== "text/plain").map((f) => ({ mediaType: f.mime, base64: f.body.toString("base64") })) }
+    ? { notes: [...earlier.filter((e) => !fresh.some((f) => f.name === e.name)), ...fresh], attachments: attached.filter((f) => f.text === undefined).map((f) => ({ mediaType: f.mime, base64: f.body.toString("base64") })) }
     : null;
   // A file with no words: your agent says what it read.
   if (!text.trim() && files) return replyToOwner(agent, userId, conversationId, "What is this?", undefined, opts.here, files);

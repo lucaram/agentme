@@ -23,7 +23,7 @@ export function useComposerExtras(conversationId: string, insertEmoji: (emoji: s
   async function addFile(file: File, recordedKind?: DraftFile["kind"]) {
     if (poll) return setError("Send the poll separately from files and location.");
     if (fileRef.current.length >= (forAgent ? AGENT_MAX_FILES : MAX_FILES)) return setError(`Attach up to ${forAgent ? AGENT_MAX_FILES : MAX_FILES} files in one message.`);
-    if (forAgent && !(file.type.startsWith("image/") || /\.(pdf|txt|jpe?g|png|webp)$/i.test(file.name))) return setError("Your agent reads photos, PDFs and text files. Share other files in a chat with people.");
+    if (forAgent && !(file.type.startsWith("image/") || /\.(pdf|txt|csv|rtf|docx|xlsx|pptx|odt|ods|odp|jpe?g|png|webp)$/i.test(file.name))) return setError("Your agent reads photos, PDFs, Word, Excel, PowerPoint and text files. Share other files in a chat with people.");
     if (file.size > 64 * 1024 * 1024) return setError("Choose a smaller file. Camera videos are compressed automatically.");
     setBusy(true); setError("");
     const controller = new AbortController(); preparation.current = controller;

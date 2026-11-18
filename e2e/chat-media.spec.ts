@@ -190,8 +190,8 @@ test("what each chat lets you attach: your agent reads photos and documents, a b
     await luca.getByRole("button", { name: "Attach", exact: true }).click();
     const menu = luca.getByRole("region", { name: "Attachment menu", exact: true });
     await expect(menu.getByRole("button")).toHaveText(["✕", "📎 Photos & files", "📷 Camera"]);
-    await expect(luca.getByTestId("agent-files-note")).toContainText("Your agent reads photos, PDFs and text files to answer you. They're never sent to anyone else.");
-    await expect(luca.getByLabel("Choose attachments", { exact: true })).toHaveAttribute("accept", ".jpg,.jpeg,.png,.webp,.pdf,.txt");
+    await expect(luca.getByTestId("agent-files-note")).toContainText("Your agent reads photos, PDFs, Word, Excel, PowerPoint and text files to answer you. They're never sent to anyone else.");
+    await expect(luca.getByLabel("Choose attachments", { exact: true })).toHaveAttribute("accept", ".jpg,.jpeg,.png,.webp,.pdf,.txt,.csv,.rtf,.docx,.xlsx,.pptx,.odt,.ods,.odp");
     await luca.getByLabel("Choose attachments", { exact: true }).setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("Jazz night, Friday 21 November, 8pm, at the Blue Room.") });
     await luca.getByRole("textbox", { name: "Message", exact: true }).fill("When is it?");
     await luca.getByRole("button", { name: "Send", exact: true }).click();
