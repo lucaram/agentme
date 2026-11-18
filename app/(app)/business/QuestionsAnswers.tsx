@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addFaqAction, removeFaqAction, updateFaqAction } from "./actions";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
+import { LoadMore } from "@/components/LoadMore";
+import { PAGE_SIZE } from "@/lib/paging";
 
 type Faq = { q: string; a: string };
 
@@ -54,6 +56,8 @@ export function QuestionsAnswers({ faqs }: { faqs: Faq[] }) {
   const [editing, setEditing] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [pending, start] = useTransition();
+  // The first few, then more as you scroll (they are all here already).
+  const [shown, setShown] = useState(PAGE_SIZE);
   const done = async (result: { error?: string }) => {
     if (!result.error) {
       setEditing(null);
@@ -66,7 +70,7 @@ export function QuestionsAnswers({ faqs }: { faqs: Faq[] }) {
     <div className="space-y-3">
       {faqs.length > 0 && (
         <ul className="divide-y divide-border" data-testid="faq-list">
-          {faqs.map((f, i) =>
+          {faqs.slice(0, shown).map((f, i) =>
             editing === i ? (
               <li key={i} className="py-2">
                 <FaqEditor initial={f} saveLabel="Save" onCancel={() => setEditing(null)} onSave={async (next) => done(await updateFaqAction(i, next.q, next.a))} />
@@ -86,6 +90,7 @@ export function QuestionsAnswers({ faqs }: { faqs: Faq[] }) {
           )}
         </ul>
       )}
+      {faqs.length > shown && <LoadMore onMore={() => setShown((n) => n + PAGE_SIZE)} left={faqs.length - shown} />}
       {adding ? (
         <FaqEditor
           initial={{ q: "", a: "" }}
@@ -95,6 +100,8 @@ export function QuestionsAnswers({ faqs }: { faqs: Faq[] }) {
             const result = await addFaqAction(f.q, f.a);
             if (!result.error) {
               setAdding(false);
+              // Show the whole list, so the new answer (added at the end) is in view.
+              setShown(Infinity);
               router.refresh();
             }
             return result;

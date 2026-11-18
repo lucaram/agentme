@@ -2,7 +2,8 @@ import { Avatar } from "@/components/Avatar";
 import Link from "next/link";
 import { OUTCOMES, describeIncoming, type Outcome } from "@/lib/activity/incoming";
 import { getOrCreateMyAgentConversation } from "@/lib/data/chat";
-import { LoadMore } from "./LoadMore";
+import { LoadMore } from "@/components/LoadMore";
+import { PAGE_SIZE as PAGE } from "@/lib/paging";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { CATEGORY_LABELS, type FactCategory } from "@/lib/policy/disclosure";
@@ -22,8 +23,6 @@ const sum = (rows: UsageRow[]) => ({
   tokens: rows.reduce((n, r) => n + r.input_tokens + r.output_tokens, 0),
 });
 
-/** Rows of "what others asked" shown at first; "Show more" adds this many. */
-const PAGE = 10;
 
 export default async function HistoryPage({ searchParams }: PageProps<"/history">) {
   const { user, agent } = await requireAgent();
