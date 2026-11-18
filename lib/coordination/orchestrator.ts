@@ -337,7 +337,7 @@ async function startAskAround(opts: { userId: string; agent: AgentRow; conversat
   } else {
     people = askable.map((c) => c.handle).sort();
   }
-  if (!people.length) return say("There's nobody to ask yet: add contacts first (or your contacts have switched off recommendation requests).");
+  if (!people.length) return say("There's nobody to ask yet: add people in [Contacts](/contacts) first (or your contacts have switched off recommendation requests).");
   const capped = people.slice(0, MAX_ASK_AROUND);
 
   const limit = await hit("askAroundPerUser", userId);

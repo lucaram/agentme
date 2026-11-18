@@ -8,7 +8,7 @@
 export type Inline = { text: string; bold: boolean; href?: string };
 
 /** The only pages an agent message may link to (anything else stays plain text). */
-export const APP_LINKS: readonly string[] = ["/settings/about", "/settings/about/lifestyle"];
+export const APP_LINKS: readonly string[] = ["/settings/about", "/settings/about/lifestyle", "/contacts", "/business"];
 const LINK = /\[([^\]\n]{1,80})\]\(([^)\s]{1,100})\)/g;
 
 /** Plain text with [label](/page) links: allowed pages become links; anything else keeps just its label. */

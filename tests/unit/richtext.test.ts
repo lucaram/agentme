@@ -39,6 +39,7 @@ describe("agent message formatting", () => {
       expect(parts.some((part) => part.href), href).toBe(false);
       expect(parts.map((part) => part.text).join(""), href).toMatch(/^Open this/);
     }
+    for (const href of ["/contacts", "/business", "/settings/about/lifestyle"]) expect(parseRichText(`Go to [there](${href})`)[0]).toMatchObject({ content: [{ text: "Go to " }, { text: "there", href }] });
     expect(parseRichText("**See [Lifestyle](/settings/about/lifestyle)**")[0]).toEqual({ type: "paragraph", content: [{ text: "See ", bold: true }, { text: "Lifestyle", bold: true, href: "/settings/about/lifestyle" }] });
   });
 });
