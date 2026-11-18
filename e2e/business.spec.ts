@@ -33,9 +33,9 @@ Our menu: ${baseURL}/demo/trattoria-menu.html`);
   await shop.page.getByRole("button", { name: "Save description" }).click();
   await expect(shop.page.getByRole("status").filter({ hasText: "1 linked page was added" })).toBeVisible();
   await openSection(shop.page, "fold-documents");
-  await expect(shop.page.getByTestId("source-status").first()).toContainText("✓ Read", { timeout: 20_000 });
+  await expect(shop.page.getByTestId("source-status").first()).toContainText("Scanned", { timeout: 20_000 });
   // Shown as the same link seen from two places, not a duplicate.
-  await expect(shop.page.getByTestId("source-from-text")).toContainText("📝 from your link in About your business");
+  await expect(shop.page.getByTestId("source-from-text")).toContainText("Linked in About your business");
 
   // Try it: answered from the menu it read.
   await shop.page.getByRole("button", { name: "Test your agent", exact: true }).click();

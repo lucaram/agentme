@@ -98,14 +98,14 @@ export function WebsiteCard({ site, verified, canVerifyByEmail, lookup = true, i
 
       <p className="text-sm text-muted" data-testid="website-status">
         {site.status === "reading" ? (
-          <><Thinking label="Reading your website" /> <Link href="/business/setup" className="text-accent underline">See progress</Link></>
+          <><Thinking label="Scanning your website" /> <Link href="/business/setup" className="text-accent underline">See progress</Link></>
         ) : site.status === "error" ? (
           <span className="text-danger">{site.error}</span>
         ) : (
           <>
             {site.pagesRead} {site.pagesRead === 1 ? "page" : "pages"} read
             {site.readingPrices ? (
-              <> · <Thinking label="Reading prices" className="text-accent" /></>
+              <> · <Thinking label="Finding prices" className="text-accent" /></>
             ) : site.pricePages ? (
               <> · <Link href="/business/prices" className="text-accent underline" data-testid="site-price-pages">💷 Prices found on {site.pricePages} {site.pricePages === 1 ? "page" : "pages"}</Link></>
             ) : null}
@@ -122,7 +122,7 @@ export function WebsiteCard({ site, verified, canVerifyByEmail, lookup = true, i
           {site.live ? "What your agent learned" : "Review and go live"}
         </Link>
         <button type="button" className="btn-ghost" disabled={pending || site.status === "reading"} onClick={() => run(rereadWebsiteAction)}>
-          ↻ Re-read now
+          ↻ Scan
         </button>
         <button type="button" className="btn-ghost" disabled={pending || site.status === "reading"} onClick={() => { setValue(site.url); setChanging(true); }}>Change website</button>
         <button

@@ -27,7 +27,7 @@ export async function readOfferings(sourceId: string, opts: { force?: boolean } 
   try {
     await readNow(sourceId, opts);
   } finally {
-    // However it ended, it's no longer being read (pages showing "Reading prices…" update).
+    // However it ended, it's no longer being read (pages showing "Scanning" update).
     await adminClient().from("business_sources").update({ offerings_reading_at: null }).eq("id", sourceId).not("offerings_reading_at", "is", null);
   }
 }
@@ -66,7 +66,7 @@ async function readNow(sourceId: string, opts: { force?: boolean }) {
     try {
       found = tidyOfferings(mergeOfferings(await Promise.all(parts.map((text, i) => readPart(text, i).catch(() => readPart(text, i))))));
     } catch (error) {
-      // What was there stays; the business sees why, and "Look again" tries again.
+      // What was there stays; the business sees why, and "Scan" tries again.
       console.error("[offerings] couldn't read", source.url, error);
       await db.from("business_sources").update({ offerings_error: "Prices couldn't be read from it this time." }).eq("id", source.id);
       return;
@@ -109,7 +109,7 @@ async function readNow(sourceId: string, opts: { force?: boolean }) {
   await db.from("business_sources").update({ offerings_hash: digest, offerings_error: null, offerings_read_at: new Date().toISOString() }).eq("id", source.id);
 }
 
-/** Every source of a business, one after another ("Look again", and after the website is read). */
+/** Every source of a business, one after another ("Scan", and after the website is read). */
 export async function readAllOfferings(agentId: string, opts: { force?: boolean; origin?: "site" | "link" } = {}) {
   await markReading(agentId, opts.origin);
   const query = adminClient().from("business_sources").select("id").eq("agent_id", agentId).not("content", "is", null).in("origin", opts.origin ? [opts.origin] : ["link", "site"]);

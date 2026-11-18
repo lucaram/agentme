@@ -96,7 +96,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const sources = rows.map((source) => ({
     fromText: inAbout.has(linkKey(source.url)) ? "About your business" : inCustomers.has(linkKey(source.url)) ? "For customers only" : null,
     id: source.id, url: source.url, visibility: source.visibility, status: source.status, kind: source.kind, error: source.error, offerings_error: source.offerings_error, reading_prices: readingPrices(source), last_read_at: source.last_read_at,
-    words: (source.content ?? "").split(/\s+/).filter(Boolean).length, preview: (source.content ?? "").slice(0, 1500),
+    prices: new Set(offerings.prices.filter((p) => p.source_url === source.url && !p.hidden && !p.added).map((p) => p.group_id)).size,
   }));
   const faqs = info.faqs ?? [];
   const { data: placementRows } = await supabase.from("business_placements").select("id, conversation_id, community_id, status").order("created_at", { ascending: false });
@@ -143,7 +143,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
           </div>
           {ownerView && scope === "all" && <CustomerDashboard data={dashboard} approvedAnswers={faqs.length} />}
         </Fold>
-        <Fold name={SECTIONS} id="agent-knows" icon="🧠" title="What your agent knows" testId="fold-knows" summary={site?.status === "reading" ? <Thinking label="Reading your website" className="text-accent" /> : readingOfferings ? <Thinking label="Reading prices" className="text-accent" /> : knowsSummary} badge={{ count: changeList.length, tone: "new" }}>
+        <Fold name={SECTIONS} id="agent-knows" icon="🧠" title="What your agent knows" testId="fold-knows" summary={site?.status === "reading" ? <Thinking label="Scanning your website" className="text-accent" /> : readingOfferings ? <Thinking label="Finding prices" className="text-accent" /> : knowsSummary} badge={{ count: changeList.length, tone: "new" }}>
           <Tabs
             label="What your agent knows"
             tabs={[
@@ -179,7 +179,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
                     <span className="text-xl" aria-hidden>{r.icon}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block font-semibold">{r.title}</span>
-                      <span className="block truncate text-xs text-muted">{readingOfferings ? <Thinking label={r.href.endsWith("prices") ? "Reading prices" : "Reading facilities"} className="text-accent" /> : r.summary}</span>
+                      <span className="block truncate text-xs text-muted">{readingOfferings ? <Thinking label="Scanning" className="text-accent" /> : r.summary}</span>
                     </span>
                     <span className="text-accent" aria-hidden>›</span>
                   </Link>
@@ -208,7 +208,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
               </div>}
               <div id="links" className="scroll-mt-40 space-y-3 border-t border-border pt-4">
                 <h3 className="font-medium">Additional documents &amp; links</h3>
-                <p className="hint">Pages, PDFs and photos your agent reads and learns from, such as a menu or price list. Customers don&apos;t see them as buttons.</p>
+                <p className="hint">Menus, price lists and other pages, PDFs or photos your agent learns from. Customers don&apos;t see them.</p>
                 {sourcesError ? <p role="alert" className="text-sm text-danger">Documents could not be loaded. Refresh to try again.</p> : <SourcesManager sources={sources} />}
               </div>
               <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Customer-only information</summary><div className="pt-3"><BusinessInfoForm mode="customers" customers={info.customers ?? ""} /></div></details>

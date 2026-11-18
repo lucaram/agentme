@@ -370,7 +370,7 @@ export async function removeFacilityAction(key: string): Promise<Out> {
   return {};
 }
 
-/** "Look again": read every document and page for prices and facilities now. */
+/** "Scan": read every document and page for prices and facilities now. */
 export async function rereadOfferingsAction(): Promise<Out> {
   const { user, agent } = await requireBusiness();
   if (!(await hit("offeringsRereadsPerAgent", agent.id)).allowed) return { error: "You've done this a lot just now. Try again in a few minutes." };

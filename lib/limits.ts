@@ -10,7 +10,7 @@ export const LIMITS = {
   /** Cover images for a business's public page. */
   coverUploadsPerUser: { windowSeconds: 60, max: 6 },
   chatUploadsPerUser: { windowSeconds: 60, max: 12 },
-  /** "Look again" for prices and facilities: every document re-read by the AI, so a few an hour. */
+  /** "Scan" for prices and facilities: every document re-read by the AI, so a few an hour. */
   offeringsRereadsPerAgent: { windowSeconds: 3600, max: 6 },
   richMessagesPerUser: { windowSeconds: 60, max: 30 },
   businessActionClicksPerIp: { windowSeconds: 60, max: 60 },
@@ -31,7 +31,7 @@ export const LIMITS = {
   contactSyncsPerAgent: { windowSeconds: 86400, max: 20 },
   /** Phone verification codes sent. */
   phoneCodesPerAgent: { windowSeconds: 3600, max: 5 },
-  /** "Re-read now" on a business link. */
+  /** "Scan" on a business link. */
   businessRereadsPerAgent: { windowSeconds: 3600, max: 20 },
   // Staff handoffs use the atomic request_business_handoff RPC: 10 per
   // caller/business/day, 50 total per business/day, after pending deduplication.
@@ -53,7 +53,7 @@ export const LIMITS = {
   forwardsPerUser: { windowSeconds: 3600, max: 60 },
   /** "Fill in from my website" at sign-up (one homepage fetch each). */
   sitePreviewsPerUser: { windowSeconds: 3600, max: 30 },
-  /** Reading a whole website (first read or "Re-read now"): up to 30 pages and one AI summary each. */
+  /** Reading a whole website (first read or "Scan"): up to 30 pages and one AI summary each. */
   siteReadsPerAgent: { windowSeconds: 3600, max: 6 },
   /** "Ask around" requests (each reaches up to 25 contacts). */
   askAroundPerUser: { windowSeconds: 86400, max: 10 },

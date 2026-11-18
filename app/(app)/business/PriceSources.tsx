@@ -12,7 +12,7 @@ const items = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
 /**
  * Top of Prices: where the prices come from (each document, and the website's pages together), reading
  * as it happens, and adding a menu right here. The same documents as in Website & documents.
- * On Facilities: only reading, problems, and Look again.
+ * On Facilities: only scanning, problems, and Scan.
  */
 export function PriceSources({ sources, empty, variant = "prices" }: { sources: PriceSource[]; empty: boolean; variant?: "prices" | "facilities" }) {
   const router = useRouter();
@@ -44,7 +44,7 @@ export function PriceSources({ sources, empty, variant = "prices" }: { sources: 
     });
   const reading = sources.some((s) => s.reading);
   const lookAgain = sources.length > 0 && (
-    <button type="button" className="btn-ghost ml-auto py-1 text-xs" disabled={pending || reading} onClick={() => run(rereadOfferingsAction)}>↻ Look again</button>
+    <button type="button" className="btn-ghost ml-auto py-1 text-xs" disabled={pending || reading} onClick={() => run(rereadOfferingsAction)}>↻ Scan</button>
   );
 
   const addForm = (
@@ -67,7 +67,7 @@ export function PriceSources({ sources, empty, variant = "prices" }: { sources: 
     return (
       <div className="space-y-1" data-testid="offerings-reading">
         <div className="flex items-center gap-2 text-xs text-muted">
-          {reading ? <Thinking label="Reading your website and documents" /> : <span>From your website and documents</span>}
+          {reading ? <Thinking label="Scanning your website and documents" /> : <span>From your website and documents</span>}
           {lookAgain}
         </div>
         {problems.map((s) => <p key={s.key} className="text-xs text-danger" data-testid="offerings-problem">⚠️ {s.label}: {s.error}</p>)}
@@ -110,7 +110,7 @@ export function PriceSources({ sources, empty, variant = "prices" }: { sources: 
             <span className="min-w-0 flex-1 truncate">{s.label}</span>
             <span className="shrink-0 text-xs text-muted">
               {s.reading ? (
-                <Thinking label="Reading prices" className="text-accent" />
+                <Thinking label="Scanning" className="text-accent" />
               ) : s.error ? (
                 <span className="text-danger">⚠️ {s.error}</span>
               ) : found[s.key] !== undefined ? (

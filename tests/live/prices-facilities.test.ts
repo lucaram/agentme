@@ -175,7 +175,7 @@ describe.skipIf(!dbUp)("prices & facilities (live)", () => {
     expect((await source()).offerings_error).toBeNull();
   });
 
-  it("Look again shows every document as being read straight away; each one stops showing it when its read ends", async () => {
+  it("Scan shows every document as being read straight away; each one stops showing it when its read ends", async () => {
     const { offerings, actions } = await lib();
     const reading = async () => ((await f.db.from("business_sources").select("offerings_reading_at").eq("agent_id", f.business.agent.id).not("content", "is", null)).data ?? []).filter((s) => s.offerings_reading_at).length;
     expect(await actions.rereadOfferingsAction()).toEqual({});

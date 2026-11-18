@@ -2,7 +2,9 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { LocalTime } from "@/components/LocalTime";
+import { sourceLabel } from "@/lib/business/offerings-shared";
 import { Thinking } from "@/components/Thinking";
 import { addSourceAction, removeSourceAction, rereadSourceAction, saveBusinessInfoAction, saveBusinessDetailsAction, setSourceVisibilityAction, tryQuestionAction } from "./actions";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
@@ -60,9 +62,9 @@ export function BusinessDetailsForm({ hours, address, fromWebsite }: { hours: st
   </form>;
 }
 
-type Source = { fromText: string | null; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; offerings_error: string | null; reading_prices: boolean; last_read_at: string | null; words: number; preview: string };
+type Source = { fromText: string | null; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; offerings_error: string | null; reading_prices: boolean; last_read_at: string | null; prices: number };
 
-const KIND: Record<string, string> = { page: "web page", pdf: "PDF", image: "photo", text: "text" };
+const KIND: Record<string, { label: string; icon: string }> = { page: { label: "Web page", icon: "🌐" }, pdf: { label: "PDF", icon: "📄" }, image: { label: "Photo", icon: "🖼️" }, text: { label: "Text", icon: "📝" } };
 
 /** Links your agent reads: website, PDF menu, menu photos. */
 export function SourcesManager({ sources }: { sources: Source[] }) {
@@ -82,59 +84,58 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
     <div className="space-y-3">
       {sources.length > 0 && (
         <ul className="divide-y divide-border rounded-xl border border-border">
-          {sources.map((s) => (
-            <li key={s.id} className="space-y-1 px-3 py-2.5" data-testid="business-source">
-              <div className="flex flex-wrap items-center gap-2">
-                <a href={s.url} target="_blank" rel="noreferrer noopener" className="min-w-0 flex-1 truncate text-sm font-medium text-accent hover:underline">
-                  {s.url}
-                </a>
-                <select
-                  className="input w-auto py-1 text-xs"
-                  value={s.visibility}
-                  aria-label="Who can see this"
-                  disabled={pending}
-                  onChange={(e) => act(() => setSourceVisibilityAction(s.id, e.target.value))}
-                >
-                  <option value="public">Public</option>
-                  <option value="customers">Customers only</option>
-                </select>
-              </div>
-              <p className="text-xs" data-testid="source-status">
-                {s.status === "ok" ? (
-                  <span className="text-accent">
-                    ✓ Read <LocalTime iso={s.last_read_at ?? new Date(0).toISOString()} /> · {KIND[s.kind ?? "page"] ?? "page"}
-                  </span>
-                ) : s.status === "error" ? (
-                  <span className="text-danger">⚠️ Couldn&apos;t read it: {s.error}</span>
-                ) : (
-                  <Thinking label="Reading" className="text-muted" />
-                )}
-                {s.status === "ok" && s.reading_prices && <> · <Thinking label="Reading prices" className="text-accent" /></>}
-                {s.status === "ok" && !s.reading_prices && s.offerings_error && (
-                  <span className="text-danger" data-testid="source-offerings-error"> · ⚠️ {s.offerings_error}</span>
-                )}
-                {s.fromText && (
-                  <span className="text-muted" data-testid="source-from-text" title="This address is also written in your text above, so your agent can give it to customers too.">
-                    {" "}· 📝 from your link in {s.fromText}
-                  </span>
-                )}
-              </p>
-              {s.preview && (
-                <details>
-                  <summary className="cursor-pointer text-xs text-muted">What your agent read</summary>
-                  <p className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg bg-accent-soft px-2 py-1 text-xs">{s.preview}</p>
-                </details>
-              )}
-              <div className="flex gap-3 text-xs">
-                <button type="button" className="text-accent underline" disabled={pending} onClick={() => act(() => rereadSourceAction(s.id))}>
-                  Re-read now
-                </button>
-                <button type="button" className="text-muted underline" disabled={pending} onClick={() => act(() => removeSourceAction(s.id))}>
-                  Remove
-                </button>
-              </div>
-            </li>
-          ))}
+          {sources.map((s) => {
+            const kind = KIND[s.kind ?? "page"] ?? KIND.page;
+            const scanning = s.status === "pending" || s.status === "reading";
+            return (
+              <li key={s.id} className="flex items-start gap-3 px-3 py-3 sm:items-center" data-testid="business-source">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-base" aria-hidden>{kind.icon}</span>
+                {/* Name and status; on a phone the controls go underneath, so the name has room. */}
+                <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <div className="min-w-0 flex-1">
+                    <a href={s.url} target="_blank" rel="noreferrer noopener" title={s.url} className="block truncate text-sm font-medium hover:text-accent hover:underline">
+                      {sourceLabel(s.url)}
+                    </a>
+                    <p className="mt-0.5 truncate text-xs text-muted" data-testid="source-status">
+                      {scanning ? (
+                        <Thinking label="Scanning" className="text-accent" />
+                      ) : s.status === "error" ? (
+                        <span className="text-danger">Couldn&apos;t read it: {s.error}</span>
+                      ) : (
+                        <>
+                          {kind.label} · Scanned <LocalTime iso={s.last_read_at ?? new Date(0).toISOString()} />
+                          {s.reading_prices ? (
+                            <> · <Thinking label="Finding prices" className="text-accent" /></>
+                          ) : s.offerings_error ? (
+                            <span className="text-danger" data-testid="source-offerings-error"> · {s.offerings_error}</span>
+                          ) : s.prices > 0 ? (
+                            <> · <Link href="/business/prices" className="text-accent hover:underline">{s.prices} {s.prices === 1 ? "price" : "prices"}</Link></>
+                          ) : null}
+                        </>
+                      )}
+                      {s.fromText && (
+                        <span data-testid="source-from-text" title="This address is also written in your text above, so your agent can give it to customers too."> · Linked in {s.fromText}</span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <select
+                      className="input w-auto py-1 text-xs"
+                      value={s.visibility}
+                      aria-label="Who can see this"
+                      disabled={pending}
+                      onChange={(e) => act(() => setSourceVisibilityAction(s.id, e.target.value))}
+                    >
+                      <option value="public">Public</option>
+                      <option value="customers">Customers only</option>
+                    </select>
+                    <button type="button" className="rounded-lg px-2 py-1 text-muted hover:bg-accent-soft hover:text-accent disabled:opacity-40" aria-label={`Scan ${sourceLabel(s.url)}`} title="Scan" disabled={pending || scanning} onClick={() => act(() => rereadSourceAction(s.id))}>↻</button>
+                    <button type="button" className="rounded-lg px-2 py-1 text-muted hover:bg-accent-soft hover:text-danger disabled:opacity-40" aria-label={`Remove ${sourceLabel(s.url)}`} title="Remove" disabled={pending} onClick={() => act(() => removeSourceAction(s.id))}>✕</button>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
       <div className="flex flex-wrap gap-2">
@@ -143,7 +144,7 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://your-website.com/menu (page, PDF or photo)"
+          placeholder="Link to a page, PDF or photo"
           aria-label="Link to read"
         />
         <select className="input w-auto" value={visibility} onChange={(e) => setVisibility(e.target.value)} aria-label="Visibility of the new link">
@@ -166,7 +167,7 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
         </button>
       </div>
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
-      <p className="hint" data-testid="visibility-hint"><b className="font-medium">Public:</b> your agent can use it when answering anyone.<br /><b className="font-medium">Customers only:</b> only in one-to-one chats with your contacts. Links are re-read daily.</p>
+      <p className="hint" data-testid="visibility-hint"><b className="font-medium">Public:</b> used when answering anyone. <b className="font-medium">Customers only:</b> used only in one-to-one chats with your contacts. Scanned again daily.</p>
     </div>
   );
 }

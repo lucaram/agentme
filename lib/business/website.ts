@@ -74,7 +74,7 @@ export async function readWebsite(agentId: string, reason: Reason): Promise<void
   if (site.reading_started_at && Date.parse(site.reading_started_at) > Date.now() - STUCK_MINUTES * 60_000) return;
   const { data: agent } = await db.from("agents").select("owner_id").eq("id", agentId).maybeSingle();
   if (!agent || await accountRestricted(agent.owner_id)) return;
-  // The owner sees "Reading…" for a first read or "Re-read now"; the daily check happens quietly.
+  // The owner sees "Scanning" for a first read or "Scan"; the daily check happens quietly.
   const visible = reason !== "refresh";
   await db
     .from("business_sites")
@@ -247,14 +247,14 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
   const warning = total < THIN_SITE_CHARS ? THIN_SITE_WARNING : null;
   const changed = added.length > 0 || removed.length > 0;
 
-  // Learn (again) on a first read, on "Re-read now", or when the website changed.
+  // Learn (again) on a first read, on "Scan", or when the website changed.
   let learned = previous;
   let learnWarning: string | null = null;
   if (reason !== "refresh" || changed || !previous.summary) {
     try {
       learned = await learnFrom(pages);
     } catch {
-      learnWarning = "Your agent read the pages but couldn't summarise them just now. It still answers from the pages; try Re-read now later.";
+      learnWarning = "Your agent read the pages but couldn't summarise them just now. It still answers from the pages; try Scan later.";
     }
   }
 
@@ -338,7 +338,7 @@ export async function refreshDueSites(limit = 1) {
   const stuck = new Date(Date.now() - STUCK_MINUTES * 60_000).toISOString();
   await db
     .from("business_sites")
-    .update({ status: "error", error: "Reading was interrupted. Tap Re-read now to try again.", reading_started_at: null })
+    .update({ status: "error", error: "Reading was interrupted. Tap Scan to try again.", reading_started_at: null })
     .eq("status", "reading")
     .lt("reading_started_at", stuck);
   const cutoff = new Date(Date.now() - SITE_REFRESH_HOURS * 3600_000).toISOString();
