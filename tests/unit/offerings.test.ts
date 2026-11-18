@@ -4,7 +4,7 @@ import { splitSource } from "@/lib/compare/comparison";
 
 const NOW = Date.parse("2026-11-18T12:00:00Z");
 const row = (p: Partial<PriceRow>): PriceRow => ({ id: crypto.randomUUID(), item: "Margherita pizza", variant: "12-inch", price: 8.5, currency: "GBP", source_url: "https://sole.example/menu.pdf", source_label: "menu.pdf", visibility: "public", found_price: 8.5, corrected: false, added: false, hidden: false, read_at: "2026-11-18T08:00:00Z", ...p });
-const facility = (f: Partial<FacilityRow>): FacilityRow => ({ key: "parking", status: "yes", evidence: "free car park behind the restaurant", source_url: "https://sole.example/visit", source_label: "sole.example/visit", visibility: "public", confirmed: false, updated_at: "2026-11-16T08:00:00Z", ...f });
+const facility = (f: Partial<FacilityRow>): FacilityRow => ({ key: "parking", label: null, status: "yes", evidence: "free car park behind the restaurant", source_url: "https://sole.example/visit", source_label: "sole.example/visit", visibility: "public", confirmed: false, hidden: false, updated_at: "2026-11-16T08:00:00Z", ...f });
 
 describe("prices & facilities", () => {
   it("a fresh read updates prices, keeps the business's corrections, and drops what the document no longer lists", () => {
@@ -38,11 +38,13 @@ describe("prices & facilities", () => {
 
   it("the agent knows only what this audience may see, never what's hidden", () => {
     const prices = [row({}), row({ item: "Staff menu", variant: null, price: 5, visibility: "customers" }), row({ item: "Old special", variant: null, hidden: true })];
-    const facilities = [facility({}), facility({ key: "dog_friendly", status: "no", evidence: null, confirmed: true })];
+    const facilities = [facility({}), facility({ key: "dog_friendly", status: "no", evidence: null, confirmed: true }), facility({ key: "custom-ab12cd34", label: "Live music", evidence: "Fridays from 8pm", confirmed: true, source_label: null }), facility({ key: "wifi", hidden: true, confirmed: true })];
     const publicView = offeringsKnowledge(prices, facilities, "public", NOW);
     expect(publicView).toContain("- Margherita pizza (12-inch): £8.50 (from menu.pdf, read today)");
     expect(publicView).toContain("- Parking: yes, free car park behind the restaurant (from sole.example/visit, read 16 Nov)");
     expect(publicView).toContain("- Dog-friendly: no (confirmed by the business)");
+    expect(publicView).toContain("- Live music: yes, Fridays from 8pm (confirmed by the business)");
+    expect(publicView).not.toContain("Wi-Fi");
     expect(publicView).not.toContain("Staff menu");
     expect(publicView).not.toContain("Old special");
     expect(offeringsKnowledge(prices, facilities, "customers", NOW)).toContain("Staff menu");

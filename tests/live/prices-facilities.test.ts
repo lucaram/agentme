@@ -39,7 +39,7 @@ describe.skipIf(!dbUp)("prices & facilities (live)", () => {
     const { offerings, actions } = await lib();
     const margherita = (await prices()).find((p) => p.item === "Margherita pizza")!;
     expect(await actions.correctPriceAction(margherita.id, 8)).toEqual({});
-    expect(await actions.setFacilityAction("parking", "no")).toEqual({});
+    expect(await actions.saveFacilityAction({ key: "parking", label: null, status: "no", note: null })).toEqual({ key: "parking" });
     await setMenu("Menu\nMargherita pizza (12-inch) £9\nCalzone £10\nFree car park behind the restaurant.");
     await offerings.readOfferings(menu);
     const after = await prices();
@@ -80,5 +80,31 @@ describe.skipIf(!dbUp)("prices & facilities (live)", () => {
     expect(await facility("parking")).toMatchObject({ confirmed: true }); // what the business confirmed stays
     expect(await actions.removePriceAction(garlic.id)).toEqual({});
     expect((await prices()).some((p) => p.item === "Garlic bread")).toBe(false);
+  });
+
+  it("facilities: add your own, edit, and remove; a removed one isn't brought back by the next read", async () => {
+    const { actions, offerings } = await lib();
+    const added = await actions.saveFacilityAction({ key: null, label: "Live music", status: "yes", note: "Fridays from 8pm" });
+    expect(added.key).toMatch(/^custom-[a-z0-9]{8}$/);
+    expect(await facility(added.key!)).toMatchObject({ label: "Live music", status: "yes", evidence: "Fridays from 8pm", confirmed: true });
+    // Same name again: the same facility (edited), never a second one.
+    expect((await actions.saveFacilityAction({ key: null, label: "live music", status: "no", note: null })).key).toBe(added.key);
+    expect(await facility(added.key!)).toMatchObject({ status: "no", evidence: null });
+    // Your own named like a common one: that common one.
+    expect((await actions.saveFacilityAction({ key: null, label: "Wi-Fi", status: "yes", note: null })).key).toBe("wifi");
+    expect(await actions.saveFacilityAction({ key: null, label: "", status: "yes", note: null })).toHaveProperty("error");
+    expect(await actions.removeFacilityAction(added.key!)).toEqual({});
+    expect(await facility(added.key!)).toBeNull();
+    // A common one read from a document, removed: set aside, and a later read doesn't bring it back.
+    const { data: doc } = await f.db.from("business_sources").insert({ agent_id: f.business.agent.id, url: "https://sole.example/info.pdf", origin: "link", visibility: "public", status: "ok", kind: "pdf", content: "Info\nVegan dishes every day.", last_read_at: new Date().toISOString() }).select("id").single();
+    await offerings.readOfferings(doc!.id);
+    expect(await facility("vegan_options")).toMatchObject({ status: "yes", confirmed: false });
+    expect(await actions.removeFacilityAction("vegan_options")).toEqual({});
+    await offerings.readOfferings(doc!.id, { force: true });
+    expect(await facility("vegan_options")).toMatchObject({ hidden: true, confirmed: true });
+    expect(await offerings.offeringsKnowledgeFor(f.business.agent.id, "public")).not.toContain("Vegan");
+    // Adding it again brings it back.
+    await actions.saveFacilityAction({ key: "vegan_options", label: null, status: "yes", note: null });
+    expect(await facility("vegan_options")).toMatchObject({ hidden: false, status: "yes" });
   });
 });

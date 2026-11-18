@@ -14,7 +14,7 @@ import { describeRetry, hit } from "@/lib/limits";
 import { MAX_FEATURED, normaliseWay, type Way } from "@/lib/business/booking";
 import { patchBusinessInfo } from "@/lib/business/profile";
 import { pruneOfferings, readAllOfferings } from "@/lib/business/offerings";
-import { FACILITY_KEYS, MAX_PRICES } from "@/lib/business/offerings-shared";
+import { FACILITIES, FACILITY_KEYS, MAX_CUSTOM_FACILITIES, MAX_PRICES, isCustomFacility } from "@/lib/business/offerings-shared";
 import { requireBusinessPermission } from "@/lib/business/access";
 import { BUSINESS_LIMITS } from "@/lib/social/limits";
 
@@ -225,7 +225,7 @@ export async function correctPriceAction(id: string, price: number): Promise<Out
   const amount = Number(price);
   if (!z.uuid().safeParse(id).success || !Number.isFinite(amount) || amount < 0 || amount > 99999) return { error: "Enter a price, e.g. 8.50." };
   const { error } = await adminClient().from("business_prices").update({ price: Math.round(amount * 100) / 100, corrected: true, updated_at: new Date().toISOString() }).eq("id", id).eq("agent_id", agent.id);
-  revalidatePath("/business");
+  revalidatePath("/business", "layout");
   return error ? { error: "Couldn't save that price." } : {};
 }
 
@@ -234,7 +234,7 @@ export async function hidePriceAction(id: string, hidden: boolean): Promise<Out>
   const { agent } = await requireBusiness();
   if (!z.uuid().safeParse(id).success) return { error: "Not found." };
   await adminClient().from("business_prices").update({ hidden: Boolean(hidden), updated_at: new Date().toISOString() }).eq("id", id).eq("agent_id", agent.id);
-  revalidatePath("/business");
+  revalidatePath("/business", "layout");
   return {};
 }
 
@@ -247,7 +247,7 @@ export async function addPriceAction(input: { item: string; variant: string | nu
   const { count } = await db.from("business_prices").select("id", { count: "exact", head: true }).eq("agent_id", agent.id);
   if ((count ?? 0) >= MAX_PRICES) return { error: `You can have up to ${MAX_PRICES} prices.` };
   const { error } = await db.from("business_prices").insert({ agent_id: agent.id, item: parsed.data.item, variant: parsed.data.variant || null, price: Math.round(parsed.data.price * 100) / 100, currency: parsed.data.currency.toUpperCase(), added: true, visibility: "public" });
-  revalidatePath("/business");
+  revalidatePath("/business", "layout");
   return error ? { error: "Couldn't add that price." } : {};
 }
 
@@ -256,23 +256,74 @@ export async function removePriceAction(id: string): Promise<Out> {
   const { agent } = await requireBusiness();
   if (!z.uuid().safeParse(id).success) return { error: "Not found." };
   await adminClient().from("business_prices").delete().eq("id", id).eq("agent_id", agent.id).eq("added", true);
-  revalidatePath("/business");
+  revalidatePath("/business", "layout");
   return {};
 }
 
-/** Confirm or change a facility: yours wins over anything read later. "unknown" clears it. */
-export async function setFacilityAction(key: string, status: "yes" | "no" | "unknown"): Promise<Out> {
+const FacilityInput = z.object({
+  key: z.string().trim().max(40).nullable(),
+  label: z.string().trim().max(60).nullable(),
+  status: z.enum(["yes", "no"]),
+  note: z.string().trim().max(300).nullable(),
+});
+
+/**
+ * Add or change a facility: one of the common ones (by key), or your own (a name; a new one gets a key).
+ * What you set is confirmed: it wins over anything read later. Keeping the same answer keeps the words
+ * it was read from, unless you write your own details.
+ */
+export async function saveFacilityAction(input: { key: string | null; label: string | null; status: "yes" | "no"; note: string | null }): Promise<Out & { key?: string }> {
   const { agent } = await requireBusiness();
-  if (!(FACILITY_KEYS as readonly string[]).includes(key) || !["yes", "no", "unknown"].includes(status)) return { error: "Not found." };
+  const parsed = FacilityInput.safeParse(input);
+  if (!parsed.success) return { error: "Choose Yes or No, and keep the name and details short." };
+  const { status } = parsed.data;
   const db = adminClient();
-  if (status === "unknown") await db.from("business_facilities").delete().eq("agent_id", agent.id).eq("key", key);
-  else {
-    const { data: current } = await db.from("business_facilities").select("status, evidence, source_url, source_label, visibility").eq("agent_id", agent.id).eq("key", key).maybeSingle();
-    // Confirming what was read keeps its words; changing it replaces them.
-    const same = current?.status === status;
-    await db.from("business_facilities").upsert({ agent_id: agent.id, key, status, evidence: same ? current?.evidence ?? null : null, source_url: same ? current?.source_url ?? null : null, source_label: same ? current?.source_label ?? null : null, visibility: current?.visibility ?? "public", confirmed: true, updated_at: new Date().toISOString() });
+  let key = parsed.data.key;
+  const label = parsed.data.label || null;
+  if (key && !(FACILITY_KEYS as readonly string[]).includes(key) && !isCustomFacility(key)) return { error: "Not found." };
+  if (!key || isCustomFacility(key)) {
+    if (!label) return { error: "Give it a name, e.g. Live music." };
+    // Your own facility with a common one's name is that common one.
+    const common = FACILITIES.find((f) => f.label.toLowerCase() === label.toLowerCase());
+    if (!key && common) key = common.key;
   }
-  revalidatePath("/business");
+  const { data: rows } = await db.from("business_facilities").select("*").eq("agent_id", agent.id);
+  if (!key) {
+    const same = (rows ?? []).find((r) => isCustomFacility(r.key) && r.label?.toLowerCase() === label!.toLowerCase());
+    if (same) key = same.key;
+    else {
+      if ((rows ?? []).filter((r) => isCustomFacility(r.key)).length >= MAX_CUSTOM_FACILITIES) return { error: `You can add up to ${MAX_CUSTOM_FACILITIES} facilities of your own.` };
+      key = `custom-${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}`;
+    }
+  }
+  const current = (rows ?? []).find((r) => r.key === key);
+  const keepWords = current && !current.hidden && current.status === status && !parsed.data.note;
+  const { error } = await db.from("business_facilities").upsert({
+    agent_id: agent.id, key, status,
+    label: isCustomFacility(key) ? label ?? current?.label ?? null : null,
+    evidence: keepWords ? current.evidence : parsed.data.note || null,
+    source_url: keepWords ? current.source_url : null,
+    source_label: keepWords ? current.source_label : null,
+    visibility: current?.visibility ?? "public",
+    confirmed: true, hidden: false, updated_at: new Date().toISOString(),
+  });
+  revalidatePath("/business", "layout");
+  return error ? { error: "Couldn't save that facility." } : { key };
+}
+
+/**
+ * Remove a facility. Your own go; a common one is set aside, so a document mentioning it later doesn't
+ * bring it back (add it again any time).
+ */
+export async function removeFacilityAction(key: string): Promise<Out> {
+  const { agent } = await requireBusiness();
+  const db = adminClient();
+  if (isCustomFacility(key)) await db.from("business_facilities").delete().eq("agent_id", agent.id).eq("key", key);
+  else if ((FACILITY_KEYS as readonly string[]).includes(key)) {
+    const { data: current } = await db.from("business_facilities").select("status").eq("agent_id", agent.id).eq("key", key).maybeSingle();
+    await db.from("business_facilities").upsert({ agent_id: agent.id, key, status: current?.status ?? "no", evidence: null, source_url: null, source_label: null, confirmed: true, hidden: true, updated_at: new Date().toISOString() });
+  } else return { error: "Not found." };
+  revalidatePath("/business", "layout");
   return {};
 }
 
@@ -281,6 +332,6 @@ export async function rereadOfferingsAction(): Promise<Out> {
   const { user, agent } = await requireBusiness();
   if (!(await hit("offeringsRereadsPerAgent", agent.id)).allowed) return { error: "You've done this a lot just now. Try again in a few minutes." };
   after(() => withUsageContext({ agentId: agent.id, userId: user.id }, () => readAllOfferings(agent.id, { force: true })));
-  revalidatePath("/business");
+  revalidatePath("/business", "layout");
   return {};
 }

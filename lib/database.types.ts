@@ -513,9 +513,9 @@ isOneToOne: true
                   Update: { item?: string; variant?: string | null; price?: number; currency?: string; source_url?: string | null; source_label?: string | null; visibility?: string; found_price?: number | null; corrected?: boolean; added?: boolean; hidden?: boolean; read_at?: string | null; updated_at?: string }
                   Relationships: []
                 },"business_facilities": {
-                  Row: { agent_id: string; key: string; status: string; evidence: string | null; source_url: string | null; source_label: string | null; visibility: string; confirmed: boolean; updated_at: string }
-                  Insert: { agent_id: string; key: string; status: string; evidence?: string | null; source_url?: string | null; source_label?: string | null; visibility?: string; confirmed?: boolean; updated_at?: string }
-                  Update: { status?: string; evidence?: string | null; source_url?: string | null; source_label?: string | null; visibility?: string; confirmed?: boolean; updated_at?: string }
+                  Row: { agent_id: string; key: string; label: string | null; status: string; evidence: string | null; source_url: string | null; source_label: string | null; visibility: string; confirmed: boolean; hidden: boolean; updated_at: string }
+                  Insert: { agent_id: string; key: string; label?: string | null; status: string; evidence?: string | null; source_url?: string | null; source_label?: string | null; visibility?: string; confirmed?: boolean; hidden?: boolean; updated_at?: string }
+                  Update: { label?: string | null; status?: string; evidence?: string | null; source_url?: string | null; source_label?: string | null; visibility?: string; confirmed?: boolean; hidden?: boolean; updated_at?: string }
                   Relationships: []
                 },"business_sources": {
                   Row: {

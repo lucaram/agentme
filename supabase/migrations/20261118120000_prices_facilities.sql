@@ -27,7 +27,9 @@ revoke all on public.business_prices from anon, authenticated;
 
 create table public.business_facilities (
   agent_id uuid not null references public.agents(id) on delete cascade,
-  key text not null check (key in ('parking', 'step_free_access', 'accessible_toilet', 'outdoor_seating', 'dog_friendly', 'vegetarian_options', 'vegan_options', 'gluten_free_options', 'kids_menu', 'wifi', 'card_payments', 'takeaway')),
+  -- One of the common facilities, or one the business named itself ("custom-…", with its label).
+  key text not null check (key in ('parking', 'step_free_access', 'accessible_toilet', 'outdoor_seating', 'dog_friendly', 'vegetarian_options', 'vegan_options', 'gluten_free_options', 'kids_menu', 'wifi', 'card_payments', 'takeaway') or key ~ '^custom-[a-z0-9]{8}$'),
+  label text check (label is null or char_length(label) between 1 and 60),
   status text not null check (status in ('yes', 'no')),
   evidence text check (evidence is null or char_length(evidence) <= 300),
   source_url text,
@@ -35,8 +37,11 @@ create table public.business_facilities (
   visibility text not null default 'public' check (visibility in ('public', 'customers')),
   -- Set by the business: wins over anything read later.
   confirmed boolean not null default false,
+  -- Removed by the business: not shown or used, and not brought back by a later read.
+  hidden boolean not null default false,
   updated_at timestamptz not null default now(),
-  primary key (agent_id, key)
+  primary key (agent_id, key),
+  check (key not like 'custom-%' or label is not null)
 );
 alter table public.business_facilities enable row level security;
 revoke all on public.business_facilities from anon, authenticated;

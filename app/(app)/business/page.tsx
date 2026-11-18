@@ -20,8 +20,8 @@ import { permanentQr } from "@/lib/people/links";
 import { OpenFromHash } from "@/components/OpenFromHash";
 import { BusinessInfoForm, BusinessDetailsForm, SourcesManager } from "./BusinessForms";
 import { QuestionsAnswers } from "./QuestionsAnswers";
-import { OfferingsEditor } from "./OfferingsEditor";
 import { offeringsOf } from "@/lib/business/offerings";
+import { facilityName } from "@/lib/business/offerings-shared";
 import { AddBusinessIntro } from "./AddBusinessIntro";
 import { WaysEditor } from "./WaysEditor";
 import { TestAgent } from "./TestAgent";
@@ -161,7 +161,22 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
               </div>
             </section>
             <section className={BODY} aria-label="Prices and facilities">
-              <OfferingsEditor prices={offerings.prices} facilities={offerings.facilities} hasSources={Boolean(site?.live_at) || rows.length > 0} />
+              {/* Like Settings: a row each, opening its own page. */}
+              <nav aria-label="Prices and facilities" className="space-y-2">
+                {[
+                  { href: "/business/prices", icon: "💷", title: "Prices", testId: "prices-link", summary: (() => { const shownPrices = offerings.prices.filter((x) => !x.hidden); const from = [...new Set(shownPrices.flatMap((x) => (x.source_label && !x.added ? [x.source_label] : [])))]; return shownPrices.length ? `${plural(shownPrices.length, "price")}${from.length ? ` · from ${from.slice(0, 2).join(", ")}${from.length > 2 ? ` and ${from.length - 2} more` : ""}` : ""}` : "None yet · read from your menu or price list, or add your own"; })() },
+                  { href: "/business/facilities", icon: "🏷️", title: "Facilities", testId: "facilities-link", summary: (() => { const shownFacilities = offerings.facilities.filter((x) => !x.hidden); const yes = shownFacilities.filter((x) => x.status === "yes").map((x) => facilityName(x).label); return shownFacilities.length ? `${yes.length ? yes.slice(0, 3).join(", ") + (yes.length > 3 ? ` and ${yes.length - 3} more` : "") : "None available"}${shownFacilities.some((x) => !x.confirmed) ? " · some to check" : ""}` : "None yet · parking, step-free access, your own…"; })() },
+                ].map((r) => (
+                  <Link key={r.href} href={r.href} className="card flex items-center gap-3 hover:bg-accent-soft" data-testid={r.testId}>
+                    <span className="text-xl" aria-hidden>{r.icon}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-semibold">{r.title}</span>
+                      <span className="block truncate text-xs text-muted">{r.summary}</span>
+                    </span>
+                    <span className="text-accent" aria-hidden>›</span>
+                  </Link>
+                ))}
+              </nav>
             </section>
             <section className={BODY} aria-label="Website and documents">
               <span id="knows" />

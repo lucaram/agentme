@@ -22,6 +22,9 @@ export const FACILITIES = [
 export type FacilityKey = (typeof FACILITIES)[number]["key"];
 export const FACILITY_KEYS = FACILITIES.map((f) => f.key) as [FacilityKey, ...FacilityKey[]];
 export const MAX_PRICES = 300;
+/** Facilities a business names itself ("Live music", "Private room"). */
+export const MAX_CUSTOM_FACILITIES = 20;
+export const isCustomFacility = (key: string) => /^custom-[a-z0-9]{8}$/.test(key);
 
 export const OfferingsSchema = z.object({
   prices: z.array(z.object({
@@ -39,7 +42,13 @@ export const OfferingsSchema = z.object({
 export type Offerings = z.infer<typeof OfferingsSchema>;
 
 export type PriceRow = { id: string; item: string; variant: string | null; price: number; currency: string; source_url: string | null; source_label: string | null; visibility: string; found_price: number | null; corrected: boolean; added: boolean; hidden: boolean; read_at: string | null };
-export type FacilityRow = { key: string; status: string; evidence: string | null; source_url: string | null; source_label: string | null; visibility: string; confirmed: boolean; updated_at: string };
+export type FacilityRow = { key: string; label: string | null; status: string; evidence: string | null; source_url: string | null; source_label: string | null; visibility: string; confirmed: boolean; hidden: boolean; updated_at: string };
+
+/** Its name and icon: one of the common facilities, or the business's own name for it. */
+export function facilityName(row: Pick<FacilityRow, "key" | "label">): { label: string; icon: string } {
+  const common = FACILITIES.find((f) => f.key === row.key);
+  return common ? { label: common.label, icon: common.icon } : { label: row.label ?? "Facility", icon: "✨" };
+}
 
 const norm = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 export const priceKey = (p: { item: string; variant: string | null }) => `${norm(p.item)}|${norm(p.variant)}`;
@@ -73,8 +82,8 @@ export const formatPrice = (n: number, currency: string) => `${SYMBOL[currency] 
 export function offeringsKnowledge(prices: PriceRow[], facilities: FacilityRow[], audience: "public" | "customers", now = Date.now()): string {
   const visible = <T extends { visibility: string }>(rows: T[]) => rows.filter((r) => r.visibility === "public" || audience === "customers");
   const priceLines = visible(prices).filter((p) => !p.hidden).map((p) => `- ${p.item}${p.variant ? ` (${p.variant})` : ""}: ${formatPrice(p.price, p.currency)} (${priceNote(p, now)})`);
-  const facilityLines = visible(facilities).map((f) => {
-    const label = FACILITIES.find((x) => x.key === f.key)?.label ?? f.key;
+  const facilityLines = visible(facilities).filter((f) => !f.hidden).map((f) => {
+    const { label } = facilityName(f);
     return `- ${label}: ${f.status === "yes" ? "yes" : "no"}${f.evidence ? `, ${f.evidence}` : ""} (${facilityNote(f, now)})`;
   });
   return [
