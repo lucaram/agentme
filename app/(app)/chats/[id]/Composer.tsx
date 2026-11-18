@@ -21,13 +21,14 @@ export function Composer({
   examplesHint,
   collapseExamples = false,
   nearMe = false,
-  attachments = true,
+  attachments = "all",
 }: {
   /**
-   * Files, camera, location, polls and voice messages, for the people in a chat. Off where only an
-   * agent reads the message (My Agent, a business's agent): it reads text only.
+   * "all": files, camera, location, polls and voice messages, for the people in a chat.
+   * "agent": My Agent, where your agent reads photos, PDFs and text files (never passed on).
+   * "none": a business's agent, which reads text only.
    */
-  attachments?: boolean;
+  attachments?: "all" | "agent" | "none";
   /** My Agent: a 📍 button to use where you are right now for one message (weather, "near me"). */
   nearMe?: boolean;
   conversationId: string;
@@ -65,7 +66,7 @@ export function Composer({
     const el = ref.current; if (!el) return;
     const start = el.selectionStart; const end = el.selectionEnd;
     el.value = el.value.slice(0, start) + emoji + el.value.slice(end); fit(); el.focus(); el.setSelectionRange(start + emoji.length, start + emoji.length);
-  }, attachments && toAgent);
+  }, attachments === "all" && toAgent, attachments === "agent");
   useEffect(() => {
     // File choosers and capture dialogs take focus away; continue the same message here.
     if (extras.draftCount) ref.current?.focus({ preventScroll: true });
@@ -177,7 +178,7 @@ export function Composer({
         </div>
       )}
       {examples && showExamples && examplesHint && <p className="-mt-1 mb-2 text-[11px] text-muted">{examplesHint}</p>}
-      {pending && !extras.hasDraft && (thinkingLabel || summoned) && (
+      {pending && (!extras.hasDraft || attachments === "agent") && (thinkingLabel || summoned) && (
         <p className="mb-1 text-xs text-muted" aria-live="polite">{thinkingLabel ?? "Your agent is thinking… (only you will see the answer)"}</p>
       )}
       {nudge && (
@@ -225,7 +226,7 @@ export function Composer({
       )}
       {/* One rounded box with the send button inside, like ChatGPT / Claude / Gemini. */}
       {extras.panel}
-      {attachments && toAgent && (
+      {attachments === "all" && toAgent && (
         <p className="mb-1 text-xs text-muted" data-testid="agent-text-only">
           @agent reads text only. {extras.hasDraft ? "Send your files as a separate message, without @agent." : "Send files as a separate message."}
         </p>
@@ -250,7 +251,7 @@ export function Composer({
           submit();
         }}
       >
-        <fieldset disabled={pending} className="contents">{extras.buttons}{attachments && extras.attach}</fieldset>
+        <fieldset disabled={pending} className="contents">{extras.buttons}{attachments !== "none" && extras.attach}</fieldset>
         <textarea
           id={messageId}
           ref={ref}
@@ -286,7 +287,7 @@ export function Composer({
             {locating ? "…" : "📍"}
           </button>
         )}
-        {attachments && <fieldset disabled={pending} className="contents">{extras.microphone}</fieldset>}
+        {attachments === "all" && <fieldset disabled={pending} className="contents">{extras.microphone}</fieldset>}
         <button
           aria-label="Send"
           title="Send (Enter) · New line: Shift+Enter"

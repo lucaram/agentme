@@ -4,6 +4,16 @@ export const MAX_FILES = 6;
 export const MAX_FILE_BYTES = 16 * 1024 * 1024;
 export const MAX_MESSAGE_BYTES = 32 * 1024 * 1024;
 export const FILE_ACCEPT = ".jpg,.jpeg,.png,.webp,.pdf,.txt,.mp4,.webm,.mp3,.m4a,.ogg,.wav";
+/**
+ * My Agent reads photos, PDFs and text files to answer its owner (never passed on to anyone).
+ * Kept well inside what the AI accepts (images up to 10 MB, PDFs up to 600 pages), to keep each answer quick and cheap.
+ */
+export const AGENT_FILE_ACCEPT = ".jpg,.jpeg,.png,.webp,.pdf,.txt";
+export const AGENT_FILE_BYTES = 5 * 1024 * 1024;
+export const AGENT_MAX_FILES = 3;
+export const AGENT_PDF_PAGES = 20;
+/** One line under the attach menu in My Agent. */
+export const AGENT_FILES_NOTE = "Your agent reads photos, PDFs and text files to answer you. They're never sent to anyone else.";
 export const LocationSchema = z.object({ lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180), accuracy: z.number().nonnegative().max(100000).optional() }).strict();
 export const PollDraftSchema = z.object({ question: z.string().trim().min(1).max(200), options: z.array(z.string().trim().min(1).max(100)).min(2).max(10), people: z.array(z.uuid()).max(19).default([]) }).strict().refine((p) => new Set(p.options.map((o) => o.toLocaleLowerCase())).size === p.options.length, "Use different poll options.");
 export const RichSchema = z.object({ clientId: z.uuid(), attachments: z.array(z.uuid()).max(MAX_FILES).default([]), location: LocationSchema.nullable().optional(), poll: PollDraftSchema.nullable().optional() }).strict();

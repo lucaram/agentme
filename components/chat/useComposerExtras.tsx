@@ -4,12 +4,15 @@ import { CaptureDialog } from "./CaptureDialog";
 import { PollEditor } from "./PollEditor";
 import { AttachmentPreview, type DraftFile } from "./AttachmentPreview";
 import { compressPhoto, compressVideo } from "@/lib/client/media";
-import { FILE_ACCEPT, MAX_FILES, MAX_FILE_BYTES, MAX_MESSAGE_BYTES, mapsUrl, type PollDraft, type SharedLocation } from "@/lib/chat/rich";
+import { AGENT_FILES_NOTE, AGENT_FILE_ACCEPT, AGENT_FILE_BYTES, AGENT_MAX_FILES, AGENT_PDF_PAGES, FILE_ACCEPT, MAX_FILES, MAX_FILE_BYTES, MAX_MESSAGE_BYTES, mapsUrl, type PollDraft, type SharedLocation } from "@/lib/chat/rich";
 
 const EMOJI = ["😀", "😂", "🥰", "😍", "😊", "😉", "😎", "🤔", "😢", "😭", "😮", "😴", "👍", "👎", "👏", "🙌", "🙏", "👋", "💪", "🤝", "❤️", "💚", "💙", "💛", "🔥", "🎉", "🎂", "🎁", "✨", "✅", "🍕", "🍣", "☕", "🍻", "⚽", "🎮", "📍", "📅", "🌞", "🌧️"];
 
-/** `textOnly`: while true, files, camera, location, polls and voice messages are held back (e.g. a message to @agent). */
-export function useComposerExtras(conversationId: string, insertEmoji: (emoji: string) => void, textOnly = false) {
+/**
+ * `textOnly`: while true, files, camera, location, polls and voice messages are held back (e.g. a message to @agent).
+ * `forAgent`: My Agent, where your agent reads what you attach: photos, PDFs and text files only (no location, poll or voice).
+ */
+export function useComposerExtras(conversationId: string, insertEmoji: (emoji: string) => void, textOnly = false, forAgent = false) {
   const [menu, setMenu] = useState<"attach" | "emoji" | null>(null); const [capture, setCapture] = useState<"camera" | "audio" | null>(null); const [pollOpen, setPollOpen] = useState(false);
   const [files, setFiles] = useState<DraftFile[]>([]); const [location, setLocation] = useState<SharedLocation | null>(null); const [poll, setPoll] = useState<PollDraft | null>(null); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const [pollAudience, setPollAudience] = useState("");
@@ -19,7 +22,8 @@ export function useComposerExtras(conversationId: string, insertEmoji: (emoji: s
   useEffect(() => { alive.current = true; return () => { alive.current = false; preparation.current?.abort(); for (const f of fileRef.current) URL.revokeObjectURL(f.url); }; }, []);
   async function addFile(file: File, recordedKind?: DraftFile["kind"]) {
     if (poll) return setError("Send the poll separately from files and location.");
-    if (fileRef.current.length >= MAX_FILES) return setError("Attach up to 6 files in one message.");
+    if (fileRef.current.length >= (forAgent ? AGENT_MAX_FILES : MAX_FILES)) return setError(`Attach up to ${forAgent ? AGENT_MAX_FILES : MAX_FILES} files in one message.`);
+    if (forAgent && !(file.type.startsWith("image/") || /\.(pdf|txt|jpe?g|png|webp)$/i.test(file.name))) return setError("Your agent reads photos, PDFs and text files. Share other files in a chat with people.");
     if (file.size > 64 * 1024 * 1024) return setError("Choose a smaller file. Camera videos are compressed automatically.");
     setBusy(true); setError("");
     const controller = new AbortController(); preparation.current = controller;
@@ -27,6 +31,7 @@ export function useComposerExtras(conversationId: string, insertEmoji: (emoji: s
       const kind = recordedKind ?? (file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : "document");
       const prepared = kind === "image" ? await compressPhoto(file) : kind === "video" && !recordedKind ? await compressVideo(file, controller.signal) : file;
       if (prepared.size > MAX_FILE_BYTES) throw new Error("Choose a file up to 16 MB after compression.");
+      if (forAgent && prepared.size > AGENT_FILE_BYTES) throw new Error(`Your agent reads files up to ${AGENT_FILE_BYTES / 1024 / 1024} MB.`);
       if (fileRef.current.reduce((n, f) => n + f.file.size, 0) + prepared.size > MAX_MESSAGE_BYTES) throw new Error("Keep attachments below 32 MB in one message.");
       if (alive.current) { const next = [...fileRef.current, { key: crypto.randomUUID(), file: prepared, kind, url: URL.createObjectURL(prepared) }]; fileRef.current = next; setFiles(next); }
     } catch (e) { if (alive.current) setError(e instanceof Error ? e.message : "Couldn't prepare this file."); }
@@ -71,16 +76,16 @@ export function useComposerExtras(conversationId: string, insertEmoji: (emoji: s
     attach: <button type="button" className={iconClass} aria-label="Attach" title={textOnly ? "@agent reads text only" : "Attach"} aria-expanded={menu === "attach"} disabled={busy || textOnly} onClick={() => setMenu((m) => m === "attach" ? null : "attach")}>＋</button>,
     microphone: <button type="button" className={iconClass} aria-label="Record audio" title={textOnly ? "@agent reads text only" : "Record audio"} disabled={busy || Boolean(poll) || textOnly} onClick={() => { setMenu(null); setCapture("audio"); }}><svg aria-hidden viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" /></svg></button>,
     panel: <div className="relative">
-      <input ref={input} type="file" accept={FILE_ACCEPT} multiple className="hidden" aria-label="Choose attachments" onChange={async (e) => { const picked = [...(e.target.files ?? [])]; e.target.value = ""; for (const file of picked) await addFile(file); }} />
+      <input ref={input} type="file" accept={forAgent ? AGENT_FILE_ACCEPT : FILE_ACCEPT} multiple className="hidden" aria-label="Choose attachments" onChange={async (e) => { const picked = [...(e.target.files ?? [])]; e.target.value = ""; for (const file of picked) await addFile(file); }} />
       {menu && !(menu === "attach" && textOnly) && <div className="mb-2 rounded-2xl border border-border bg-surface p-3 shadow-lg" role="region" aria-label={menu === "emoji" ? "Emoji picker" : "Attachment menu"}>
         <div className="mb-2 flex items-center justify-between"><span className="text-xs font-medium text-muted">{menu === "emoji" ? "Emojis" : "Add to your message"}</span><button type="button" className="px-2 text-muted" aria-label="Close attachment menu" onClick={() => setMenu(null)}>✕</button></div>
         {menu === "emoji" ? <div className="grid grid-cols-8 gap-1">{EMOJI.map((emoji) => <button type="button" key={emoji} aria-label={`Emoji ${emoji}`} className="rounded-xl p-2 text-xl hover:bg-accent-soft" onClick={() => insertEmoji(emoji)}>{emoji}</button>)}</div> : <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <button type="button" className="rounded-xl bg-accent-soft/40 p-3 text-left text-sm hover:bg-accent-soft" disabled={busy} onClick={chooseFiles}>📎 Photos &amp; files</button>
           <button type="button" className="rounded-xl bg-accent-soft/40 p-3 text-left text-sm hover:bg-accent-soft" disabled={busy || Boolean(poll)} onClick={() => { setMenu(null); setCapture("camera"); }}>📷 Camera</button>
-          <button type="button" className="rounded-xl bg-accent-soft/40 p-3 text-left text-sm hover:bg-accent-soft" disabled={busy} onClick={shareLocation}>📍 Share location</button>
-          <button type="button" className="rounded-xl bg-accent-soft/40 p-3 text-left text-sm hover:bg-accent-soft" disabled={busy} onClick={() => { setMenu(null); if (files.length || location) return setError("Send your files or location before creating a poll."); setPollOpen(true); }}>📊 Create poll</button>
+          {!forAgent && <button type="button" className="rounded-xl bg-accent-soft/40 p-3 text-left text-sm hover:bg-accent-soft" disabled={busy} onClick={shareLocation}>📍 Share location</button>}
+          {!forAgent && <button type="button" className="rounded-xl bg-accent-soft/40 p-3 text-left text-sm hover:bg-accent-soft" disabled={busy} onClick={() => { setMenu(null); if (files.length || location) return setError("Send your files or location before creating a poll."); setPollOpen(true); }}>📊 Create poll</button>}
         </div>}
-        {menu === "attach" && <p className="mt-3 text-[11px] text-muted">Photos, MP4/WebM video, audio, PDF or TXT · up to 16 MB per file</p>}
+        {menu === "attach" && (forAgent ? <p className="mt-3 text-[11px] text-muted" data-testid="agent-files-note">{AGENT_FILES_NOTE} Up to {AGENT_FILE_BYTES / 1024 / 1024} MB each; PDFs up to {AGENT_PDF_PAGES} pages.</p> : <p className="mt-3 text-[11px] text-muted">Photos, MP4/WebM video, audio, PDF or TXT · up to 16 MB per file</p>)}
       </div>}
       {hasDraft && <section className={`mb-2 max-h-[45dvh] ${files.length === 1 && !location && !poll ? "w-fit" : "w-full"} max-w-full space-y-2 overflow-y-auto rounded-2xl border border-accent/30 bg-surface p-3`} aria-label="Message preview" data-testid="attachment-preview">
         <div><p className="text-xs font-medium">Review your message</p><p className="mt-0.5 text-[11px] text-muted">Nothing is sent until you choose Send.</p></div>
@@ -90,7 +95,7 @@ export function useComposerExtras(conversationId: string, insertEmoji: (emoji: s
       </section>}
       {busy && <p className="mb-1 text-xs text-muted" role="status">Preparing your attachment…</p>}
       {error && <p className="mb-1 text-xs text-danger" role="alert">{error}</p>}
-      {capture && <CaptureDialog mode={capture} onClose={() => setCapture(null)} onFile={(file, kind) => { void addFile(file, kind); }} />}
+      {capture && <CaptureDialog mode={capture} photoOnly={forAgent} onClose={() => setCapture(null)} onFile={(file, kind) => { void addFile(file, kind); }} />}
       {pollOpen && <PollEditor conversationId={conversationId} initial={poll} onClose={() => setPollOpen(false)} onConfirm={(draft, audience) => { setPoll(draft); setPollAudience(audience); setPollOpen(false); }} />}
     </div>,
   };

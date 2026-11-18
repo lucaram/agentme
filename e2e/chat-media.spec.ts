@@ -171,22 +171,31 @@ test("chat previews keep emoji, files, location and polls private until Send; me
   }
 });
 
-test("only text goes to an agent: no attachments in My Agent, and @agent in a chat holds them back", async ({ browser }) => {
+test("what each chat lets you attach: your agent reads photos and documents, a business's agent text only, @agent in a chat holds files back", async ({ browser }) => {
   const f = await planBusinessFixture(); const sessions: BrowserContext[] = [];
   try {
     const context = await browser.newContext(); sessions.push(context); const luca = await context.newPage();
     await luca.goto("/login"); await luca.getByLabel("Email", { exact: true }).fill(f.luca.email); await luca.getByLabel("Password", { exact: true }).fill(f.password); await luca.getByRole("button", { name: "Log in", exact: true }).click(); await expect(luca).toHaveURL(/\/chats/);
-    // My Agent and a business's agent read text only: no attach, camera, location, poll or voice message there.
-    for (const path of [`/chats/${f.myAgent}?t=new`, `/chats/${f.direct}`]) {
-      await luca.goto(path);
-      await expect(luca.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
-      await expect(luca.getByRole("button", { name: "Attach", exact: true })).toHaveCount(0);
-      await expect(luca.getByRole("button", { name: "Record audio", exact: true })).toHaveCount(0);
-      await expect(luca.getByLabel("Choose attachments", { exact: true })).toHaveCount(0);
-      await expect(luca.getByRole("button", { name: "Emojis", exact: true })).toBeVisible();
-    }
+    // A business's agent reads text only: nothing to attach, no voice message.
+    await luca.goto(`/chats/${f.direct}`);
+    await expect(luca.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
+    await expect(luca.getByRole("button", { name: "Attach", exact: true })).toHaveCount(0);
+    await expect(luca.getByRole("button", { name: "Record audio", exact: true })).toHaveCount(0);
     await expect(luca.getByRole("button", { name: "Near me now", exact: true })).toHaveCount(0);
-    await luca.goto(`/chats/${f.myAgent}?t=new`); await expect(luca.getByRole("button", { name: "Near me now", exact: true })).toBeVisible();
+    await expect(luca.getByRole("button", { name: "Emojis", exact: true })).toBeVisible();
+    // My Agent: photos & files and camera only (your agent reads them; they're never sent on); no location, poll or voice.
+    await luca.goto(`/chats/${f.myAgent}?t=new`);
+    await expect(luca.getByRole("button", { name: "Near me now", exact: true })).toBeVisible();
+    await expect(luca.getByRole("button", { name: "Record audio", exact: true })).toHaveCount(0);
+    await luca.getByRole("button", { name: "Attach", exact: true }).click();
+    const menu = luca.getByRole("region", { name: "Attachment menu", exact: true });
+    await expect(menu.getByRole("button")).toHaveText(["✕", "📎 Photos & files", "📷 Camera"]);
+    await expect(luca.getByTestId("agent-files-note")).toContainText("Your agent reads photos, PDFs and text files to answer you. They're never sent to anyone else.");
+    await expect(luca.getByLabel("Choose attachments", { exact: true })).toHaveAttribute("accept", ".jpg,.jpeg,.png,.webp,.pdf,.txt");
+    await luca.getByLabel("Choose attachments", { exact: true }).setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("Jazz night, Friday 21 November, 8pm, at the Blue Room.") });
+    await luca.getByRole("textbox", { name: "Message", exact: true }).fill("When is it?");
+    await luca.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(luca.getByRole("list", { name: "Messages", exact: true })).toContainText("From notes.txt: Jazz night, Friday 21 November");
     // In a group, files are for people: they wait while the message is to @agent.
     await luca.goto(`/chats/${f.group}`);
     const box = luca.getByRole("textbox", { name: "Message", exact: true });

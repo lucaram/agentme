@@ -3,6 +3,7 @@ import { prepareAvatar, commitAvatar, pruneAvatarFiles } from "@/lib/profile/ava
 import { businessAllows } from "@/lib/business/permissions";
 import { askTeam } from "@/lib/business/ask-team";
 import { sendRichMessage } from "@/lib/chat/send-rich";
+import { agentFilesFrom, type AgentFile } from "@/lib/agents/files";
 
 import { after } from "next/server";
 import { redirect } from "next/navigation";
@@ -84,7 +85,17 @@ export async function sendMessage(
     const { state } = await dmState(conversationId, user.id, agent.id);
     if (state !== "open") return { error: DM_CLOSED[state] };
   }
-  if (options.rich) {
+  // My Agent: photos, PDFs and text files are for your agent to read (never passed on).
+  let agentFiles: { clientId: string; items: AgentFile[] } | null = null;
+  if (options.rich && conv.kind === "my_agent") {
+    if (agent.type === "business" && user.businessRole === "staff") return { error: "Your agent reads text only here. Nothing has been sent." };
+    const loaded = await agentFilesFrom(conversationId, user.id, options.rich);
+    if ("error" in loaded) return { error: loaded.error };
+    // Sent already (a retry after a lost response): nothing twice.
+    const { data: sent } = await adminClient().from("messages").select("thread_id").eq("conversation_id", conversationId).eq("sender_user_id", user.id).eq("metadata->>client_id", loaded.clientId).maybeSingle();
+    if (sent) return sent.thread_id ? { threadId: sent.thread_id } : {};
+    agentFiles = { clientId: loaded.clientId, items: loaded.files };
+  } else if (options.rich) {
     if (agent.type === "business" && user.businessRole === "staff" && typeof options.rich === "object" && options.rich && "poll" in options.rich && options.rich.poll) return { error: "An owner or manager can create a business poll." };
     const allowed = await canPost(conv as ConvRow, user.id);
     if (!allowed.ok) return { error: allowed.error };
@@ -127,7 +138,7 @@ export async function sendMessage(
   }
 
   // My Agent: one thread per request; everything the agent says while handling this stays in it.
-  const thread = conv.kind === "my_agent" ? await resolveThread({ userId: user.id, conversationId, threadId, text: content }) : null;
+  const thread = conv.kind === "my_agent" ? await resolveThread({ userId: user.id, conversationId, threadId, text: content || agentFiles?.items.map((f) => f.name).join(", ") || "" }) : null;
 
   await withUsageContext({ userId: user.id, agentId: agent.id }, async () => {
     if (conv.kind === "my_agent" && thread) {
@@ -138,9 +149,9 @@ export async function sendMessage(
           await postMessage({ conversationId, from: "agent", agentId: agent.id, content: reply.answer }); return;
         }
         // "📍 Near me now": the position becomes the nearest town here, on our server; only the town is used.
-        await handleOwnerMessage({ userId: user.id, agent, conversationId, text: content, reply, here: townAt(options.here) });
+        await handleOwnerMessage({ userId: user.id, agent, conversationId, text: content, reply, here: townAt(options.here), files: agentFiles });
         // "I'm vegetarian now": offer to remember it (nothing is saved until you tap Save).
-        await offerProfileSave(agent, conversationId, content);
+        if (content) await offerProfileSave(agent, conversationId, content);
       });
     } else if (conv.kind === "agent_chat") {
       await askAgent({ userId: user.id, agent, conversationId, text: content, reply });
