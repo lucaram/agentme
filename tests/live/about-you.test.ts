@@ -135,4 +135,30 @@ describe.skipIf(!dbUp)("what your agent knows about you (live)", () => {
     for (const text of ["I'm also free on Sundays all day", "Am I free on Sunday?", "Marco is vegetarian", "Organise dinner with @marco"]) await offer.offerProfileUpdates(agent, conv.id, text);
     expect(await count()).toBe(before);
   });
+
+  it("your own topics: offered by their name, updated with old and new shown, never recreated after you remove them", async () => {
+    const { save, offer, agents, chat } = await lib();
+    // The earlier test fills all 5 topics of your own: start from none.
+    await admin().from("agent_facts").delete().eq("agent_id", agent.id).eq("category", "custom");
+    expect(await save.saveFact(agent.id, { category: "custom", label: "My car", value: "Red Fiat 500", share: false })).toEqual({ ok: true });
+    const conv = await chat.getOrCreateMyAgentConversation(userId);
+    const latest = async () => (await admin().from("messages").select("id, content, metadata").eq("conversation_id", conv.id).order("created_at", { ascending: false }).limit(1).single()).data!;
+    const car = async () => (await agents.getFacts(agent.id)).find((f) => f.category === "custom" && f.label === "My car")?.value;
+
+    await offer.offerProfileUpdates(agent, conv.id, "I've just bought a blue Golf");
+    let card = await latest();
+    expect(card.content).toBe("⚠️ You said you've got blue Golf. You've saved “Red Fiat 500” in My car. Update it to “blue Golf”?");
+    expect(card.metadata).toMatchObject({ kind: "profile_update", shared: false, update: { category: "custom", topic: "My car" } });
+    expect(await car()).toBe("Red Fiat 500");
+    expect(await offer.answerProfileUpdate(userId, agent, card.id, "apply")).toEqual({ ok: true });
+    expect(await car()).toBe("blue Golf");
+
+    // You removed the topic meanwhile: the card doesn't bring it back.
+    await save.saveFact(agent.id, { category: "custom", label: "My car", value: "Red Fiat 500", share: false });
+    await offer.offerProfileUpdates(agent, conv.id, "I've just bought a blue Golf");
+    card = await latest();
+    await save.saveFact(agent.id, { category: "custom", label: "My car", value: "", share: false });
+    expect(await offer.answerProfileUpdate(userId, agent, card.id, "apply")).toMatchObject({ ok: false, error: expect.stringContaining("isn't one of your topics any more") });
+    expect(await car()).toBeUndefined();
+  });
 });

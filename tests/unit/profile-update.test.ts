@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyUpdate, checkUpdate, looksAboutSelf, sectionName, type ProfileUpdate } from "@/lib/profile/update";
 import { mockProfileUpdates } from "@/lib/profile/mock-updates";
 
-const u = (p: Partial<ProfileUpdate>): ProfileUpdate => ({ category: "availability", action: "add", value: "", old: null, reason: "", until: null, ...p });
+const u = (p: Partial<ProfileUpdate>): ProfileUpdate => ({ category: "availability", topic: null, action: "add", value: "", old: null, reason: "", until: null, ...p });
 
 describe("profile updates from what you say in My Agent", () => {
   it("looks only at things you say about yourself", () => {
@@ -33,11 +33,13 @@ describe("profile updates from what you say in My Agent", () => {
     expect(sectionName("food")).toBe("Lifestyle → Food & drink");
     expect(sectionName("away")).toBe("Away for a while");
     expect(sectionName("notes")).toBe("Private notes");
+    expect(sectionName("custom", "My car")).toBe("My car");
   });
 
   it("the test stand-in: adds, removes the saved part, and spots the vegetarian contradiction", () => {
     expect(mockProfileUpdates("I'm also free on Tuesday and Thursday evenings too", {})).toMatchObject([{ category: "availability", action: "add", value: "Tuesday and Thursday evenings" }]);
     expect(mockProfileUpdates("I can't do Saturdays any more", { availability: "Saturdays after 7 PM; Sundays all day" })).toMatchObject([{ action: "remove", old: "Saturdays after 7 PM" }]);
     expect(mockProfileUpdates("I eat fish now", { food: "vegetarian" })).toMatchObject([{ action: "replace", old: "vegetarian", value: "pescatarian" }]);
+    expect(mockProfileUpdates("I've just bought a blue Golf", {}, { "My car": "Red Fiat 500" })).toMatchObject([{ category: "custom", topic: "My car", action: "replace", old: "Red Fiat 500", value: "blue Golf" }]);
   });
 });

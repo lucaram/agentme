@@ -6,11 +6,12 @@
 import { z } from "zod";
 import { TOPICS } from "./topics";
 
-export const UPDATE_CATEGORIES = ["availability", "away", "food", "interests", "location", "budget", "practical", "notes"] as const;
+export const UPDATE_CATEGORIES = ["availability", "away", "food", "interests", "location", "budget", "practical", "notes", "custom"] as const;
 export type UpdateCategory = (typeof UPDATE_CATEGORIES)[number];
 
 export const ProfileUpdateSchema = z.object({
-  category: z.enum(UPDATE_CATEGORIES).describe("Where it belongs: availability (when they're usually free), away (time away, with an end date), food, interests, location (where they usually are), budget, practical (allergies, mobility, kids, pets, no car), notes (anything else private)."),
+  category: z.enum(UPDATE_CATEGORIES).describe("Where it belongs: availability (when they're usually free), away (time away, with an end date), food, interests, location (where they usually are), budget, practical (allergies, mobility, kids, pets, no car), custom (one of the owner's own topics, named in topic), notes (anything else private)."),
+  topic: z.string().max(40).nullable().describe("For custom: the name of one of the owner's own topics, exactly as given. Otherwise null."),
   action: z.enum(["add", "replace", "remove"]).describe("add: new. replace: it changes or contradicts something saved. remove: something saved no longer applies."),
   value: z.string().max(160).describe("The new text, short, in the style of the saved items, without 'I' (e.g. 'Tuesday evenings'). Empty for remove."),
   old: z.string().max(300).nullable().describe("For replace and remove: the saved text it changes, copied exactly from saved. Null for add."),
@@ -18,10 +19,13 @@ export const ProfileUpdateSchema = z.object({
   until: z.string().nullable().describe("For away: the last day away, YYYY-MM-DD. Otherwise null."),
 });
 export type ProfileUpdate = z.infer<typeof ProfileUpdateSchema>;
+/** As kept on a card: cards from before your own topics have no topic. */
+export const StoredUpdateSchema = ProfileUpdateSchema.extend({ topic: z.string().max(40).nullable().optional().transform((t) => t ?? null) });
 export const ProfileUpdatesSchema = z.object({ updates: z.array(ProfileUpdateSchema).max(3) });
 
 /** Where it's shown in Settings → What your agent knows about you. */
-export function sectionName(category: UpdateCategory): string {
+export function sectionName(category: UpdateCategory, ownTopic?: string | null): string {
+  if (category === "custom") return ownTopic || "your own topic";
   if (category === "away") return "Away for a while";
   const topic = TOPICS.find((t) => t.key === category);
   return topic ? (["availability", "notes"].includes(category) ? topic.title : `Lifestyle → ${topic.title}`) : "your profile";

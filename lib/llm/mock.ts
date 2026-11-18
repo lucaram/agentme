@@ -120,7 +120,7 @@ export class MockProvider implements LLMProvider {
     let value: unknown;
     switch (req.purpose) {
       case "profile_extract":
-        value = { updates: mockProfileUpdates(String(ctx.text ?? ""), (ctx.saved ?? {}) as Record<string, string>) };
+        value = { updates: mockProfileUpdates(String(ctx.text ?? ""), (ctx.saved ?? {}) as Record<string, string>, (ctx.ownTopics ?? {}) as Record<string, string>) };
         break;
       case "recall_route":
         value = mockRecallRoute(String(ctx.text ?? ""), (ctx.plans ?? []) as RecallPlan[]);
