@@ -17,6 +17,8 @@ export type LLMPurpose =
   | "business_faq" // answer a question from business-provided info only
   | "ask_around_summary" // summarise friends' recommendations for the owner
   | "business_ingest" // read a business's PDF or photo (e.g. a menu) into text
+  | "compare_points" // what to compare across businesses, as one question each
+  | "compare_cells" // a business's answers read into short facts for the comparison card
   | "profile_extract" // what the owner said about themselves, compared with their saved profile
   | "file_notes" // read a photo or PDF the owner attached in My Agent into private notes
   | "business_learn" // learn a business's whole website: basics, facts, questions & answers

@@ -24,6 +24,8 @@ import { DraftReply } from "./DraftReply";
 import { MessageActions } from "./MessageActions";
 import { FactSuggestion } from "./FactSuggestion";
 import { ProfileUpdate } from "./ProfileUpdate";
+import { ComparisonCard } from "./ComparisonCard";
+import type { Comparison } from "@/lib/compare/comparison";
 import { BusinessSuggestion } from "./BusinessSuggestion";
 import { AskTeam } from "./AskTeam";
 import { ForwardButton } from "./Forward";
@@ -189,6 +191,13 @@ export function MessageList({ bundle, unreadId }: { bundle: HistoryBundle; unrea
               {m.removed_at && meta.auto_hidden && mine && <HiddenAppeal messageId={m.id} conversationId={id} status={meta.appeal} />}
               {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}
               {meta.kind === "fact_suggestion" && isMyAgent && <FactSuggestion messageId={m.id} decided={meta.decided} />}
+              {meta.kind === "business_comparison" && isMyAgent && !m.removed_at && (
+                <ComparisonCard
+                  messageId={m.id}
+                  comparison={m.metadata as unknown as Comparison}
+                  actions={Object.fromEntries(((m.metadata as unknown as Comparison).businesses ?? []).map((b) => [b.id, currentActions.get(b.id)?.all ?? []]))}
+                />
+              )}
               {meta.kind === "profile_update" && isMyAgent && <ProfileUpdate messageId={m.id} update={meta.update} shared={meta.shared} decided={meta.decided} />}
               {meta.kind === "business_suggestion" && isMyAgent && <BusinessSuggestion messageId={m.id} handle={meta.handle ?? ""} decided={meta.decided} />}
               {isMyAgent && !m.removed_at && m.is_ai_generated && Array.isArray(meta.booking_ways) && <BusinessWays ways={currentActions.get(meta.booking_business_id ?? legacyIdentities.get(m.id) ?? "")?.reservation ?? []} primary={false} agentId={meta.booking_business_id ?? legacyIdentities.get(m.id)} source="recall" />}

@@ -1,7 +1,7 @@
 "use server";
 import { prepareAvatar, commitAvatar, pruneAvatarFiles } from "@/lib/profile/avatar-server";
 import { businessAllows } from "@/lib/business/permissions";
-import { askTeam } from "@/lib/business/ask-team";
+import { askTeam, askTeamForComparison } from "@/lib/business/ask-team";
 import { sendRichMessage } from "@/lib/chat/send-rich";
 import { agentFilesFrom, type AgentFile } from "@/lib/agents/files";
 
@@ -193,6 +193,15 @@ export async function answerProfileUpdateAction(messageId: string, choice: "appl
   revalidatePath("/chats", "layout");
   revalidatePath("/settings/about", "layout");
   return result.ok ? {} : { error: result.error };
+}
+
+/** "Ask the team" on one point of a comparison card (your own My Agent). */
+export async function askTeamForComparisonAction(messageId: string, businessId: string, point: number): Promise<{ error?: string; notice?: string }> {
+  const { user, agent } = await requireAgent();
+  if (!Id.safeParse(messageId).success || !Id.safeParse(businessId).success || !Number.isInteger(point) || point < 0 || point > 3) return { error: "Not found." };
+  const result = await askTeamForComparison(user.id, agent, messageId, businessId, point);
+  revalidatePath("/chats", "layout");
+  return result;
 }
 
 /** "Shall I ask its agent?" in My Agent: your agent asks the business for you, or not. */
