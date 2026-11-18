@@ -208,6 +208,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/cha
         key={`${id}:${threadParam ?? ""}`}
         conversationId={id}
         nearMe={isMyAgent}
+        attachments={conv.kind !== "my_agent" && conv.kind !== "agent_chat"}
         threadId={isMyAgent ? (thread && thread.kind === "request" ? thread.id : "new") : undefined}
         placeholder={
           conv.kind === "my_agent"
