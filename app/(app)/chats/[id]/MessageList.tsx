@@ -23,6 +23,7 @@ import { AssignCard } from "./AssignCard";
 import { DraftReply } from "./DraftReply";
 import { MessageActions } from "./MessageActions";
 import { FactSuggestion } from "./FactSuggestion";
+import { ProfileUpdate } from "./ProfileUpdate";
 import { BusinessSuggestion } from "./BusinessSuggestion";
 import { AskTeam } from "./AskTeam";
 import { ForwardButton } from "./Forward";
@@ -50,7 +51,7 @@ export function MessageList({ bundle, unreadId }: { bundle: HistoryBundle; unrea
     q.sender_agent_id ? `@${byId.get(q.sender_agent_id)?.handle ?? "an"}'s agent` : q.sender_user_id === user.id ? "You" : byOwner.get(q.sender_user_id ?? "")?.display_name ?? "Someone").author;
   return <>
         {(messages ?? []).map((m) => {
-          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string; flags?: string[]; auto_hidden?: boolean; appeal?: string; business_id?: string; handle?: string; handoff_offer?: boolean; handoff_sent?: boolean; asked_by?: string; booking_ways?: unknown; booking_business_id?: string; forwarded?: Forwarded; sources?: { url?: string; title?: string }[] };
+          const meta = m.metadata as { kind?: string; task_id?: string; proposal_id?: string; step_id?: string; draft?: string; sent?: boolean; decided?: string; flags?: string[]; auto_hidden?: boolean; appeal?: string; business_id?: string; handle?: string; handoff_offer?: boolean; handoff_sent?: boolean; asked_by?: string; booking_ways?: unknown; booking_business_id?: string; update?: { category?: string; action?: "add" | "replace" | "remove" }; shared?: boolean; forwarded?: Forwarded; sources?: { url?: string; title?: string }[] };
           // Where a looked-up answer came from: links to the pages themselves (web addresses only).
           const sources = (Array.isArray(meta.sources) ? meta.sources : []).filter((s) => typeof s?.url === "string" && /^https?:\/\//i.test(s.url)).slice(0, 3);
           const isPrivate = Boolean(m.visible_to);
@@ -188,6 +189,7 @@ export function MessageList({ bundle, unreadId }: { bundle: HistoryBundle; unrea
               {m.removed_at && meta.auto_hidden && mine && <HiddenAppeal messageId={m.id} conversationId={id} status={meta.appeal} />}
               {meta.kind === "draft" && meta.draft && <DraftReply conversationId={id} messageId={m.id} draft={meta.draft} sent={Boolean(meta.sent)} />}
               {meta.kind === "fact_suggestion" && isMyAgent && <FactSuggestion messageId={m.id} decided={meta.decided} />}
+              {meta.kind === "profile_update" && isMyAgent && <ProfileUpdate messageId={m.id} update={meta.update} shared={meta.shared} decided={meta.decided} />}
               {meta.kind === "business_suggestion" && isMyAgent && <BusinessSuggestion messageId={m.id} handle={meta.handle ?? ""} decided={meta.decided} />}
               {isMyAgent && !m.removed_at && m.is_ai_generated && Array.isArray(meta.booking_ways) && <BusinessWays ways={currentActions.get(meta.booking_business_id ?? legacyIdentities.get(m.id) ?? "")?.reservation ?? []} primary={false} agentId={meta.booking_business_id ?? legacyIdentities.get(m.id)} source="recall" />}
               {meta.handoff_offer && !m.removed_at && (isMyAgent || conv.kind === "agent_chat" || meta.asked_by === user.id) && <AskTeam messageId={m.id} sent={Boolean(meta.handoff_sent)} />}

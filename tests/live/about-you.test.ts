@@ -85,4 +85,54 @@ describe.skipIf(!dbUp)("what your agent knows about you (live)", () => {
     await offer.offerProfileSave(agent, conv.id, "I'm vegetarian now");
     expect((await admin().from("messages").select("*", { count: "exact", head: true }).eq("conversation_id", conv.id)).count).toBe(before);
   });
+
+  it("from what you say in My Agent: adds, updates and removes, always showing old and new, and only on your tap", async () => {
+    const { save, offer, agents, chat } = await lib();
+    await save.saveFact(agent.id, { category: "availability", value: "Saturdays after 7 PM; Sundays all day", share: true });
+    await save.saveFact(agent.id, { category: "food", value: "vegetarian", share: false });
+    const conv = await chat.getOrCreateMyAgentConversation(userId);
+    const latest = async () => (await admin().from("messages").select("id, content, metadata").eq("conversation_id", conv.id).order("created_at", { ascending: false }).limit(1).single()).data!;
+    const saved = async (category: string) => (await agents.getFacts(agent.id)).find((f) => f.category === category)?.value;
+    const count = async () => (await admin().from("messages").select("*", { count: "exact", head: true }).eq("conversation_id", conv.id)).count;
+
+    // New: offered, nothing saved until Save; shared like the section already is.
+    await offer.offerProfileUpdates(agent, conv.id, "I'm also free on Tuesday and Thursday evenings too");
+    let card = await latest();
+    expect(card.content).toBe("💡 Save to When you're free: “Tuesday and Thursday evenings”?");
+    expect(card.metadata).toMatchObject({ kind: "profile_update", shared: true });
+    expect(await saved("availability")).toBe("Saturdays after 7 PM; Sundays all day");
+    expect(await offer.answerProfileUpdate("00000000-0000-0000-0000-000000000000", agent, card.id, "apply")).toMatchObject({ ok: false });
+    expect(await offer.answerProfileUpdate(userId, agent, card.id, "apply")).toEqual({ ok: true });
+    expect(await saved("availability")).toBe("Saturdays after 7 PM; Sundays all day; Tuesday and Thursday evenings");
+
+    // No longer true: asked first, showing exactly what goes.
+    await offer.offerProfileUpdates(agent, conv.id, "I can't do Saturdays any more");
+    card = await latest();
+    expect(card.content).toBe("⚠️ You said you can't do Saturdays any more. Remove “Saturdays after 7 PM” from When you're free?");
+    expect(await offer.answerProfileUpdate(userId, agent, card.id, "apply")).toEqual({ ok: true });
+    expect(await saved("availability")).toBe("Sundays all day; Tuesday and Thursday evenings");
+
+    // A contradiction: old and new on the card; "Keep both" keeps both; private stays private.
+    await offer.offerProfileUpdates(agent, conv.id, "I eat fish now");
+    card = await latest();
+    expect(card.content).toBe("⚠️ You said you eat fish now. You've saved “vegetarian” in Lifestyle → Food & drink. Update it to “pescatarian”?");
+    expect(card.metadata).toMatchObject({ shared: false });
+    expect(await offer.answerProfileUpdate(userId, agent, card.id, "keep_both")).toEqual({ ok: true });
+    expect(await saved("food")).toBe("vegetarian; pescatarian");
+
+    // Changed in Settings meanwhile: not applied over it.
+    await offer.offerProfileUpdates(agent, conv.id, "I eat fish now");
+    expect(await count()).toBeGreaterThan(0);
+    await save.saveFact(agent.id, { category: "food", value: "vegetarian", share: false });
+    await offer.offerProfileUpdates(agent, conv.id, "I eat fish now");
+    card = await latest();
+    await save.saveFact(agent.id, { category: "food", value: "Italian", share: false });
+    expect(await offer.answerProfileUpdate(userId, agent, card.id, "apply")).toMatchObject({ ok: false, error: expect.stringContaining("changed since") });
+    expect(await saved("food")).toBe("Italian");
+
+    // Already saved, a question, or about someone else: no card.
+    const before = await count();
+    for (const text of ["I'm also free on Sundays all day", "Am I free on Sunday?", "Marco is vegetarian", "Organise dinner with @marco"]) await offer.offerProfileUpdates(agent, conv.id, text);
+    expect(await count()).toBe(before);
+  });
 });

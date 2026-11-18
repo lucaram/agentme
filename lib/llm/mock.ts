@@ -13,6 +13,7 @@ import { LLMError, type LLMObjectRequest, type LLMProvider, type LLMRequest, typ
 import { mockResearch } from "@/lib/research/mock";
 import { mockRoute, overlapPick } from "@/lib/research/answer";
 import { isProfileQuestion, mockRecallRoute } from "@/lib/agents/recall-route";
+import { mockProfileUpdates } from "@/lib/profile/mock-updates";
 import { mockBusinessScope, mockPublicationDecision } from "@/lib/business/question-scope";
 
 type Faq = { q: string; a: string };
@@ -118,6 +119,9 @@ export class MockProvider implements LLMProvider {
     const ctx = (req.mockContext ?? {}) as Record<string, unknown>;
     let value: unknown;
     switch (req.purpose) {
+      case "profile_extract":
+        value = { updates: mockProfileUpdates(String(ctx.text ?? ""), (ctx.saved ?? {}) as Record<string, string>) };
+        break;
       case "recall_route":
         value = mockRecallRoute(String(ctx.text ?? ""), (ctx.plans ?? []) as RecallPlan[]);
         break;

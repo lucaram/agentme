@@ -50,7 +50,7 @@ import { guardCommunityPost } from "@/lib/social/guard-server";
 import { autopilot } from "@/lib/social/moderation-server";
 import { renameThread, resolveThread } from "@/lib/agents/threads";
 import { withThread } from "@/lib/agents/thread-context";
-import { answerSuggestion, offerProfileSave } from "@/lib/profile/offer";
+import { answerProfileUpdate, answerSuggestion, offerProfileUpdates } from "@/lib/profile/offer";
 import { answerBusinessSuggestion } from "@/lib/agents/ask-business";
 import { resolveReply } from "@/lib/social/quote-server";
 import { quoteContext } from "@/lib/social/quote";
@@ -151,7 +151,7 @@ export async function sendMessage(
         // "📍 Near me now": the position becomes the nearest town here, on our server; only the town is used.
         await handleOwnerMessage({ userId: user.id, agent, conversationId, text: content, reply, here: townAt(options.here), files: agentFiles });
         // "I'm vegetarian now": offer to remember it (nothing is saved until you tap Save).
-        if (content) await offerProfileSave(agent, conversationId, content);
+        if (content) await offerProfileUpdates(agent, conversationId, content);
       });
     } else if (conv.kind === "agent_chat") {
       await askAgent({ userId: user.id, agent, conversationId, text: content, reply });
@@ -182,6 +182,16 @@ export async function answerFactSuggestionAction(messageId: string, accept: bool
   revalidatePath("/chats", "layout");
   revalidatePath("/settings/about");
   revalidatePath("/settings/about/lifestyle");
+  return result.ok ? {} : { error: result.error };
+}
+
+/** "Save to When you're free …?" / "Update it to …?" in My Agent: change your profile, keep both, or leave it. */
+export async function answerProfileUpdateAction(messageId: string, choice: "apply" | "keep_both" | "dismiss"): Promise<{ error?: string }> {
+  const { user, agent } = await requireAgent();
+  if (!Id.safeParse(messageId).success || !["apply", "keep_both", "dismiss"].includes(choice)) return { error: "Not found." };
+  const result = await answerProfileUpdate(user.id, agent, messageId, choice);
+  revalidatePath("/chats", "layout");
+  revalidatePath("/settings/about", "layout");
   return result.ok ? {} : { error: result.error };
 }
 
