@@ -9,6 +9,7 @@ import { answerMessage } from "@/lib/research/answer";
 import { hit } from "@/lib/limits";
 import { isPublicDomain } from "@/lib/business/site";
 import { handoffMetadata } from "@/lib/business/question-scope";
+import { relayToComparison } from "@/lib/compare/run";
 
 /**
  * Your agent asks a business's agent for you (over A2A, exactly like asking it
@@ -116,7 +117,8 @@ export async function relayToMyAgent(a2aTaskId: string | null, business: Busines
     .eq("metadata->>a2a_task", a2aTaskId)
     .limit(1)
     .maybeSingle();
-  if (!asked?.sender_agent_id) return false;
+  // Asked from a comparison card: the cell is filled in.
+  if (!asked?.sender_agent_id) return relayToComparison(a2aTaskId, business, answer);
   await postMessage({
     conversationId: asked.conversation_id,
     threadId: asked.thread_id ?? undefined,

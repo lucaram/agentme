@@ -57,7 +57,9 @@ export async function prepareHistory(client: Client, userId: string, agent: Agen
     const meta = m.metadata as Meta;
     return m.is_ai_generated && !m.removed_at && Array.isArray(meta.booking_ways) ? [{ messageId: m.id, businessId: meta.booking_business_id, ways: waysOf({ ways: meta.booking_ways }), metadata: m.metadata }] : [];
   }) : [];
-  const actions = await currentChatActions([...venueIds, ...booking.flatMap((m) => m.businessId ? [m.businessId] : [])], booking.filter((m) => !m.businessId));
+  // Businesses on a comparison card: their own booking and contact buttons under "Open".
+  const compared = conv.kind === "my_agent" ? messages.flatMap((m) => ((m.metadata as { kind?: string; businesses?: { id?: string }[] }).kind === "business_comparison" ? ((m.metadata as { businesses?: { id?: string }[] }).businesses ?? []).flatMap((b) => (typeof b.id === "string" ? [b.id] : [])) : [])) : [];
+  const actions = await currentChatActions(unique([...venueIds, ...compared, ...booking.flatMap((m) => m.businessId ? [m.businessId] : [])]), booking.filter((m) => !m.businessId));
   const shared = conv.kind === "group" || conv.kind === "channel";
   const posting = shared ? await canPost(conv as ConvRow, userId) : { ok: true };
   const dm = conv.kind === "dm" ? await dmState(conv.id, userId, agent.id) : null;

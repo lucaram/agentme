@@ -33,6 +33,8 @@ import { askBusinessesFor, offerToAskBusiness } from "@/lib/agents/ask-business"
 import { asksToPassOn, claimsAction, honestReply, passOnReply } from "@/lib/agents/honesty";
 import { quoteContext, withReplyContext } from "@/lib/social/quote";
 import type { ReplyInfo } from "@/lib/social/quote-server";
+import { compareBusinesses } from "@/lib/compare/run";
+import { MIN_COMPARE } from "@/lib/compare/comparison";
 import { filesBlock, noteFiles, threadFileNotes, type AgentFile, type FileNotes } from "@/lib/agents/files";
 import { waysOf, waysText, type Way } from "@/lib/business/booking";
 import { routeRequest, researchWeb } from "@/lib/research";
@@ -162,6 +164,12 @@ export async function handleOwnerMessage(opts: {
   const known = (await Promise.all(mentions.map((h) => getAgentByHandle(h)))).filter((a): a is AgentRow => a !== null);
   const businesses = known.filter((a) => a.type === "business");
   if (businesses.length && businesses.length === known.length) {
+    // Two or more businesses: the same points to each, answered on one comparison card.
+    if (businesses.length >= MIN_COMPARE) {
+      await compareBusinesses({ agent, conversationId, businesses, text: withReplyContext(text, replyCtx) });
+      if (files) await postMessage({ conversationId, from: "agent", agentId: agent.id, content: "I sent only the questions. Your files stay with you." });
+      return;
+    }
     await askBusinessesFor(agent, conversationId, businesses, withReplyContext(text, replyCtx));
     // Only your words go to a business: what's in your files stays with you.
     if (files) await postMessage({ conversationId, from: "agent", agentId: agent.id, content: "I sent only your message. Your files stay with you." });

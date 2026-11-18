@@ -9,6 +9,7 @@ import { summonsAgent } from "@/lib/agents/commands";
 import { useComposerExtras } from "@/components/chat/useComposerExtras";
 import { notifyChatSent } from "@/lib/client/chat-position";
 import { useMentionPicker } from "@/components/chat/useMentionPicker";
+import { FILL_COMPOSER_EVENT } from "./ComparisonCard";
 
 const MAX_HEIGHT = 200; // about 8 lines
 
@@ -67,6 +68,21 @@ export function Composer({
     const start = el.selectionStart; const end = el.selectionEnd;
     el.value = el.value.slice(0, start) + emoji + el.value.slice(end); fit(); el.focus(); el.setSelectionRange(start + emoji.length, start + emoji.length);
   }, attachments === "all" && toAgent, attachments === "agent");
+  useEffect(() => {
+    // "Plan it here" on a comparison card: the start of a request, to finish and send.
+    const fill = (event: Event) => {
+      const text = (event as CustomEvent<string>).detail;
+      const el = ref.current;
+      if (!el || typeof text !== "string") return;
+      el.value = text;
+      fit();
+      setToAgent(summonsAgent(text));
+      el.focus();
+      el.setSelectionRange(text.length, text.length);
+    };
+    window.addEventListener(FILL_COMPOSER_EVENT, fill);
+    return () => window.removeEventListener(FILL_COMPOSER_EVENT, fill);
+  }, []);
   useEffect(() => {
     // File choosers and capture dialogs take focus away; continue the same message here.
     if (extras.draftCount) ref.current?.focus({ preventScroll: true });
