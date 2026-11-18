@@ -11,7 +11,7 @@ const items = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
 
 /**
  * Top of Prices: where the prices come from (each document, and the website's pages together), reading
- * as it happens, and adding a menu right here. The same documents as in Website & documents.
+ * as it happens, and adding a menu right here. The same documents as in Website & links.
  * On Facilities: only scanning, problems, and Scan.
  */
 export function PriceSources({ sources, empty, variant = "prices" }: { sources: PriceSource[]; empty: boolean; variant?: "prices" | "facilities" }) {
@@ -57,7 +57,7 @@ export function PriceSources({ sources, empty, variant = "prices" }: { sources: 
         </select>
         <button type="button" className="btn-primary" disabled={pending || !url.trim()} onClick={() => run(() => addSourceAction(url, visibility), () => { setUrl(""); setAdding(false); })}>Add</button>
       </div>
-      <p className="hint">It&apos;s added to Website &amp; documents too, and read again daily.</p>
+      <p className="hint">It&apos;s added to Website &amp; links too, and read again daily.</p>
     </div>
   );
 

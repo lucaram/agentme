@@ -63,7 +63,7 @@ const quietly = async (url: string): Promise<Fetched | null> => {
 const mediaType = (f: Fetched) => f.contentType.split(";")[0].trim();
 
 export const THIN_SITE_WARNING =
-  "Your website builds its pages in the browser, so there's very little text for your agent to read. Add a PDF or a photo of your menu or price list in Website & documents instead.";
+  "Your website builds its pages in the browser, so there's very little text for your agent to read. Add a PDF or a photo of your menu or price list in Website & links instead.";
 
 /** Reads (or re-reads) a business's website. Safe to call in the background. */
 export async function readWebsite(agentId: string, reason: Reason): Promise<void> {
@@ -121,7 +121,7 @@ async function crawl(agentId: string, ownerId: string, siteUrl: string, liveAt: 
   const homeUrl = base.toString();
   const homeHtml = /html/.test(mediaType(home)) ? home.body.toString("utf8") : "";
   if (!robotsAllows(rules, base.pathname)) {
-    throw new Error("Your website's robots.txt asks bots not to read it, so your agent respects that. You can still add your own documents in Website & documents.");
+    throw new Error("Your website's robots.txt asks bots not to read it, so your agent respects that. You can still add your own documents in Website & links.");
   }
 
   // Candidates: the sitemap(s), then links found on the pages read.

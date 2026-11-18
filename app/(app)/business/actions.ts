@@ -36,7 +36,7 @@ export async function saveBusinessInfoAction(_prev: Out | undefined, form: FormD
   const hasAbout = form.has("about");
   const hasCustomers = form.has("customers");
   const about = hasAbout ? String(form.get("about") ?? "").trim() : "";
-  if (about.length > BUSINESS_LIMITS.about) return { error: `Keep About your business to ${BUSINESS_LIMITS.about.toLocaleString("en-GB")} characters (it has ${about.length.toLocaleString("en-GB")}). Longer details belong in Q&A or Website & documents.` };
+  if (about.length > BUSINESS_LIMITS.about) return { error: `Keep About your business to ${BUSINESS_LIMITS.about.toLocaleString("en-GB")} characters (it has ${about.length.toLocaleString("en-GB")}). Longer details belong in Q&A or Website & links.` };
   const customers = hasCustomers ? String(form.get("customers") ?? "").trim().slice(0, 4000) : "";
   // Opening hours and address, saved with the description (About).
   const hours = String(form.get("hours") ?? "").trim();

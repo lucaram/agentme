@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 
 /**
  * My Business sections open one at a time: open the one a step needs (if it isn't already).
- * About, Details, Website & documents and Q&A are tabs of "What your agent knows": for those,
+ * About, Website & links, Prices & facilities and Q&A are tabs of "What your agent knows": for those,
  * that section is opened and the tab chosen. Returns the section (or tab panel).
  */
 export async function openSection(page: Page, testId: string) {

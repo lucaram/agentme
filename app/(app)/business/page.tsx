@@ -31,7 +31,6 @@ import { businessDescription, publicBusinessDetails } from "@/lib/business/detai
 import { ActionButton } from "@/components/ActionButton";
 import { answerPartnerInviteAction, leavePlacementAction } from "../social-actions";
 import { linkKey, linksIn } from "@/lib/business/extract";
-import { WebsiteCard } from "./WebsiteCard";
 import { PagedList } from "@/components/PagedList";
 import { verifiesByEmail } from "@/lib/business/site";
 import { emailProofEnforced } from "@/lib/business/verify";
@@ -114,7 +113,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const communitiesCount = places.filter((p) => p.community_id && p.status !== "invited").length;
   const changeList = changes ?? [];
   const siteSummary = siteError ? "Website status unavailable" : site ? `${site.domain} · ${site.live_at ? "Connected" : site.status === "reading" ? "Reading…" : site.status === "error" ? "Needs attention" : "Ready for review"}` : initialWebsite ? "Website saved · connection needed" : "No website connected";
-  const documentsSummary = `${siteSummary}${sources.length ? ` · ${plural(sources.length, "additional document")}` : ""}`;
+  const documentsSummary = `${siteSummary}${sources.length ? ` · ${plural(sources.length, "link")}` : ""}`;
   const publicPage = { settings: pageSettings(agent.business_info), cover: await currentCover(agent.id), qr: await permanentQr(agent.handle) };
   const { page: _look, ...shownInfo } = (agent.business_info ?? {}) as Record<string, unknown>;
   void _look;
@@ -133,7 +132,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
         <div><h1 className="text-lg font-semibold">My Business</h1><p className="text-xs text-muted">Manage your public profile, customer actions and the information your agent uses.</p></div>
         <TestAgent />
       </div>
-      {live && <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status" data-testid="site-live">Your website information is published. Automatic checks are available approximately daily, and changes appear in Website &amp; documents.</p>}
+      {live && <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm" role="status" data-testid="site-live">Your website information is published. Automatic checks are available approximately daily, and changes appear in Website &amp; links.</p>}
       <div className="space-y-3" data-testid="business-sections">
         <Fold name={SECTIONS} id="customer-dashboard" icon="📊" title="Customer dashboard" testId="fold-activity" summary={dashboard ? `${period} days · ${plural(dashboard.totals.received, "recorded question")} · agent answered ${dashboard.totals.automatic}` : "Team performance and activity"}>
           <span id="customer-inbox" /><span id="customer-activity" />
@@ -148,7 +147,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
             label="What your agent knows"
             tabs={[
               { id: "about-business", label: "About", testId: "fold-own-words" },
-              { id: "website-documents", label: "Website & documents", testId: "fold-documents", badge: { count: changeList.length, tone: "new" } },
+              { id: "website-documents", label: "Website & links", testId: "fold-documents", badge: { count: changeList.length, tone: "new" } },
               { id: "prices-facilities", label: "Prices & facilities", testId: "fold-offerings" },
               { id: "questions-answers", label: "Q&A", testId: "fold-faqs", badge: { count: faqs.length, tone: "total" } },
             ]}
@@ -167,29 +166,34 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
             </section>
             <section className={BODY} aria-label="Website and documents">
               <span id="knows" />
-              <p className="text-sm" data-testid="knows-explained">
-                <b>What your agent knows.</b> Your agent reads your website and these documents, and uses what it learns to answer customers.
-              </p>
-              <div id="website" className="scroll-mt-40">
-                {siteError ? <p role="alert" className="text-sm text-danger">Your website connection could not be loaded. Refresh this page before adding another.</p> : <WebsiteCard
-                  key={`${agent.id}:${site?.url ?? initialWebsite}`}
-                  site={site ? { domain: site.domain, url: site.url, status: site.status, pagesRead: site.pages_read, lastReadAt: site.last_read_at, lastSuccessAt: site.last_success_at, autoRefresh: site.auto_refresh, live: Boolean(site.live_at), pricePages, readingPrices: siteReadingPrices, warning: site.warning, error: site.error, verifyToken: site.verify_token } : null}
-                  lookup={(agent.business_info as { lookup?: boolean } | null)?.lookup !== false}
-                  verified={Boolean(site && agent.verified_domain === site.domain)}
-                  canVerifyByEmail={Boolean(site && emailProofEnforced() && email.confirmed && verifiesByEmail(email.address, site.domain))}
-                  initialValue={initialWebsite}
-                  notice={site ? undefined : website_error ? "We couldn't connect the website you gave at sign-up. Check the address and try again." : initialWebsite ? "We couldn't connect your website yet. Check the address and try again." : undefined}
-                />}
+              {/* One list, one box: your website (the whole site) first, then pages, PDFs and photos. */}
+              <div id="links" className="scroll-mt-40 space-y-3">
+                <span id="website" className="block scroll-mt-40" />
+                <div>
+                  <h3 className="font-medium">Website &amp; links</h3>
+                  <p className="hint" data-testid="knows-explained">Your website, menus, price lists: anything your agent should learn from to answer customers. Customers don&apos;t see these links.</p>
+                </div>
+                {siteError || sourcesError ? (
+                  <p role="alert" className="text-sm text-danger">Your website and links could not be loaded. Refresh this page to try again.</p>
+                ) : (
+                  <SourcesManager
+                    key={`${agent.id}:${site?.url ?? initialWebsite}`}
+                    sources={sources}
+                    website={{
+                      site: site ? { domain: site.domain, url: site.url, status: site.status, pagesRead: site.pages_read, lastReadAt: site.last_read_at, lastSuccessAt: site.last_success_at, autoRefresh: site.auto_refresh, live: Boolean(site.live_at), pricePages, readingPrices: siteReadingPrices, warning: site.warning, error: site.error, verifyToken: site.verify_token } : null,
+                      lookup: (agent.business_info as { lookup?: boolean } | null)?.lookup !== false,
+                      verified: Boolean(site && agent.verified_domain === site.domain),
+                      canVerifyByEmail: Boolean(site && emailProofEnforced() && email.confirmed && verifiesByEmail(email.address, site.domain)),
+                      // A website given at sign-up that couldn't be connected yet.
+                      pending: !site && initialWebsite ? { url: initialWebsite, notice: website_error ? "We couldn't connect the website you gave at sign-up. Check the address and try again." : "Not connected yet. Try again, or remove it." } : null,
+                    }}
+                  />
+                )}
               </div>
               {changeList.length > 0 && <div data-testid="site-changes" className="space-y-3 rounded-xl border border-border p-3">
                 <div className="flex items-center justify-between gap-3"><h3 className="font-medium">Website updates</h3><ActionButton action={clearSiteChangesAction} label="Clear" /></div>
                 <ul>{changeList.map((change) => <li key={change.id} className="py-2 text-sm" data-testid="site-change">{change.text}<span className="block text-xs text-muted">{dayBucket(change.created_at)}</span></li>)}</ul>
               </div>}
-              <div id="links" className="scroll-mt-40 space-y-3 border-t border-border pt-4">
-                <h3 className="font-medium">Additional documents &amp; links</h3>
-                <p className="hint">Menus, price lists and other pages, PDFs or photos your agent learns from. Customers don&apos;t see them.</p>
-                {sourcesError ? <p role="alert" className="text-sm text-danger">Documents could not be loaded. Refresh to try again.</p> : <SourcesManager sources={sources} />}
-              </div>
               <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Customer-only information</summary><div className="pt-3"><BusinessInfoForm mode="customers" customers={info.customers ?? ""} /></div></details>
             </section>
             <section className={BODY} aria-label="Prices and facilities">
@@ -251,7 +255,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
                       <li><SectionLink id="about-business" className="text-accent underline">Description</SectionLink></li>
                       <li><SectionLink id="business-information" className="text-accent underline">Opening hours and address</SectionLink></li>
                       <li><SectionLink id="book-or-order" className="text-accent underline">Book, order and contact buttons</SectionLink></li>
-                      <li><SectionLink id="website-documents" className="text-accent underline">Website, documents and verified badge</SectionLink></li>
+                      <li><SectionLink id="website-documents" className="text-accent underline">Website, links and verified badge</SectionLink></li>
                     </ul>
                   </div>
                 }

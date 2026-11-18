@@ -85,7 +85,7 @@ test("business workspace preserves agent information, custom actions, documents 
     expect(((await f.db.from("agents").select("business_info").eq("id", f.business.agent.id).single()).data!.business_info as { ways: unknown[] }).ways).toHaveLength(9);
 
     const docs = await open(shop, "fold-documents");
-    await expect(docs.getByLabel("Your website", { exact: true })).toHaveValue(`${baseURL}/demo/trattoria-menu.html`);
+    await expect(docs.getByTestId("website-card")).toContainText(`${baseURL!.replace(/^https?:\/\//, "")}/demo/trattoria-menu.html`);
     await expect(docs.getByRole("button", { name: "Retry connection", exact: true })).toBeVisible();
     await docs.getByLabel("Link to read").fill(documentUrl);
     await docs.getByRole("button", { name: "Add link", exact: true }).click();
@@ -98,7 +98,7 @@ test("business workspace preserves agent information, custom actions, documents 
     await shop.goto("/chats");
     await shop.goto("/business");
     await open(shop, "fold-documents");
-    await expect(docs.getByLabel("Your website", { exact: true })).toHaveValue(`${baseURL}/demo/trattoria-menu.html`);
+    await expect(docs.getByTestId("website-card")).toContainText(`${baseURL!.replace(/^https?:\/\//, "")}/demo/trattoria-menu.html`);
     await docs.getByRole("button", { name: "Retry connection", exact: true }).click();
     await expect(shop).toHaveURL(/\/business\/setup/);
     await shop.getByRole("button", { name: /Go live/ }).click();
@@ -108,6 +108,7 @@ test("business workspace preserves agent information, custom actions, documents 
     await expect(docs.getByTestId("website-card")).not.toContainText("not recorded yet");
     await expect(docs.getByRole("button", { name: "Read my website", exact: true })).toHaveCount(0);
     await expect(docs.getByRole("button", { name: "Retry connection", exact: true })).toHaveCount(0);
+    await docs.getByTestId("website-card").locator("summary").click();
     await docs.getByRole("checkbox", { name: /Automatic website updates/ }).uncheck();
     await expect.poll(async () => (await f.db.from("business_sites").select("auto_refresh").eq("agent_id", f.business.agent.id).single()).data?.auto_refresh).toBe(false);
 
@@ -213,10 +214,10 @@ test("business workspace preserves agent information, custom actions, documents 
     await open(shop, "fold-documents");
     shop.once("dialog", (dialog) => dialog.accept());
     await docs.getByTestId("website-card").getByRole("button", { name: "Remove", exact: true }).click();
-    await expect(docs.getByLabel("Your website", { exact: true })).toHaveValue("");
+    await expect(docs.getByTestId("website-card")).toHaveCount(0);
     await shop.reload();
     await open(shop, "fold-documents");
-    await expect(docs.getByLabel("Your website", { exact: true })).toHaveValue("");
+    await expect(docs.getByTestId("website-card")).toHaveCount(0);
   } finally {
     for (const session of sessions) await session.close();
     await f.cleanup();

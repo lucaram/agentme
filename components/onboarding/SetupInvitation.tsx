@@ -27,7 +27,7 @@ export function SetupInvitation({ business, websiteSaved }: { business: boolean;
   });
   return <aside className="mx-4 mt-3 space-y-2 rounded-xl border border-border bg-surface p-3 text-sm" aria-label="Optional account setup" data-testid="setup-invitation">
     <p className="font-medium">{business ? websiteSaved ? "Your website is saved" : "Introduce your business" : "Personalise your agent"}</p>
-    <p className="text-xs text-muted">{business ? websiteSaved ? "Review your website information before publishing, now or later in My Business → Website & documents." : "Add information whenever you're ready in My Business." : "Add preferences and saved tips in Settings → What your agent knows about you. You control what is shared."}</p>
+    <p className="text-xs text-muted">{business ? websiteSaved ? "Review your website information before publishing, now or later in My Business → Website & links." : "Add information whenever you're ready in My Business." : "Add preferences and saved tips in Settings → What your agent knows about you. You control what is shared."}</p>
     <div className="flex flex-wrap gap-2"><button type="button" className="btn-ghost text-sm" disabled={pending} onClick={() => finish(true)}>{business && websiteSaved ? "Review now" : "Add details"}</button><button type="button" className="px-2 text-xs text-muted hover:underline" disabled={pending} onClick={() => finish(false)}>{business && websiteSaved ? "Later in My Business" : "Not now"}</button></div>
     {error && <p role="alert" className="text-xs text-danger">{error}</p>}
   </aside>;

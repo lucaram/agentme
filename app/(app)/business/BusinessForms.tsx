@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LocalTime } from "@/components/LocalTime";
 import { sourceLabel } from "@/lib/business/offerings-shared";
+import { MAX_SITE_PAGES } from "@/lib/business/site";
+import { PendingWebsiteRow, WebsiteRow, type WebsiteSummary } from "./WebsiteCard";
+import { startWebsiteAction } from "./website-actions";
 import { Thinking } from "@/components/Thinking";
 import { addSourceAction, removeSourceAction, rereadSourceAction, saveBusinessInfoAction, setSourceVisibilityAction, tryQuestionAction } from "./actions";
 import { AutoGrowTextarea } from "@/components/AutoGrowTextarea";
@@ -50,7 +53,7 @@ export function BusinessInfoForm({ about = "", customers = "", mode = "about", d
       {state?.saved && (
         <p className="text-sm text-accent" role="status">
           Saved. Your agent uses this straight away.
-          {state.addedLinks ? ` ${state.addedLinks} linked ${state.addedLinks === 1 ? "page was" : "pages were"} added to Website & documents with the same visibility.` : ""}
+          {state.addedLinks ? ` ${state.addedLinks} linked ${state.addedLinks === 1 ? "page was" : "pages were"} added to Website & links with the same visibility.` : ""}
         </p>
       )}
       <button className="btn-primary" disabled={pending}>{pending ? "Saving…" : mode === "about" ? "Save" : "Save customer information"}</button>
@@ -62,11 +65,29 @@ type Source = { fromText: string | null; id: string; url: string; visibility: st
 
 const KIND: Record<string, { label: string; icon: string }> = { page: { label: "Web page", icon: "🌐" }, pdf: { label: "PDF", icon: "📄" }, image: { label: "Photo", icon: "🖼️" }, text: { label: "Text", icon: "📝" } };
 
-/** Links your agent reads: website, PDF menu, menu photos. */
-export function SourcesManager({ sources }: { sources: Source[] }) {
+/** "https://" added when left out (people paste "trattoria-camden.co.uk"). */
+const withScheme = (raw: string) => (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw.trim()) ? raw.trim() : `https://${raw.trim()}`);
+/** A site's home address (nothing after the domain): the whole website may be meant. */
+function homeAddress(link: string) {
+  try {
+    const u = new URL(link);
+    return u.pathname.replace(/\/+$/, "") === "" && !u.search;
+  } catch {
+    return false;
+  }
+}
+
+type WebsiteInfo = { site: WebsiteSummary | null; verified: boolean; canVerifyByEmail: boolean; lookup: boolean; pending: { url: string; notice: string } | null };
+
+/**
+ * "Website & links": everything your agent learns from, in one list with one box. Your website comes
+ * first (the whole site, read up to 30 pages); then pages, PDFs and photos, each read on its own.
+ */
+export function SourcesManager({ sources, website }: { sources: Source[]; website: WebsiteInfo }) {
   const router = useRouter();
   const [url, setUrl] = useState("");
   const [visibility, setVisibility] = useState("public");
+  const [ask, setAsk] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const act = (fn: () => Promise<{ error?: string }>) =>
@@ -75,11 +96,28 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
       setError(result.error ?? null);
       router.refresh();
     });
+  const addLink = (link: string) =>
+    act(async () => {
+      const result = await addSourceAction(link, visibility);
+      if (!result.error) { setUrl(""); setAsk(null); }
+      return result;
+    });
+  const add = () => {
+    const link = withScheme(url);
+    if (!website.site && homeAddress(link)) return setAsk(link);
+    addLink(link);
+  };
+  const hasRows = Boolean(website.site || website.pending || sources.length);
 
   return (
     <div className="space-y-3">
-      {sources.length > 0 && (
+      {hasRows && (
         <ul className="divide-y divide-border rounded-xl border border-border">
+          {website.site ? (
+            <WebsiteRow site={website.site} verified={website.verified} canVerifyByEmail={website.canVerifyByEmail} lookup={website.lookup} />
+          ) : website.pending ? (
+            <PendingWebsiteRow url={website.pending.url} notice={website.pending.notice} />
+          ) : null}
           {sources.map((s) => {
             const kind = KIND[s.kind ?? "page"] ?? KIND.page;
             const scanning = s.status === "pending" || s.status === "reading";
@@ -134,34 +172,37 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
           })}
         </ul>
       )}
-      <div className="flex flex-wrap gap-2">
+      <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); add(); }}>
         <input
-          className="input min-w-0 flex-1"
-          type="url"
+          className="input w-full min-w-0 sm:w-auto sm:flex-1"
+          inputMode="url"
+          autoCapitalize="none"
+          spellCheck={false}
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="Link to a page, PDF or photo"
+          onChange={(e) => { setUrl(e.target.value); setAsk(null); }}
+          placeholder="Paste a link: your website, a menu, a PDF or a photo"
           aria-label="Link to read"
         />
-        <select className="input w-auto" value={visibility} onChange={(e) => setVisibility(e.target.value)} aria-label="Visibility of the new link">
+        <select className="input w-auto flex-1 sm:flex-none" value={visibility} onChange={(e) => setVisibility(e.target.value)} aria-label="Visibility of the new link">
           <option value="public">Public</option>
           <option value="customers">Customers only</option>
         </select>
-        <button
-          type="button"
-          className="btn-primary"
-          disabled={pending || !url.trim()}
-          onClick={() =>
-            act(async () => {
-              const result = await addSourceAction(url, visibility);
-              if (!result.error) setUrl("");
-              return result;
-            })
-          }
-        >
-          Add link
-        </button>
-      </div>
+        <button className="btn-primary" disabled={pending || !url.trim()}>Add link</button>
+      </form>
+      {/* A website's home address: the whole site, or only that page? Asked once, while no website is connected. */}
+      {ask && (
+        <div className="space-y-2 rounded-xl border border-accent/40 bg-accent-soft/40 p-3" data-testid="whole-site-choice">
+          <p className="text-sm font-medium">This looks like your website. What should your agent read?</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className="btn-primary" disabled={pending} onClick={() => start(async () => { setError(null); const r = await startWebsiteAction(ask); if (r.error) setError(r.error); else router.push("/business/setup"); })}>
+              {pending ? "Starting…" : `The whole website (up to ${MAX_SITE_PAGES} pages)`}
+            </button>
+            <button type="button" className="btn-ghost" disabled={pending} onClick={() => addLink(ask)}>Just this page</button>
+            <button type="button" className="text-sm text-muted hover:text-foreground" onClick={() => setAsk(null)}>Cancel</button>
+          </div>
+          <p className="hint">The whole website: you check what your agent learned before it goes live, then it&apos;s scanned again daily and can earn the ✓ Verified badge. A website is always public.</p>
+        </div>
+      )}
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
       <p className="hint" data-testid="visibility-hint"><b className="font-medium">Public:</b> used when answering anyone. <b className="font-medium">Customers only:</b> used only in one-to-one chats with your contacts. Scanned again daily.</p>
     </div>
