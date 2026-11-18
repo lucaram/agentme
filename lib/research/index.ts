@@ -5,6 +5,7 @@ import { llm } from "@/lib/llm";
 import { asJson } from "@/lib/data/json";
 import { MISS_SECONDS, PickSchema, RouteSchema, WordsSchema, buildAnswer, cacheSeconds, cacheText, chosenPages, feedLink, feedText, overlapPick, type Answer, type ResearchSource, type Route, type TimeClass } from "./answer";
 import { wrapUntrusted } from "@/lib/agents/prompts";
+import { NO_FLIGHT } from "@/lib/travel/flights";
 import { htmlToText } from "@/lib/business/extract";
 import { safeFetch } from "@/lib/business/fetch";
 import { clipPage, pageTitle, siteDomain } from "@/lib/business/site";
@@ -48,14 +49,15 @@ export async function routeRequest(
     return await llm().generateObject({
       purpose: "route",
       tier: "fast",
-      system: quote ? `${ROUTE_SYSTEM}\n${ROUTE_QUOTE_RULE}` : ROUTE_SYSTEM,
+      // Today's date: "next Friday" in a flight request becomes a real date.
+      system: `${quote ? `${ROUTE_SYSTEM}\n${ROUTE_QUOTE_RULE}` : ROUTE_SYSTEM}\nToday is ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}.`,
       messages: [{ role: "user", content: quote ? `${text.slice(0, 1500)}\n\n${wrapUntrusted("replying_to", quote)}` : text.slice(0, 1500) }],
       schema: RouteSchema,
       maxTokens: 300,
       mockContext: { text, quoted: quote ?? "" },
     });
   } catch {
-    return { kind: "chat", question: "", time: "none", place: "", pages: [] };
+    return { kind: "chat", question: "", time: "none", place: "", pages: [], flight: NO_FLIGHT };
   }
 }
 
