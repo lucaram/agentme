@@ -30,11 +30,14 @@ test("tip visibility uses the profile controls and is enforced over real agent-t
     await saved.getByRole("button", { name: "Edit", exact: true }).click(); let edit = saved.getByRole("form", { name: "Edit saved tip", exact: true }); await expect(edit.getByRole("radio", { name: /Only my agent/ })).toBeChecked(); await edit.getByText("My contacts' agents", { exact: true }).click(); await edit.getByRole("button", { name: "Cancel", exact: true }).click();
     expect((await f.db.from("agent_tips").select("disclosure").eq("id", query.data!.id).single()).data!.disclosure).toBe("private");
     await saved.getByRole("button", { name: "Edit", exact: true }).click(); edit = saved.getByRole("form", { name: "Edit saved tip", exact: true }); await edit.getByText("My contacts' agents", { exact: true }).click(); await edit.getByRole("button", { name: "Save tip", exact: true }).click(); await expect(saved).toContainText("My contacts' agents");
+    await expect(edit).toHaveCount(0);
     expect((await ask()).text).toBe("Trusted Plumbing Co.");
-    await expect(page.getByTestId("profile-preview")).toContainText("Trusted Plumbing Co.");
+    await page.getByTestId("profile-preview").locator("summary").click();
+    await expect(page.getByTestId("profile-preview").getByRole("list", { name: "My contacts' agents" })).toContainText("Saved tips (matching recommendations only)");
     await saved.getByRole("button", { name: "Edit", exact: true }).click(); await edit.getByText("Only my agent", { exact: true }).click(); await edit.getByRole("button", { name: "Save tip", exact: true }).click(); await expect(saved).toContainText("Only my agent");
+    await expect(edit).toHaveCount(0);
     expect(JSON.stringify(await ask())).not.toContain("Trusted Plumbing Co.");
-    await expect(page.getByTestId("profile-preview")).not.toContainText("Trusted Plumbing Co.");
+    await expect(page.getByTestId("profile-preview").getByRole("list", { name: "My contacts' agents" })).toHaveCount(0);
     await page.reload(); await expect(saved).toBeHidden(); await category.locator("summary").click(); await saved.getByRole("button", { name: "Edit", exact: true }).click(); await expect(edit.getByRole("radio", { name: /Only my agent/ })).toBeChecked();
     await category.scrollIntoViewIfNeeded(); await page.screenshot({ path: "test-results/saved-tip-visibility-desktop.png" }); await page.setViewportSize({ width: 390, height: 844 }); await edit.getByRole("radio", { name: /Only my agent/ }).scrollIntoViewIfNeeded(); await page.screenshot({ path: "test-results/saved-tip-visibility-mobile.png" }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   } finally { await Promise.allSettled([context.close()]); await f.cleanup(); }

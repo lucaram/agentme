@@ -21,7 +21,7 @@ import { OpenFromHash } from "@/components/OpenFromHash";
 import { BusinessInfoForm, BusinessDetailsForm, SourcesManager } from "./BusinessForms";
 import { QuestionsAnswers } from "./QuestionsAnswers";
 import { offeringsOf } from "@/lib/business/offerings";
-import { facilityName } from "@/lib/business/offerings-shared";
+import { facilityName, groupItems } from "@/lib/business/offerings-shared";
 import { AddBusinessIntro } from "./AddBusinessIntro";
 import { WaysEditor } from "./WaysEditor";
 import { TestAgent } from "./TestAgent";
@@ -87,7 +87,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const inCustomers = new Set(linksIn(info.customers ?? "").map(linkKey));
   const sources = rows.map((source) => ({
     fromText: inAbout.has(linkKey(source.url)) ? "About your business" : inCustomers.has(linkKey(source.url)) ? "For customers only" : null,
-    id: source.id, url: source.url, visibility: source.visibility, status: source.status, kind: source.kind, error: source.error, last_read_at: source.last_read_at,
+    id: source.id, url: source.url, visibility: source.visibility, status: source.status, kind: source.kind, error: source.error, offerings_error: source.offerings_error, last_read_at: source.last_read_at,
     words: (source.content ?? "").split(/\s+/).filter(Boolean).length, preview: (source.content ?? "").slice(0, 1500),
   }));
   const faqs = info.faqs ?? [];
@@ -114,7 +114,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
     .update(JSON.stringify([agent.display_name, agent.avatar, agent.verified_domain, agent.bio, shownInfo, site?.live_at ?? null, site?.learned ?? null, site?.hidden ?? null]))
     .digest("hex")
     .slice(0, 16);
-  const knowsSummary = [about ? "About" : "", details.hours || details.address ? "Details" : "", ways.length ? plural(ways.length, "customer action") : "", offerings.prices.length ? plural(offerings.prices.filter((x) => !x.hidden).length, "price") : "", documentsSummary, faqs.length ? plural(faqs.length, "answer") : ""].filter(Boolean).join(" · ");
+  const knowsSummary = [about ? "About" : "", details.hours || details.address ? "Details" : "", ways.length ? plural(ways.length, "customer action") : "", offerings.prices.length ? plural(groupItems(offerings.prices).filter((x) => !x.hidden).length, "price") : "", documentsSummary, faqs.length ? plural(faqs.length, "answer") : ""].filter(Boolean).join(" · ");
 
   return (
     <div className="space-y-6">
@@ -164,7 +164,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
               {/* Like Settings: a row each, opening its own page. */}
               <nav aria-label="Prices and facilities" className="space-y-2">
                 {[
-                  { href: "/business/prices", icon: "💷", title: "Prices", testId: "prices-link", summary: (() => { const shownPrices = offerings.prices.filter((x) => !x.hidden); const from = [...new Set(shownPrices.flatMap((x) => (x.source_label && !x.added ? [x.source_label] : [])))]; return shownPrices.length ? `${plural(shownPrices.length, "price")}${from.length ? ` · from ${from.slice(0, 2).join(", ")}${from.length > 2 ? ` and ${from.length - 2} more` : ""}` : ""}` : "None yet · read from your menu or price list, or add your own"; })() },
+                  { href: "/business/prices", icon: "💷", title: "Prices", testId: "prices-link", summary: (() => { const items = groupItems(offerings.prices).filter((x) => !x.hidden); const products = items.filter((x) => x.kind === "product").length; const services = items.length - products; const from = [...new Set(items.flatMap((x) => (x.source_label && !x.added ? [x.source_label] : [])))]; return items.length ? `${[products ? plural(products, "product") : "", services ? plural(services, "service") : ""].filter(Boolean).join(" · ")}${from.length ? ` · from ${from.slice(0, 2).join(", ")}${from.length > 2 ? ` and ${from.length - 2} more` : ""}` : ""}` : "None yet · products and services from your menu or price list"; })() },
                   { href: "/business/facilities", icon: "🏷️", title: "Facilities", testId: "facilities-link", summary: (() => { const shownFacilities = offerings.facilities.filter((x) => !x.hidden); const yes = shownFacilities.filter((x) => x.status === "yes").map((x) => facilityName(x).label); return shownFacilities.length ? `${yes.length ? yes.slice(0, 3).join(", ") + (yes.length > 3 ? ` and ${yes.length - 3} more` : "") : "None available"}${shownFacilities.some((x) => !x.confirmed) ? " · some to check" : ""}` : "None yet · parking, step-free access, your own…"; })() },
                 ].map((r) => (
                   <Link key={r.href} href={r.href} className="card flex items-center gap-3 hover:bg-accent-soft" data-testid={r.testId}>

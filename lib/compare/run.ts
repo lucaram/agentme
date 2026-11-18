@@ -81,7 +81,7 @@ async function cellsFor(business: Business, points: ComparePoint[], answers: Ans
       const asked = toRead.find((r) => r.point === reading.point);
       if (!asked) continue;
       Object.assign(cells[reading.point], reading.stated
-        ? { status: "answered", text: reading.text.trim() || asked.text.slice(0, 120), number: points[reading.point].kind === "price" ? reading.number : null, currency: reading.currency?.toUpperCase() ?? null, yes: points[reading.point].kind === "yes_no" ? reading.yes : null, detail: reading.detail, source: asked.source }
+        ? { status: "answered", text: reading.text.trim() || asked.text.slice(0, 120), number: points[reading.point].kind === "price" ? reading.number : null, basis: points[reading.point].kind === "price" ? reading.basis : null, currency: reading.currency?.toUpperCase() ?? null, yes: points[reading.point].kind === "yes_no" ? reading.yes : null, detail: reading.detail, source: asked.source }
         : { status: "not_stated" });
     }
   } catch {

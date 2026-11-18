@@ -30,6 +30,7 @@ export function mockCompareCells(items: { point: number; kind: string; text: str
         stated,
         text: text.replace(/\s+/g, " ").trim().slice(0, 120),
         number: kind === "price" && price ? Number(price[2]) : null,
+        basis: kind === "price" && price ? (/\bfrom\s+[£€$]/i.test(text) ? "from" as const : /per hour/i.test(text) ? "per_hour" as const : /per person/i.test(text) ? "per_person" as const : "fixed" as const) : null,
         currency: kind === "price" && price ? ({ "£": "GBP", "€": "EUR", $: "USD" } as Record<string, string>)[price[1]] : null,
         yes: kind === "yes_no" && stated ? (no ? false : yes ? true : null) : null,
         detail: text.match(/\b(\d{1,2}-inch)\b/)?.[1] ?? null,

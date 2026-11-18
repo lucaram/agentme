@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { factsByRequest, REQUESTABLE_CATEGORIES, type Fact, type FactCategory, type RequestableCategory } from "@/lib/policy/disclosure";
-import { TOPICS } from "@/lib/profile/topics";
+import { LIFESTYLE_TOPICS, TOPICS } from "@/lib/profile/topics";
 import { AwayCard, CustomTopics, TopicCard } from "./TopicCards";
 import { SavedTips } from "../SavedTips";
 import { Fold } from "@/components/Fold";
@@ -60,7 +60,7 @@ export default async function AboutYouPage() {
         <summary className="flex items-center gap-3 px-4 py-3">
           <span className="text-xl" aria-hidden>👁️</span>
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold">Preview what contacts&apos; agents can see</span>
+            <span className="block text-sm font-semibold">Preview what agents can see</span>
             <span className="block text-xs text-muted">
               What your agent can share when a contact&apos;s agent asks ·{" "}
               {sharedCount
@@ -71,23 +71,24 @@ export default async function AboutYouPage() {
           <span className="text-muted transition group-open:rotate-90" aria-hidden>›</span>
         </summary>
         <div className="space-y-2 border-t border-agent-border px-4 py-3 text-sm">
-          {REQUESTABLE_CATEGORIES.some((c) => preview[c]) || sharedTips.length > 0 ? (
-            <ul className="space-y-1">
-              {REQUESTABLE_CATEGORIES.filter((c) => preview[c]).map((c) => (
-                <li key={c}>
-                  <span className="font-medium">{TITLE[c]}:</span> {preview[c]}
-                </li>
-              ))}
-              {sharedTips.length > 0 && <li><span className="font-medium">💡 Saved tips (matching recommendations only):</span><ul className="mt-1 space-y-1 pl-3">{sharedTips.map((tip) => <li key={tip.id}><span className="font-medium">{tip.topic}:</span> {tip.tip}</li>)}</ul></li>}
-            </ul>
-          ) : (
-            <p>Nothing is shared yet: friends&apos; agents will ask you each time instead.</p>
-          )}
+          <div className="space-y-1">
+            <p className="font-medium">My contacts&apos; agents can see:</p>
+            {REQUESTABLE_CATEGORIES.some((c) => preview[c]) || sharedTips.length > 0 ? (
+              <ul className="space-y-1 text-muted" aria-label="My contacts' agents">
+                {REQUESTABLE_CATEGORIES.filter((c) => preview[c]).map((c) => (
+                  <li key={c}>{TITLE[c]}</li>
+                ))}
+                {sharedTips.length > 0 && <li>💡 Saved tips (matching recommendations only)</li>}
+              </ul>
+            ) : (
+              <p className="text-muted">Nothing shared yet.</p>
+            )}
+          </div>
           {(privateTopics.length > 0 || privateTips) && (
             <div className="space-y-1 pt-3">
-              <p className="font-medium">Only my agent (never shared with others):</p>
+              <p className="font-medium">Only my agent can see:</p>
               <ul className="space-y-1 text-muted" aria-label="Only my agent">
-                {privateTopics.map((topic) => <li key={topic.key}>{topic.icon} {topic.title}</li>)}
+                {privateTopics.map((topic) => <li key={topic.key}>{topic.icon} {LIFESTYLE_TOPICS.some((item) => item.key === topic.key) ? "Lifestyle > " : ""}{topic.title}</li>)}
                 {privateTips && <li>💡 Private saved tips</li>}
               </ul>
             </div>
