@@ -3,7 +3,10 @@ import { createHash } from "node:crypto";
 import { adminClient } from "@/lib/supabase/admin";
 import { llm } from "@/lib/llm";
 import { wrapUntrusted } from "@/lib/agents/prompts";
-import { MAX_PRICES, OfferingsSchema, mentionsOfferings, offeringsKnowledge, planPrices, sourceLabel, type FacilityRow, type Offerings, type PriceRow } from "./offerings-shared";
+import {
+  MAX_PRICES, OfferingsSchema, mentionsOfferings, mergeOfferings, offeringsKnowledge, planPrices, sourceLabel, splitForReading, tidyOfferings,
+  type FacilityRow, type Offerings, type PriceRow,
+} from "./offerings-shared";
 
 /**
  * Prices and facilities are read from a business's own website pages and documents whenever their
@@ -30,18 +33,28 @@ export async function readOfferings(sourceId: string, opts: { force?: boolean } 
   const readAt = source.last_read_at ?? new Date().toISOString();
   let found: Offerings = { items: [], facilities: [] };
   if (mentionsOfferings(source.content)) {
-    try {
-      found = await llm().generateObject({
+    // A long menu is read in parts side by side: one answer for all of it would be cut off.
+    const parts = splitForReading(source.content.slice(0, MAX_TEXT));
+    const readPart = (text: string, i: number) => {
+      const before = i ? parts[i - 1].split("\n").slice(-6).join("\n") : "";
+      const content = parts.length === 1 ? `${label}\n\n${text}` : `${label}, part ${i + 1} of ${parts.length}.${before ? ` The text just before this part, for its heading only (don't list what's in it):\n${before}\n\nThis part:` : ""}\n\n${text}`;
+      return llm().generateObject({
         purpose: "business_offerings",
         tier: "fast",
         schema: OfferingsSchema,
         system: READ_SYSTEM,
-        messages: [{ role: "user", content: wrapUntrusted("document", `${label}\n\n${source.content.slice(0, MAX_TEXT)}`) }],
-        maxTokens: 8000,
-        mockContext: { text: source.content },
+        messages: [{ role: "user", content: wrapUntrusted("document", content) }],
+        maxTokens: 12_000,
+        mockContext: { text },
       });
-    } catch {
-      return; // Try again on the next read; what was there stays.
+    };
+    try {
+      found = tidyOfferings(mergeOfferings(await Promise.all(parts.map((text, i) => readPart(text, i).catch(() => readPart(text, i))))));
+    } catch (error) {
+      // What was there stays; the business sees why, and "Look again" tries again.
+      console.error("[offerings] couldn't read", source.url, error);
+      await db.from("business_sources").update({ offerings_error: "Prices couldn't be read from it this time." }).eq("id", source.id);
+      return;
     }
   }
 
@@ -55,11 +68,16 @@ export async function readOfferings(sourceId: string, opts: { force?: boolean } 
   if (plan.insert.length && room) {
     // Options of one new item share one group (a new item gets a new group).
     const groups = new Map<string, string>();
-    await db.from("business_prices").insert(plan.insert.slice(0, room).map((p) => {
+    const { error } = await db.from("business_prices").insert(plan.insert.slice(0, room).map((p) => {
       const group = p.group_id ?? groups.get(p.item.toLowerCase()) ?? crypto.randomUUID();
       groups.set(p.item.toLowerCase(), group);
       return { ...p, agent_id: source.agent_id, group_id: group, source_url: source.url, source_label: label, visibility: source.visibility, found_price: p.price, read_at: readAt };
     }));
+    if (error) {
+      console.error("[offerings] couldn't save", source.url, error.message);
+      await db.from("business_sources").update({ offerings_error: "Prices were read but couldn't be saved." }).eq("id", source.id);
+      return;
+    }
   }
 
   // Facilities: what the business confirmed always stands; otherwise the latest read says.
@@ -72,7 +90,8 @@ export async function readOfferings(sourceId: string, opts: { force?: boolean } 
   const gone = [...saved.values()].filter((f) => !f.confirmed && f.source_url === source.url && !found.facilities.some((x) => x.key === f.key));
   if (gone.length) await db.from("business_facilities").delete().eq("agent_id", source.agent_id).in("key", gone.map((f) => f.key));
 
-  await db.from("business_sources").update({ offerings_hash: digest }).eq("id", source.id);
+  // Also tells an open Prices or Facilities page (live) that the read has finished.
+  await db.from("business_sources").update({ offerings_hash: digest, offerings_error: null, offerings_read_at: new Date().toISOString() }).eq("id", source.id);
 }
 
 /** Every source of a business, one after another ("Look again", and after the website is read). */

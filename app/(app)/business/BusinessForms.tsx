@@ -59,7 +59,7 @@ export function BusinessDetailsForm({ hours, address, fromWebsite }: { hours: st
   </form>;
 }
 
-type Source = { fromText: string | null; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; last_read_at: string | null; words: number; preview: string };
+type Source = { fromText: string | null; id: string; url: string; visibility: string; status: string; kind: string | null; error: string | null; offerings_error: string | null; last_read_at: string | null; words: number; preview: string };
 
 const KIND: Record<string, string> = { page: "web page", pdf: "PDF", image: "photo", text: "text" };
 
@@ -107,6 +107,9 @@ export function SourcesManager({ sources }: { sources: Source[] }) {
                   <span className="text-danger">⚠️ Couldn&apos;t read it: {s.error}</span>
                 ) : (
                   <span className="text-muted">⏳ Reading…</span>
+                )}
+                {s.status === "ok" && s.offerings_error && (
+                  <span className="text-danger" data-testid="source-offerings-error"> · ⚠️ {s.offerings_error}</span>
                 )}
                 {s.fromText && (
                   <span className="text-muted" data-testid="source-from-text" title="This address is also written in your text above, so your agent can give it to customers too.">

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  cleanTags, facilityNote, groupItems, mentionsOfferings, mockOfferings, offeringsKnowledge, planPrices, priceNote, priceText, sourceLabel,
+  cleanTags, facilityNote, groupItems, mentionsOfferings, mergeOfferings, mockOfferings, offeringsKnowledge, planPrices, priceNote, priceText, sourceLabel, splitForReading, tidyOfferings,
   type FacilityRow, type FoundItem, type PriceRow,
 } from "@/lib/business/offerings-shared";
 import { splitSource, summarise, type Comparison } from "@/lib/compare/comparison";
@@ -85,6 +85,43 @@ describe("products & services", () => {
       cells: [{ business_id: "a", point: 0, status: "answered", number: 15, basis: "from", currency: "GBP" }, { business_id: "b", point: 0, status: "answered", number: 20, basis: "fixed", currency: "GBP" }],
     };
     expect(summarise(c)).toEqual([`Only Barber Bob stated a price for haircut (£20). One price is given as "from" or per hour and isn't ranked.`]);
+  });
+
+  it("a long menu is read in parts and put back together; what's read is held to what can be saved", () => {
+    const menu = Array.from({ length: 300 }, (_, i) => `Dish number ${i} with a fairly long name 6.5 GBP`).join("\n");
+    const parts = splitForReading(menu, 4000);
+    expect(parts.length).toBeGreaterThan(3);
+    expect(parts.every((p) => p.length <= 4000)).toBe(true);
+    expect(parts.join("\n")).toBe(menu);
+    expect(splitForReading("x".repeat(9000), 4000).map((p) => p.length)).toEqual([4000, 4000, 1000]);
+    // A dish whose sizes straddle two parts is one dish again; the same facility once.
+    const merged = mergeOfferings([
+      { items: [found({ item: "Chicken tikka", category: "Mains", options: [{ label: "Half", price: 7 }] })], facilities: [{ key: "parking", status: "yes", evidence: "car park" }] },
+      { items: [found({ item: "chicken  tikka", category: "mains", tags: ["Spicy"], options: [{ label: "Half", price: 7 }, { label: "Full", price: 12 }] }), found({ item: "Chicken tikka", category: "Starters" })], facilities: [{ key: "parking", status: "yes", evidence: "parking" }] },
+    ]);
+    expect(merged.items.map((i) => [i.category, i.item, i.options.map((o) => o.label), i.tags])).toEqual([["Mains", "Chicken tikka", ["Half", "Full"], ["Spicy"]], ["Starters", "Chicken tikka", [null], []]]);
+    expect(merged.facilities).toHaveLength(1);
+    // A part starting mid-section: its first dishes without a heading belong to the section before.
+    const carried = mergeOfferings([
+      { items: [found({ item: "Rice", category: null }), found({ item: "Balti", category: "Curries" })], facilities: [] },
+      { items: [found({ item: "Korma", category: null }), found({ item: "Naan", category: "Breads" }), found({ item: "Water", category: null })], facilities: [] },
+    ]);
+    expect(carried.items.map((i) => [i.item, i.category])).toEqual([["Rice", null], ["Balti", "Curries"], ["Korma", "Curries"], ["Naan", "Breads"], ["Water", null]]);
+    // A long description no longer throws the whole menu away: it's shortened; nonsense is left out.
+    const tidy = tidyOfferings({
+      items: [
+        found({ description: "Tender pieces of chicken breast marinated in yoghurt and spices, ".repeat(5), currency: "gbp", duration_minutes: 30.4, tags: ["vegetarian", "vegetarian"] }),
+        found({ item: "  ", options: [{ label: null, price: 3 }] }),
+        found({ item: "No price", options: [{ label: null, price: null }, { label: "Large", price: -1 }] }),
+        found({ item: "Tasting menu", price_type: "on_request", options: [{ label: null, price: null }] }),
+      ],
+      facilities: [{ key: "wifi", status: "yes", evidence: "w".repeat(400) }],
+    });
+    expect(tidy.items.map((i) => i.item)).toEqual(["Margherita pizza", "Tasting menu"]);
+    expect(tidy.items[0].description!.length).toBeLessThanOrEqual(200);
+    expect(tidy.items[0].description).toMatch(/…$/);
+    expect(tidy.items[0]).toMatchObject({ currency: "GBP", duration_minutes: 30, tags: ["Vegetarian"] });
+    expect(tidy.facilities[0].evidence.length).toBeLessThanOrEqual(300);
   });
 
   it("only pages that mention prices or facilities are read; the test stand-in reads simple menus and price lists", () => {

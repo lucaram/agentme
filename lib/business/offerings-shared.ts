@@ -40,27 +40,29 @@ export const COMMON_TAGS = ["Vegetarian", "Vegan", "Gluten-free", "Spicy", "Cont
 export const TAG_ICON: Record<string, string> = { Vegetarian: "🥗", Vegan: "🌱", "Gluten-free": "🌾", Spicy: "🌶️", "Contains nuts": "🥜", Popular: "⭐", Seasonal: "🍂" };
 export const MAX_TAGS = 8;
 
+// No length or range limits here: the model can't be held to them, and one long description must not
+// throw away a whole menu. tidyOfferings applies the limits afterwards, item by item.
 const ItemSchema = z.object({
   kind: z.enum(KINDS).describe("product: something a customer buys (a dish, a drink, goods). service: something the business does (a haircut, a repair, room hire, delivery, a lesson)."),
-  category: z.string().max(60).nullable().describe("The heading it's listed under in the document, e.g. 'Pizza', 'Starters', 'Colour'. Null if there isn't one."),
-  item: z.string().min(1).max(120).describe("The name, cleaned: without labels like (V) or (HOT), and in normal capitals, e.g. 'Masala dosa'."),
-  description: z.string().max(200).nullable().describe("A short description if the document gives one. Otherwise null."),
-  tags: z.array(z.string().max(30)).max(MAX_TAGS).describe(`Labels the document gives it, as tags: ${COMMON_TAGS.join(", ")} (e.g. (V) → Vegetarian, (HOT) → Spicy, (VG) → Vegan, (GF) → Gluten-free).`),
+  category: z.string().nullable().describe("The heading it's listed under in the document, e.g. 'Pizza', 'Starters', 'Colour'. Null if there isn't one."),
+  item: z.string().describe("The name, cleaned: without labels like (V) or (HOT), and in normal capitals, e.g. 'Masala dosa'."),
+  description: z.string().nullable().describe("A short description (one sentence) if the document gives one. Otherwise null."),
+  tags: z.array(z.string()).describe(`Labels the document gives it, as tags: ${COMMON_TAGS.join(", ")} (e.g. (V) → Vegetarian, (HOT) → Spicy, (VG) → Vegan, (GF) → Gluten-free).`),
   price_type: z.enum(PRICE_TYPES).describe("fixed; from ('from £30'); per_hour; per_person; free; on_request ('price on request')."),
-  duration_minutes: z.number().int().min(1).max(1440).nullable().describe("For a service: how long it takes, in minutes, if stated. Otherwise null."),
+  duration_minutes: z.number().nullable().describe("For a service: how long it takes, in minutes, if stated. Otherwise null."),
   needs_booking: z.boolean().describe("For a service: true if the document says it must be booked."),
-  currency: z.string().length(3).describe("GBP, EUR, USD…"),
+  currency: z.string().describe("GBP, EUR, USD…"),
   options: z.array(z.object({
-    label: z.string().max(60).nullable().describe("The size or option ('10-inch', 'glass', 'large'), or null when there's only one price."),
-    price: z.number().min(0).max(99999).nullable().describe("The amount, e.g. 8.5. Null for free or price on request."),
-  })).min(1).max(12),
+    label: z.string().nullable().describe("The size or option ('10-inch', 'glass', 'large'), or null when there's only one price."),
+    price: z.number().nullable().describe("The amount, e.g. 8.5. Null for free or price on request."),
+  })),
 });
 export const OfferingsSchema = z.object({
-  items: z.array(ItemSchema).max(MAX_PRICES),
+  items: z.array(ItemSchema),
   facilities: z.array(z.object({
     key: z.enum(FACILITY_KEYS),
     status: z.enum(["yes", "no"]).describe("Only what the text states: 'yes' or 'no'. Leave out anything it doesn't mention."),
-    evidence: z.string().max(300).describe("The words it's based on, e.g. 'free car park behind the restaurant'."),
+    evidence: z.string().describe("The words it's based on, e.g. 'free car park behind the restaurant'."),
   })),
 });
 export type Offerings = z.infer<typeof OfferingsSchema>;
@@ -119,6 +121,104 @@ export function cleanTags(tags: string[]): string[] {
     if (!out.some((o) => o.toLowerCase() === tag.toLowerCase())) out.push(tag);
   }
   return out.slice(0, MAX_TAGS);
+}
+
+// ------------------------------------------------------------- reading long documents
+
+/** Text read in one go; a longer menu is read in parts, side by side. */
+export const READ_PART = 4000;
+const MAX_OPTIONS = 12;
+const clip = (s: string | null | undefined, max: number) => {
+  const t = (s ?? "").trim().replace(/\s+/g, " ");
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 1);
+  return `${cut.slice(0, cut.lastIndexOf(" ") > max / 2 ? cut.lastIndexOf(" ") : cut.length)}…`;
+};
+
+/** Split at line ends into parts of at most `size` characters (a very long line is cut). */
+export function splitForReading(text: string, size = READ_PART): string[] {
+  const parts: string[] = [];
+  let part = "";
+  for (let line of text.split("\n")) {
+    while (line.length > size) {
+      if (part) parts.push(part);
+      part = "";
+      parts.push(line.slice(0, size));
+      line = line.slice(size);
+    }
+    if (part && part.length + 1 + line.length > size) {
+      parts.push(part);
+      part = "";
+    }
+    part = part ? `${part}\n${line}` : line;
+  }
+  if (part.trim()) parts.push(part);
+  return parts;
+}
+
+/**
+ * What was read, held to what can be saved: names and descriptions shortened, prices that make sense,
+ * at most twelve options, an item without any price left out (unless free or on request).
+ */
+export function tidyOfferings(found: Offerings): Offerings {
+  const items: FoundItem[] = [];
+  for (const it of found.items) {
+    const item = clip(it.item, 120);
+    if (!item) continue;
+    const priced = it.price_type === "free" || it.price_type === "on_request";
+    const options = it.options
+      .map((o) => ({ label: clip(o.label, 60) || null, price: typeof o.price === "number" && Number.isFinite(o.price) && o.price >= 0 && o.price < 100000 ? Math.round(o.price * 100) / 100 : null }))
+      .filter((o) => priced || o.price !== null)
+      .slice(0, MAX_OPTIONS);
+    if (!options.length) continue;
+    const minutes = typeof it.duration_minutes === "number" ? Math.round(it.duration_minutes) : null;
+    const currency = (it.currency ?? "").trim().toUpperCase();
+    items.push({
+      ...it, item, options,
+      category: clip(it.category, 60) || null,
+      description: clip(it.description, 200) || null,
+      tags: cleanTags(it.tags),
+      duration_minutes: minutes && minutes >= 1 && minutes <= 1440 ? minutes : null,
+      currency: /^[A-Z]{3}$/.test(currency) ? currency : "GBP",
+    });
+  }
+  return {
+    items: items.slice(0, MAX_PRICES),
+    facilities: found.facilities.map((f) => ({ ...f, evidence: clip(f.evidence, 300) })),
+  };
+}
+
+/** The parts of one document, back together: an item whose options were split across parts is one item again. */
+export function mergeOfferings(parts: Offerings[]): Offerings {
+  const items: FoundItem[] = [];
+  const byName = new Map<string, FoundItem>();
+  // A part that starts in the middle of a section: its first items without a heading carry on the last one.
+  let last: string | null = null;
+  const all = parts.flatMap((p) => {
+    let leading = true;
+    const items = p.items.map((it) => {
+      if (it.category) leading = false;
+      return leading && !it.category && last ? { ...it, category: last } : it;
+    });
+    last = items.at(-1)?.category ?? last;
+    return items;
+  });
+  for (const it of all) {
+    const key = `${it.kind}|${norm(it.category)}|${norm(it.item)}`;
+    const same = byName.get(key);
+    if (!same) {
+      const copy = { ...it, options: [...it.options] };
+      byName.set(key, copy);
+      items.push(copy);
+      continue;
+    }
+    for (const o of it.options) if (!same.options.some((x) => norm(x.label) === norm(o.label))) same.options.push(o);
+    same.description ??= it.description;
+    same.tags = cleanTags([...same.tags, ...it.tags]);
+  }
+  const facilities = new Map<string, Offerings["facilities"][number]>();
+  for (const f of parts.flatMap((p) => p.facilities)) if (!facilities.has(f.key)) facilities.set(f.key, f);
+  return { items, facilities: [...facilities.values()] };
 }
 
 /** "menu.pdf" for a file; "sole.example/visit" for a page. */

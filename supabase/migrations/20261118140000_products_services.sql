@@ -19,3 +19,9 @@ update public.business_prices set found_item = item where not added;
 alter table public.business_prices alter column price drop not null;
 alter table public.business_prices add constraint business_prices_amount check (price_type in ('free', 'on_request') or price is not null);
 create index business_prices_group on public.business_prices(group_id);
+
+-- Why prices couldn't be read from a source (shown on it until a read works), and when they last were:
+-- an open Prices page refreshes when that changes.
+alter table public.business_sources
+  add column offerings_error text check (offerings_error is null or char_length(offerings_error) <= 200),
+  add column offerings_read_at timestamptz;

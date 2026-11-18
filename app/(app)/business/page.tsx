@@ -87,7 +87,7 @@ export default async function MyBusinessPage({ searchParams }: PageProps<"/busin
   const inCustomers = new Set(linksIn(info.customers ?? "").map(linkKey));
   const sources = rows.map((source) => ({
     fromText: inAbout.has(linkKey(source.url)) ? "About your business" : inCustomers.has(linkKey(source.url)) ? "For customers only" : null,
-    id: source.id, url: source.url, visibility: source.visibility, status: source.status, kind: source.kind, error: source.error, last_read_at: source.last_read_at,
+    id: source.id, url: source.url, visibility: source.visibility, status: source.status, kind: source.kind, error: source.error, offerings_error: source.offerings_error, last_read_at: source.last_read_at,
     words: (source.content ?? "").split(/\s+/).filter(Boolean).length, preview: (source.content ?? "").slice(0, 1500),
   }));
   const faqs = info.faqs ?? [];

@@ -144,4 +144,34 @@ describe.skipIf(!dbUp)("prices & facilities (live)", () => {
     // Two options with the same name are refused.
     expect(await actions.saveItemAction({ ...service, item: "Lessons", options: [{ id: null, label: "Adult", price: 20 }, { id: null, label: "adult", price: 15 }] })).toHaveProperty("error");
   });
+
+  it("a long menu is read in parts, side by side; a read that fails keeps what was there and says why", async () => {
+    const { offerings } = await lib();
+    const { llm, setLLMProviderForTesting } = await import("@/lib/llm");
+    const dishes = Array.from({ length: 200 }, (_, i) => `Curry number ${i + 1} with rice and naan £${(5 + i / 10).toFixed(2)}`);
+    const content = `Mains\n${dishes.join("\n")}`;
+    expect(content.length).toBeGreaterThan(8000);
+    const { data: doc } = await f.db.from("business_sources").insert({ agent_id: f.business.agent.id, url: "https://sole.example/long-menu", origin: "link", visibility: "public", status: "ok", kind: "page", content, last_read_at: new Date().toISOString() }).select("id").single();
+    const real = llm();
+    let calls = 0;
+    setLLMProviderForTesting({ ...real, name: real.name, generateText: real.generateText.bind(real), generateObject: (req) => { calls++; return real.generateObject(req); } } as typeof real);
+    try {
+      await offerings.readOfferings(doc!.id);
+    } finally { setLLMProviderForTesting(undefined); }
+    expect(calls).toBeGreaterThan(2);
+    const read = (await prices()).filter((x) => x.source_url === "https://sole.example/long-menu");
+    expect(read).toHaveLength(200);
+    const source = async () => (await f.db.from("business_sources").select("offerings_error, offerings_read_at").eq("id", doc!.id).single()).data!;
+    expect(await source()).toMatchObject({ offerings_error: null, offerings_read_at: expect.any(String) });
+    // The reader fails (twice, so the retry fails too): nothing is lost, and the source says why.
+    setLLMProviderForTesting({ ...real, name: real.name, generateText: real.generateText.bind(real), generateObject: async () => { throw new Error("cut off"); } } as typeof real);
+    try {
+      await offerings.readOfferings(doc!.id, { force: true });
+    } finally { setLLMProviderForTesting(undefined); }
+    expect((await prices()).filter((x) => x.source_url === "https://sole.example/long-menu")).toHaveLength(200);
+    expect((await source()).offerings_error).toBe("Prices couldn't be read from it this time.");
+    // It works again: the note goes.
+    await offerings.readOfferings(doc!.id, { force: true });
+    expect((await source()).offerings_error).toBeNull();
+  });
 });
