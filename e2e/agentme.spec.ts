@@ -577,10 +577,11 @@ test("what your agent knows: topics with quick picks, your own topic, a preview,
   await page.goto("/chats");
   await page.getByRole("link", { name: /My Agent/ }).click();
   await send(page, "I'm vegetarian now");
-  const offer = page.getByTestId("fact-suggestion");
+  const offer = page.getByTestId("profile-update");
   await expect(offer).toBeVisible();
+  await expect(page.getByText("💡 Save to Lifestyle → Food & drink: “vegetarian”?")).toBeVisible();
   await offer.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByTestId("fact-saved")).toBeVisible();
+  await expect(page.getByTestId("profile-update-done")).toContainText("Saved.");
   await page.goto("/settings/about/lifestyle");
   await expect(page.getByTestId("topic-food")).toContainText("vegetarian");
   await context.close();
