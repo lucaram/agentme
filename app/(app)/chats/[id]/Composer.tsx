@@ -21,7 +21,13 @@ export function Composer({
   examplesHint,
   collapseExamples = false,
   nearMe = false,
+  attachments = true,
 }: {
+  /**
+   * Files, camera, location, polls and voice messages, for the people in a chat. Off where only an
+   * agent reads the message (My Agent, a business's agent): it reads text only.
+   */
+  attachments?: boolean;
   /** My Agent: a 📍 button to use where you are right now for one message (weather, "near me"). */
   nearMe?: boolean;
   conversationId: string;
@@ -39,6 +45,8 @@ export function Composer({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [summoned, setSummoned] = useState(false);
+  /** Typing "@agent …": your agent reads text only, so files and voice wait for a separate message. */
+  const [toAgent, setToAgent] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const messageId = useId();
   const mentions = useMentionPicker(conversationId, () => ref.current, fit);
@@ -57,7 +65,7 @@ export function Composer({
     const el = ref.current; if (!el) return;
     const start = el.selectionStart; const end = el.selectionEnd;
     el.value = el.value.slice(0, start) + emoji + el.value.slice(end); fit(); el.focus(); el.setSelectionRange(start + emoji.length, start + emoji.length);
-  });
+  }, attachments && toAgent);
   useEffect(() => {
     // File choosers and capture dialogs take focus away; continue the same message here.
     if (extras.draftCount) ref.current?.focus({ preventScroll: true });
@@ -100,6 +108,7 @@ export function Composer({
     setAppeal(null);
     ref.current!.value = "";
     fit();
+    setToAgent(false);
     setError(null);
     setSummoned(summonsAgent(text));
     startTransition(async () => {
@@ -116,6 +125,7 @@ export function Composer({
         if (ref.current) {
           ref.current.value = text;
           fit();
+          setToAgent(summonsAgent(text));
         }
         return;
       }
@@ -128,6 +138,7 @@ export function Composer({
         if (ref.current && !ref.current.value) {
           ref.current.value = text;
           fit();
+          setToAgent(summonsAgent(text));
         }
       }
       } catch (e) {
@@ -156,6 +167,7 @@ export function Composer({
                 if (!ref.current || !ex.text) return;
                 ref.current.value = ex.text;
                 fit();
+                setToAgent(summonsAgent(ex.text));
                 ref.current.focus();
               }}
             >
@@ -213,7 +225,11 @@ export function Composer({
       )}
       {/* One rounded box with the send button inside, like ChatGPT / Claude / Gemini. */}
       {extras.panel}
-      {extras.hasDraft && thinkingLabel && <p className="mb-2 text-xs text-muted">Attachments are saved in this chat. Agent file analysis and audio transcription aren&apos;t available yet.</p>}
+      {attachments && toAgent && (
+        <p className="mb-1 text-xs text-muted" data-testid="agent-text-only">
+          @agent reads text only. {extras.hasDraft ? "Send your files as a separate message, without @agent." : "Send files as a separate message."}
+        </p>
+      )}
       {replying && (
         <div className="mb-1.5 flex items-center gap-2 rounded-2xl border-l-4 border-accent bg-surface px-3 py-1.5 text-xs" data-testid="replying-to">
           <span className="min-w-0 flex-1">
@@ -234,7 +250,7 @@ export function Composer({
           submit();
         }}
       >
-        <fieldset disabled={pending} className="contents">{extras.buttons}</fieldset>
+        <fieldset disabled={pending} className="contents">{extras.buttons}{attachments && extras.attach}</fieldset>
         <textarea
           id={messageId}
           ref={ref}
@@ -245,7 +261,7 @@ export function Composer({
           rows={1}
           className="thin-scrollbar block min-h-10 min-w-0 flex-1 resize-none overflow-hidden bg-transparent py-2 text-[15px] leading-6 outline-none placeholder:text-muted"
           placeholder={extras.hasDraft ? "Add a message…" : placeholder}
-          onInput={() => { fit(); mentions.detect(); }}
+          onInput={(e) => { fit(); mentions.detect(); setToAgent(summonsAgent(e.currentTarget.value)); }}
           onClick={mentions.detect}
           onKeyDown={(e) => {
             if (mentions.keyDown(e)) return;
@@ -270,7 +286,7 @@ export function Composer({
             {locating ? "…" : "📍"}
           </button>
         )}
-        <fieldset disabled={pending} className="contents">{extras.microphone}</fieldset>
+        {attachments && <fieldset disabled={pending} className="contents">{extras.microphone}</fieldset>}
         <button
           aria-label="Send"
           title="Send (Enter) · New line: Shift+Enter"

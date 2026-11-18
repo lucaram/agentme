@@ -10,8 +10,6 @@ import { getConversation } from "@/lib/data/chat";
 import { chatWriteAccess } from "@/lib/chat/access";
 import { ATTACHMENT_BUCKET, pruneChatAttachments } from "@/lib/chat/files";
 import type { Database } from "@/lib/database.types";
-import { answerGroupInvite } from "@/lib/social/groups";
-import { votePoll } from "@/lib/plans/participation";
 import { createCommunity } from "@/lib/social/communities";
 type AuthClient = ReturnType<typeof createClient<Database>>;
 
@@ -92,35 +90,23 @@ describe.skipIf(!dbUp)("private rich chat messages", () => {
     expect((await download()).status).toBe(404);
     expect((await f.db.from("chat_attachments").select("id").eq("id", fileId)).data).toEqual([]);
   });
-  it("creates direct polls atomically, prevents duplicates and shares a My Agent poll only with selected contacts", async () => {
-    // Explicit opt-in tests the direct-add branch; the next test covers invitations.
+  it("creates direct polls atomically and prevents duplicates", async () => {
     await f.db.from("agents").update({ group_add_policy: "contacts" }).eq("id", f.marco.agent.id);
     const nonce = crypto.randomUUID(); const raw = { clientId: nonce, poll: { question: "Pizza or sushi?", options: ["Pizza", "Sushi"] } };
     expect(await send(raw)).not.toHaveProperty("error"); expect(await send(raw)).not.toHaveProperty("error");
     const { data: rows } = await f.db.from("messages").select("id,metadata").eq("metadata->>client_id", nonce); expect(rows).toHaveLength(1);
     const { error: forbidden } = await (session.client as AuthClient).rpc("create_chat_poll", { p_owner: f.luca.userId, p_agent: f.luca.agent.id, p_origin: f.group, p_group: f.group, p_thread: null, p_client: crypto.randomUUID(), p_question: "Not permitted", p_options: ["Yes", "No"], p_voters: [f.luca.agent.handle] }); expect(forbidden?.code).toBe("42501");
-    await f.db.from("contacts").insert({ requester_agent: f.luca.agent.id, addressee_agent: f.marco.agent.id, status: "accepted" });
-    const ownNonce = crypto.randomUUID(); const answer = await send({ clientId: ownNonce, poll: { question: "Friday dinner?", options: ["Yes", "No"], people: [f.marco.agent.id] } }, f.myAgent);
-    expect(answer).toHaveProperty("threadId"); expect(answer).not.toHaveProperty("error");
-    const { data: copies } = await f.db.from("messages").select("conversation_id").eq("metadata->>client_id", ownNonce); expect(copies).toHaveLength(2);
-    const group = copies!.find((m) => m.conversation_id !== f.myAgent)!.conversation_id;
-    const { data: members } = await f.db.from("conversation_members").select("user_id").eq("conversation_id", group);
-    expect(members!.map((m) => m.user_id).sort()).toEqual([f.luca.userId, f.marco.userId].sort());
   });
-  it("respects a contact's requirement to approve a group invitation before accessing a My Agent poll", async () => {
-    await f.db.from("agents").update({ group_add_policy: "nobody" }).eq("id", f.marco.agent.id);
-    const nonce = crypto.randomUUID();
-    expect(await send({ clientId: nonce, poll: { question: "Private invitation", options: ["Yes", "No"], people: [f.marco.agent.id] } }, f.myAgent)).not.toHaveProperty("error");
-    const { data: copies } = await f.db.from("messages").select("conversation_id,metadata").eq("metadata->>client_id", nonce);
-    const group = copies!.find((m) => m.conversation_id !== f.myAgent)!.conversation_id;
-    const step = (copies![0].metadata as { step_id: string }).step_id;
-    const marcoClient = await as(f.marco);
-    expect((await marcoClient.from("plan_steps").select("id").eq("id", step)).data).toEqual([]);
-    expect(await votePoll(step, f.marco.userId, f.marco.agent, "Yes")).toMatchObject({ ok: false });
-    const { data: invite } = await f.db.from("inbox_items").select("id").eq("owner_id", f.marco.userId).eq("payload->>conversation_id", group).single();
-    expect(invite).toBeTruthy();
-    expect(await answerGroupInvite(invite!.id, { userId: f.marco.userId, agent: f.marco.agent }, true)).toMatchObject({ ok: true });
-    expect(await votePoll(step, f.marco.userId, f.marco.agent, "Yes")).toMatchObject({ ok: true });
+  it("takes only text where an agent is the reader: My Agent, a business's agent, and @agent in a chat", async () => {
+    const textOnly = { error: "Your agent reads text only. Nothing has been sent." };
+    expect(await send({ clientId: crypto.randomUUID(), poll: { question: "Friday dinner?", options: ["Yes", "No"], people: [f.marco.agent.id] } }, f.myAgent)).toEqual(textOnly);
+    expect(await send({ clientId: crypto.randomUUID(), location: { lat: 51.5, lon: -0.12 } }, f.myAgent)).toEqual(textOnly);
+    expect(await send({ clientId: crypto.randomUUID(), location: { lat: 51.5, lon: -0.12 } }, f.direct)).toEqual(textOnly);
+    const toAgent = await sendRichMessage({ conv: (await getConversation(f.group))!, userId: f.luca.userId, agent: f.luca.agent, text: "@agent where is this?", raw: { clientId: crypto.randomUUID(), location: { lat: 51.5, lon: -0.12 } } });
+    expect(toAgent.error).toMatch(/^@agent reads text only/);
+    // Nothing was posted by any of them.
+    const { count } = await f.db.from("messages").select("id", { count: "exact", head: true }).in("conversation_id", [f.myAgent, f.direct]).eq("metadata->>kind", "rich_message");
+    expect(count).toBe(0);
   });
   it("does not let attachments bypass a community's no-media house rule", async () => {
     const made = await createCommunity({ userId: f.luca.userId, agent: f.luca.agent }, { name: `Text discussion ${f.luca.agent.handle}`, description: "A temporary community for text discussion only.", avatar: "📚", visibility: "private", houseRules: ["no_media"] });

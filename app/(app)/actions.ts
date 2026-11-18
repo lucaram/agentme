@@ -88,7 +88,7 @@ export async function sendMessage(
     if (agent.type === "business" && user.businessRole === "staff" && typeof options.rich === "object" && options.rich && "poll" in options.rich && options.rich.poll) return { error: "An owner or manager can create a business poll." };
     const allowed = await canPost(conv as ConvRow, user.id);
     if (!allowed.ok) return { error: allowed.error };
-    const result = await sendRichMessage({ conv, userId: user.id, agent, text: content, threadId, replyTo: options.replyTo, confirmed: options.confirmed, raw: options.rich });
+    const result = await sendRichMessage({ conv, userId: user.id, agent, text: content, replyTo: options.replyTo, confirmed: options.confirmed, raw: options.rich });
     revalidatePath(`/chats/${conversationId}`);
     return result;
   }

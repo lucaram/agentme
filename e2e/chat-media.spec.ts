@@ -171,36 +171,36 @@ test("chat previews keep emoji, files, location and polls private until Send; me
   }
 });
 
-test("My Agent keeps files private and creates a poll with explicitly selected contacts", async ({ browser }) => {
+test("only text goes to an agent: no attachments in My Agent, and @agent in a chat holds them back", async ({ browser }) => {
   const f = await planBusinessFixture(); const sessions: BrowserContext[] = [];
-  const login = async (email: string) => {
-    const context = await browser.newContext(); sessions.push(context); const page = await context.newPage(); await page.goto("/login"); await page.getByLabel("Email", { exact: true }).fill(email); await page.getByLabel("Password", { exact: true }).fill(f.password); await page.getByRole("button", { name: "Log in", exact: true }).click(); await expect(page).toHaveURL(/\/chats/); return page;
-  };
   try {
-    await f.db.from("contacts").insert({ requester_agent: f.luca.agent.id, addressee_agent: f.marco.agent.id, status: "accepted" });
-    const luca = await login(f.luca.email); await luca.goto(`/chats/${f.myAgent}?t=new`);
-    await luca.getByLabel("Choose attachments", { exact: true }).setInputFiles({ name: "private.txt", mimeType: "text/plain", buffer: Buffer.from("Owner's private note.") });
-    await expect(luca.getByTestId("attachment-preview")).toBeVisible();
-    const privateCaption = luca.getByRole("textbox", { name: "Message", exact: true }); await expect(privateCaption).toBeFocused(); await privateCaption.pressSequentially("A private note for this request.");
-    await luca.getByRole("button", { name: "Send", exact: true }).click();
-    const note = luca.getByRole("link", { name: /private.txt/ }); await expect(note).toBeVisible();
-    await expect(luca.getByRole("list", { name: "Messages", exact: true }).getByText("A private note for this request.", { exact: true })).toBeVisible();
-    const { data: privateMessage } = await f.db.from("messages").select("id").eq("conversation_id", f.myAgent).eq("content", "A private note for this request.").single();
-    expect((await f.db.from("chat_attachments").select("id").eq("message_id", privateMessage!.id)).data).toHaveLength(1);
-    const paul = await login(f.paul.email); expect((await paul.request.get((await note.getAttribute("href"))!)).status()).toBe(404);
-    await luca.goto(`/chats/${f.myAgent}?t=new`); await luca.getByRole("button", { name: "Attach", exact: true }).click(); await luca.getByRole("button", { name: /Create poll/ }).click();
-    const editor = luca.getByRole("dialog", { name: "Create poll", exact: true }); await editor.getByLabel("Question", { exact: true }).fill("Friday lunch?"); await editor.getByLabel("Poll option 1", { exact: true }).fill("Yes"); await editor.getByLabel("Poll option 2", { exact: true }).fill("No"); await editor.getByRole("checkbox", { name: /^Marco/ }).check(); await editor.getByRole("button", { name: "Review poll", exact: true }).click();
-    await expect(luca.getByTestId("attachment-preview")).toContainText("With: Marco"); await luca.getByRole("button", { name: "Send", exact: true }).click();
-    await expect(luca.getByTestId("poll")).toContainText("Friday lunch?"); const groupLink = luca.getByRole("link", { name: "Open poll chat →", exact: true }); await expect(groupLink).toBeVisible(); const groupPath = await groupLink.getAttribute("href");
-    const marco = await login(f.marco.email); await marco.goto(groupPath!); await expect(marco.getByRole("heading", { name: "404", exact: true })).toBeVisible();
-    await marco.goto("/chats"); await marco.getByRole("link", { name: /My Agent/ }).first().click();
-    await marco.getByRole("button", { name: "Join group", exact: true }).click();
-    await expect(marco.getByTestId("poll")).toContainText("Friday lunch?"); await marco.getByTestId("poll").getByRole("button", { name: "Yes", exact: true }).click(); await expect(luca.getByTestId("poll").getByRole("list", { name: "Votes for Yes", exact: true })).toContainText("Marco");
-    await paul.goto(groupPath!); await expect(paul.getByRole("heading", { name: "404", exact: true })).toBeVisible();
+    const context = await browser.newContext(); sessions.push(context); const luca = await context.newPage();
+    await luca.goto("/login"); await luca.getByLabel("Email", { exact: true }).fill(f.luca.email); await luca.getByLabel("Password", { exact: true }).fill(f.password); await luca.getByRole("button", { name: "Log in", exact: true }).click(); await expect(luca).toHaveURL(/\/chats/);
+    // My Agent and a business's agent read text only: no attach, camera, location, poll or voice message there.
+    for (const path of [`/chats/${f.myAgent}?t=new`, `/chats/${f.direct}`]) {
+      await luca.goto(path);
+      await expect(luca.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
+      await expect(luca.getByRole("button", { name: "Attach", exact: true })).toHaveCount(0);
+      await expect(luca.getByRole("button", { name: "Record audio", exact: true })).toHaveCount(0);
+      await expect(luca.getByLabel("Choose attachments", { exact: true })).toHaveCount(0);
+      await expect(luca.getByRole("button", { name: "Emojis", exact: true })).toBeVisible();
+    }
+    await expect(luca.getByRole("button", { name: "Near me now", exact: true })).toHaveCount(0);
+    await luca.goto(`/chats/${f.myAgent}?t=new`); await expect(luca.getByRole("button", { name: "Near me now", exact: true })).toBeVisible();
+    // In a group, files are for people: they wait while the message is to @agent.
+    await luca.goto(`/chats/${f.group}`);
+    const box = luca.getByRole("textbox", { name: "Message", exact: true });
+    await expect(luca.getByRole("button", { name: "Attach", exact: true })).toBeEnabled();
+    await box.pressSequentially("@agent what time is dinner?");
+    await expect(luca.getByTestId("agent-text-only")).toHaveText("@agent reads text only. Send files as a separate message.");
+    await expect(luca.getByRole("button", { name: "Attach", exact: true })).toBeDisabled();
+    await expect(luca.getByRole("button", { name: "Record audio", exact: true })).toBeDisabled();
+    await box.fill(""); await box.pressSequentially("See you there");
+    await expect(luca.getByTestId("agent-text-only")).toHaveCount(0);
+    await expect(luca.getByRole("button", { name: "Attach", exact: true })).toBeEnabled();
   } finally {
     for (const session of sessions) await session.close();
-    const { data: objects } = await f.db.from("chat_attachments").select("path").eq("uploader_id", f.luca.userId); const paths = (objects ?? []).map((o) => o.path);
-    const removed = paths.length ? await f.db.storage.from("chat-attachments").remove(paths) : { error: null }; await f.cleanup(); if (!removed.error && paths.length) await f.db.from("chat_attachment_gc").delete().in("path", paths);
+    await f.cleanup();
   }
 });
 
