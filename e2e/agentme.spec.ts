@@ -127,8 +127,9 @@ test("three agents coordinate a dinner and humans approve it", async ({ browser 
   // Marco can audit exactly what his agent shared, and with whom.
   await marco.page.goto("/history");
   const disclosure = marco.page.getByTestId("disclosure").first();
-  await expect(disclosure).toContainText("@luca's agent");
-  await expect(disclosure).toContainText("Shared: Availability, Food preferences");
+  await expect(disclosure).toContainText("Luca");
+  await expect(disclosure.getByTestId("shared")).toContainText("Availability:");
+  await expect(disclosure.getByTestId("shared")).toContainText("Food preferences:");
 
   await luca.close();
   await marco.close();

@@ -1,6 +1,7 @@
 import { Avatar } from "@/components/Avatar";
-import { avatarText } from "@/lib/profile/avatar";
 import Link from "next/link";
+import { OUTCOMES, describeIncoming, type Outcome } from "@/lib/activity/incoming";
+import { getOrCreateMyAgentConversation } from "@/lib/data/chat";
 import { requireAgent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { CATEGORY_LABELS, type FactCategory } from "@/lib/policy/disclosure";
@@ -20,20 +21,42 @@ const sum = (rows: UsageRow[]) => ({
   tokens: rows.reduce((n, r) => n + r.input_tokens + r.output_tokens, 0),
 });
 
-export default async function HistoryPage() {
-  const { agent } = await requireAgent();
+/** Rows of "what others asked" shown at first; "Show more" adds this many. */
+const PAGE = 10;
+
+export default async function HistoryPage({ searchParams }: PageProps<"/history">) {
+  const { user, agent } = await requireAgent();
+  const { show: rawShow, n: rawCount } = await searchParams;
+  const show = (OUTCOMES.some((o) => o.id === rawShow) ? rawShow : "all") as Outcome | "all";
+  const count = Math.min(200, Math.max(PAGE, Number(rawCount) || PAGE));
   const supabase = await createClient();
   const since = daysAgo(30);
-  const [{ data: tasks }, { data: exchanges }, { data: agents }, { data: usage }] = await Promise.all([
+  const [{ data: tasks }, { data: exchanges }, { data: received }, { data: agents }, { data: usage }] = await Promise.all([
     supabase.from("tasks").select("*").order("created_at", { ascending: false }).limit(50),
     supabase.from("task_exchanges").select("*").order("created_at", { ascending: false }).limit(200),
-    supabase.from("agents").select("id, handle, avatar"),
+    supabase.from("task_exchanges").select("*").eq("to_agent", agent.id).order("created_at", { ascending: false }).limit(200),
+    supabase.from("agents").select("id, handle, avatar, display_name"),
     // RLS: usage you caused, plus every call made for your tasks (including other agents' replies).
     supabase.from("llm_usage").select("task_id, cost_usd, input_tokens, output_tokens").gte("created_at", since).limit(5000),
   ]);
   const byId = new Map((agents ?? []).map((a) => [a.id, a]));
   const label = (c: string) => (c === "business_info" ? "Public business info" : CATEGORY_LABELS[c as FactCategory] ?? c);
-  const incoming = (exchanges ?? []).filter((e) => e.to_agent === agent.id);
+  // What others asked: in plain words, waiting ones first; the summary covers the last 30 days.
+  const incoming = (received ?? []).map((e) => ({ ...e, row: describeIncoming(e) }));
+  const recent = incoming.filter((e) => e.created_at >= since);
+  const tally = (outcome: Outcome) => recent.filter((e) => e.row.outcome === outcome).length;
+  const listed = incoming
+    .filter((e) => show === "all" || e.row.outcome === show)
+    .sort((a, b) => Number(b.row.outcome === "waiting") - Number(a.row.outcome === "waiting"));
+  const myAgent = incoming.some((e) => e.row.outcome === "waiting") ? await getOrCreateMyAgentConversation(user.id) : null;
+  const business = agent.type === "business";
+  const href = (next: { show?: string; n?: number }) => {
+    const params = new URLSearchParams();
+    const nextShow = next.show ?? show;
+    if (nextShow !== "all") params.set("show", nextShow);
+    if (next.n && next.n > PAGE) params.set("n", String(next.n));
+    return `/history${params.size ? `?${params}` : ""}#asked`;
+  };
 
   const usageRows = (usage ?? []) as UsageRow[];
   const usageByTask = new Map<string, UsageRow[]>();
@@ -93,32 +116,76 @@ export default async function HistoryPage() {
         </ul>
       </section>
 
-      <section>
-        <h2 className="mb-1 font-semibold">What your agent shared with others</h2>
-        <p className="mb-2 text-xs text-muted">Every request other agents sent to @{agent.handle}, and exactly which of your information was used to answer.</p>
-        {!incoming.length && <p className="text-sm text-muted">Nothing yet.</p>}
+      <section id="asked" className="scroll-mt-40" aria-labelledby="asked-title">
+        <h2 id="asked-title" className="mb-1 font-semibold">{business ? "Questions customers asked" : "What your agent shared with others"}</h2>
+        <p className="mb-2 text-xs text-muted">
+          {business ? `What customers' agents asked @${agent.handle}, and what they were told.` : "What other people's agents asked, and exactly what your agent told them."}
+        </p>
+        {incoming.length > 0 && (
+          <>
+            <p className="mb-2 text-sm" data-testid="asked-summary">
+              Last 30 days: {recent.length} {business ? (recent.length === 1 ? "question" : "questions") : recent.length === 1 ? "request" : "requests"} · {tally("agent")} by your agent · {tally("you")} by you
+              {tally("waiting") > 0 && <> · <b className="text-accent">{tally("waiting")} waiting for you</b></>}
+            </p>
+            <nav aria-label="Show" className="no-scrollbar mb-3 flex gap-1 overflow-x-auto">
+              {OUTCOMES.map((o) => (
+                <Link key={o.id} href={href({ show: o.id })} aria-current={show === o.id ? "true" : undefined} className={`shrink-0 rounded-full border px-3 py-1 text-xs ${show === o.id ? "border-accent bg-accent-soft font-medium" : "border-border text-muted hover:bg-accent-soft"}`}>
+                  {o.label}
+                </Link>
+              ))}
+            </nav>
+          </>
+        )}
+        {!listed.length && <p className="text-sm text-muted">{incoming.length ? "Nothing here." : "Nothing yet."}</p>}
         <ul className="divide-y divide-border rounded-2xl border border-border bg-surface empty:hidden">
-          {incoming.map((e) => {
+          {listed.slice(0, count).map((e) => {
             const from = e.from_agent ? byId.get(e.from_agent) : undefined;
+            const { row } = e;
+            const waiting = row.outcome === "waiting";
             return (
-              <li key={e.id} className="px-4 py-3 text-sm" data-testid="disclosure">
-                <div className="flex justify-between gap-2">
-                  <span>{from ? `${avatarText(from.avatar)} @${from.handle}'s agent` : "An external agent"} · {e.skill}</span>
-                  <span className="shrink-0 text-xs text-muted">{fmt(e.created_at)}</span>
+              <li key={e.id} className={`space-y-1 px-4 py-3 text-sm ${waiting ? "bg-accent-soft/60" : ""}`} data-testid="disclosure">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    {waiting && <span className="h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden />}
+                    <Avatar value={from?.avatar} />
+                    <span className="truncate font-medium">{from?.display_name ?? "An agent outside AGENTME"}</span>
+                    <span className="shrink-0 text-xs text-muted">· {fmt(e.created_at)}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2 text-xs">
+                    <span className={waiting ? "font-medium text-accent" : "text-muted"} data-testid="outcome">{row.outcomeText}</span>
+                    {waiting && myAgent && <Link href={`/chats/${myAgent.id}`} className="btn-primary px-3 py-1 text-xs">Answer</Link>}
+                  </span>
                 </div>
-                <p className="text-xs text-muted">
-                  {e.status === "completed"
-                    ? e.disclosed_categories.length
-                      ? `Shared: ${e.disclosed_categories.map(label).join(", ")}${e.answered_by === "human" ? " (you answered personally)" : ""}`
-                      : "Shared nothing"
-                    : e.status === "waiting_human"
-                      ? "Waiting for your answer in My Agent: nothing shared yet"
-                      : `${e.status}${e.error ? ` (${e.error})` : ""} — nothing shared`}
-                </p>
+                {row.asked && (
+                  <p>
+                    {row.plan ? <><span className="text-muted">Asked about: </span>{row.asked}</> : <>“{row.asked}”</>}
+                  </p>
+                )}
+                {row.shared.length > 0 && (
+                  <p className="text-xs" data-testid="shared">
+                    <span className="text-muted">Shared: </span>
+                    {row.shared.map((item, i) => <span key={item.label}>{i > 0 && " · "}{item.label}: <i>{item.value}</i></span>)}
+                  </p>
+                )}
+                {row.answer && (
+                  row.answer.length > 160 ? (
+                    <details className="group text-muted">
+                      <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                        <span className="line-clamp-2 group-open:line-clamp-none">→ {row.answer}</span>
+                        <span className="text-xs text-accent group-open:hidden">Show all</span>
+                      </summary>
+                    </details>
+                  ) : (
+                    <p className="text-muted">→ {row.answer}</p>
+                  )
+                )}
               </li>
             );
           })}
         </ul>
+        {listed.length > count && (
+          <Link href={href({ n: count + PAGE })} className="mt-2 inline-block text-sm text-accent hover:underline" scroll={false}>Show more ({listed.length - count} left)</Link>
+        )}
       </section>
     </div>
   );
