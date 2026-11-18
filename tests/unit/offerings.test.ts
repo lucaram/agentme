@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  asksAboutOffering, cleanTags, facilityNote, offeringsIndex, groupItems, mentionsOfferings, mergeOfferings, mockOfferings, offeringsKnowledge, planPrices, priceNote, priceSources, priceText, readingPrices, sourceLabel, splitForReading, tidyOfferings,
+  asksAboutOffering, cleanTags, facilityNote, offeringsIndex, oneNote, groupItems, mentionsOfferings, mergeOfferings, mockOfferings, offeringsKnowledge, planPrices, priceNote, priceSources, priceText, readingPrices, sourceLabel, splitForReading, tidyOfferings,
   type FacilityRow, type FoundItem, type PriceRow, type SourceRow,
 } from "@/lib/business/offerings-shared";
 import { addressKey } from "@/lib/business/extract";
@@ -68,7 +68,7 @@ describe("products & services", () => {
     ];
     const facilities = [facility({}), facility({ key: "custom-ab12cd34", label: "Live music", evidence: "Fridays from 8pm", confirmed: true, source_label: null }), facility({ key: "wifi", hidden: true, confirmed: true })];
     const publicView = offeringsKnowledge(prices, facilities, "public", NOW);
-    expect(publicView).toContain("- Pizza › Margherita pizza [Vegetarian]: 10-inch £7.50; 12-inch £8.50 (from menu.pdf, read today)");
+    expect(publicView).toContain("- Pizza › Margherita pizza (vegetarian): 10-inch £7.50; 12-inch £8.50 (from menu.pdf, read today)");
     expect(publicView).toContain("Prices of services:\n- Cuts › Men's haircut: from £18.00, 30 min, booking needed (confirmed by the business)");
     expect(publicView).toContain("- Live music: yes, Fridays from 8pm (confirmed by the business)");
     expect(publicView).not.toContain("Wi-Fi");
@@ -159,6 +159,9 @@ describe("products & services", () => {
     expect(asksAboutOffering("How much is the staff curry?", prices, "customers")).toBe(true);
     expect(asksAboutOffering("Will it rain tomorrow?", prices, "public")).toBe(false);
     expect(offeringsIndex(prices, "public")).toBe("Breads: Butter Roti");
+    // A source note said twice in a row is said once; different notes stay.
+    expect(oneNote("Tiramisù is £6.00 (confirmed by the business). (confirmed by the business)")).toBe("Tiramisù is £6.00 (confirmed by the business)");
+    expect(oneNote("Naan £3.95 (from menu.pdf, read today) and roti £3.50 (confirmed by the business).")).toBe("Naan £3.95 (from menu.pdf, read today) and roti £3.50 (confirmed by the business).");
   });
 
   it("only pages that mention prices or facilities are read; the test stand-in reads simple menus and price lists", () => {

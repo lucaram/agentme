@@ -1,5 +1,5 @@
 import { offeringsKnowledgeFor, offeringsOf } from "@/lib/business/offerings";
-import { asksAboutOffering, offeringsIndex, type PriceRow } from "@/lib/business/offerings-shared";
+import { asksAboutOffering, offeringsIndex, oneNote, type PriceRow } from "@/lib/business/offerings-shared";
 import { llm } from "@/lib/llm";
 import { canContact, type ContactPolicy, type Relationship } from "@/lib/policy/contactPolicy";
 import { factsByRequest, isRequestableCategory, selectDisclosableFacts, type Fact, type RequestableCategory } from "@/lib/policy/disclosure";
@@ -268,7 +268,8 @@ ${offerings}` : knowledge.info;
   });
   // Where it came from and when it was read: added by code, only for a page the agent was actually given.
   const page = raw.needs_team ? undefined : sources.find((s) => s.url === raw.source_url.trim() && s.origin !== "learned");
-  const reply = { answer: page ? `${raw.answer.trim()}\n\n${citation(page.url, page.last_read_at)}` : raw.answer, needs_team: raw.needs_team };
+  const answer = oneNote(raw.answer.trim());
+  const reply = { answer: page ? `${answer}\n\n${citation(page.url, page.last_read_at)}` : answer, needs_team: raw.needs_team };
   // Booking or ordering: the business's own ways are always in the answer (code, not the model).
   return { ...withWays(trimmed, reply, waysOf(recipient.business_info)), source: page?.url ?? null };
 }

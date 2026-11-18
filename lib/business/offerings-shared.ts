@@ -150,6 +150,9 @@ export function offeringsIndex(prices: PriceRow[], audience: "public" | "custome
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
+/** "£6.00 (confirmed by the business). (confirmed by the business)": a note said twice in a row, once. */
+export const oneNote = (text: string) => text.replace(/(\(([^()]+)\))\.?(\s*\(\2\))+/g, "$1");
+
 // ------------------------------------------------------------- where prices come from
 
 export type SourceRow = {
@@ -325,7 +328,7 @@ export function offeringsKnowledge(prices: PriceRow[], facilities: FacilityRow[]
   const line = (i: Item) => {
     const options = i.options.map((o) => `${o.label ? `${o.label} ` : ""}${priceText(o.price, i.price_type, i.currency)}`).join("; ");
     const extra = [i.duration_minutes ? durationText(i.duration_minutes) : "", i.needs_booking ? "booking needed" : ""].filter(Boolean).join(", ");
-    return `- ${i.category ? `${i.category} › ` : ""}${i.item}${i.tags.length ? ` [${i.tags.join(", ")}]` : ""}: ${options}${extra ? `, ${extra}` : ""}${i.description ? `. ${i.description}` : ""} (${priceNote({ corrected: i.corrected, added: i.added, source_label: i.source_label, read_at: i.read_at }, now)})`;
+    return `- ${i.category ? `${i.category} › ` : ""}${i.item}${i.tags.length ? ` (${i.tags.join(", ").toLowerCase()})` : ""}: ${options}${extra ? `, ${extra}` : ""}${i.description ? `. ${i.description}` : ""} (${priceNote({ corrected: i.corrected, added: i.added, source_label: i.source_label, read_at: i.read_at }, now)})`;
   };
   const products = items.filter((i) => i.kind === "product").map(line);
   const services = items.filter((i) => i.kind === "service").map(line);
