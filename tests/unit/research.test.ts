@@ -5,7 +5,7 @@ import { clipPage, indexWords, isPublicDomain, newestFirst, rankIndexHits, sitem
 import { businessKnowledge } from "@/lib/business/knowledge";
 import { splitInline, summonsAgent } from "@/lib/agents/commands";
 import { readFound, readResearch } from "@/lib/llm/anthropic";
-import { chosenPages, overlapPick } from "@/lib/research/answer";
+import { chosenPages, feedLink, feedText, overlapPick, routePages } from "@/lib/research/answer";
 import { statsLine } from "@/lib/business/answer-log";
 
 const NOW = new Date("2026-11-13T10:00:00Z");
@@ -279,5 +279,23 @@ describe("@agent inside a message", () => {
     expect(summonsAgent("I'm fine thanks. @agent: weather in Falkirk?")).toBe(true);
     expect(summonsAgent("@agent summarise")).toBe(true);
     expect(summonsAgent("ask @agent later")).toBe(false);
+  });
+});
+
+describe("reading news sites ourselves", () => {
+  it("a site's feed lists its latest stories in order; the page that lists it is found; router addresses are checked", () => {
+    const rss = `<?xml version="1.0"?><rss><channel><title>BBC News</title>
+      <item><title><![CDATA[Talks with Xi & Trump]]></title><description><![CDATA[Leaders meet in <b>Beijing</b>.]]></description><pubDate>Wed, 18 Nov 2026 16:00:00 GMT</pubDate></item>
+      <item><title>Storm warning</title><description>Storm warning</description></item>
+    </channel></rss>`;
+    expect(feedText(rss)).toBe("1. Talks with Xi & Trump — Leaders meet in Beijing . (Wed, 18 Nov 2026 16:00:00 GMT)\n2. Storm warning");
+    const atom = `<feed><entry><title>Budget passed</title><summary>MPs vote.</summary><updated>2026-11-18T10:00:00Z</updated></entry></feed>`;
+    expect(feedText(atom)).toBe("1. Budget passed — MPs vote. (2026-11-18T10:00:00Z)");
+    expect(feedText("<html><body>No feed</body></html>")).toBe("");
+    const html = `<head><link rel="stylesheet" href="/a.css"><link rel="alternate" type="application/rss+xml" title="News" href="//feeds.example.co.uk/news/rss.xml?a=1&amp;b=2"></head>`;
+    expect(feedLink(html, "https://www.example.co.uk/news")).toBe("https://feeds.example.co.uk/news/rss.xml?a=1&b=2");
+    expect(feedLink("<head></head>", "https://www.example.co.uk/")).toBeNull();
+    expect(routePages(["https://www.bbc.co.uk/news", "bbc news", "javascript:alert(1)", "https://a.example/x", "https://b.example/y"])).toEqual(["https://www.bbc.co.uk/news", "https://a.example/x"]);
+    expect(routePages(undefined)).toEqual([]);
   });
 });

@@ -31,6 +31,7 @@ export const RouteSchema = z.object({
   question: z.string().describe("research only: the request rewritten as one standalone question a search engine could answer, with nothing private in it. Otherwise empty."),
   time: z.enum(["now", "recent", "past", "none"]).describe("now = current conditions or today/tomorrow; recent = news from the last weeks; past = a dated event or an older article; none otherwise."),
   place: z.string().describe("A city or place named in the request (for weather or local results), or empty."),
+  pages: z.array(z.string()).describe("research only: when the request names a website, publisher or organisation whose own page answers it directly, up to 2 full addresses of those pages (e.g. 'the latest BBC news' → https://www.bbc.co.uk/news; 'Guardian headlines' → https://www.theguardian.com/uk). Otherwise empty."),
 });
 export type Route = z.infer<typeof RouteSchema>;
 
@@ -51,7 +52,48 @@ export function mockRoute(text: string, quoted = ""): Route {
     question: research ? `${text.trim().slice(0, 300)}${about ? ` (about: ${about})` : ""}` : "",
     time: NOW_HINT.test(text) ? "now" : RECENT_HINT.test(text) ? "recent" : "none",
     place,
+    pages: [],
   };
+}
+
+/** Only real web addresses from the router (at most 2). */
+export const routePages = (pages: readonly string[] | undefined) => (pages ?? []).filter((p) => /^https?:\/\/[^\s/]+\.[^\s]+$/i.test(p.trim())).map((p) => p.trim()).slice(0, 2);
+
+/** A page's news feed (RSS or Atom), as an absolute address, when it lists one. */
+export function feedLink(html: string, base: string): string | null {
+  for (const tag of html.match(/<link\b[^>]*>/gi) ?? []) {
+    if (!/rel=["']?alternate/i.test(tag) || !/type=["']?application\/(rss|atom)\+xml/i.test(tag)) continue;
+    const href = tag.match(/href=["']([^"']+)["']/i)?.[1];
+    if (!href) continue;
+    try {
+      return new URL(href.replace(/&amp;/g, "&"), base).toString();
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+const feedField = (block: string, names: string[]) => {
+  for (const name of names) {
+    const value = block.match(new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)</${name}>`, "i"))?.[1];
+    if (value) return value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+  }
+  return "";
+};
+
+/**
+ * A news feed (RSS or Atom) as plain text, newest stories in the order the site gives them:
+ * "1. Title — summary (date)". Empty when it isn't a feed.
+ */
+export function feedText(xml: string, max = 20): string {
+  const items = xml.match(/<(item|entry)\b[\s\S]*?<\/\1>/gi) ?? [];
+  return items.slice(0, max).map((block, i) => {
+    const title = feedField(block, ["title"]);
+    const summary = feedField(block, ["description", "summary"]);
+    const date = feedField(block, ["pubDate", "updated", "published", "dc:date"]);
+    return title ? `${i + 1}. ${title}${summary && summary !== title ? ` — ${summary.slice(0, 300)}` : ""}${date ? ` (${date})` : ""}` : "";
+  }).filter(Boolean).join("\n");
 }
 
 /** Shown with an answer whose question was completed from a quoted message: what actually went to the search. */

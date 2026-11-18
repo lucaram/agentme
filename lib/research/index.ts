@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { adminClient } from "@/lib/supabase/admin";
 import { llm } from "@/lib/llm";
 import { asJson } from "@/lib/data/json";
-import { MISS_SECONDS, PickSchema, RouteSchema, WordsSchema, buildAnswer, cacheSeconds, cacheText, chosenPages, overlapPick, type Answer, type ResearchSource, type Route, type TimeClass } from "./answer";
+import { MISS_SECONDS, PickSchema, RouteSchema, WordsSchema, buildAnswer, cacheSeconds, cacheText, chosenPages, feedLink, feedText, overlapPick, type Answer, type ResearchSource, type Route, type TimeClass } from "./answer";
 import { wrapUntrusted } from "@/lib/agents/prompts";
 import { htmlToText } from "@/lib/business/extract";
 import { safeFetch } from "@/lib/business/fetch";
@@ -55,7 +55,7 @@ export async function routeRequest(
       mockContext: { text, quoted: quote ?? "" },
     });
   } catch {
-    return { kind: "chat", question: "", time: "none", place: "" };
+    return { kind: "chat", question: "", time: "none", place: "", pages: [] };
   }
 }
 
@@ -74,7 +74,7 @@ const OWN_READ_TEXT = 30_000;
  * top ones itself (the same safe fetching as business links) and the answer is
  * written from their full text, with no tools.
  */
-async function readOurselves(question: string, sources: ResearchSource[], allowedDomains: readonly string[], now: Date): Promise<Answer | null> {
+async function readOurselves(question: string, sources: ResearchSource[], allowedDomains: readonly string[], now: Date, time: TimeClass = "none"): Promise<Answer | null> {
   const allowed = (url: string) => {
     try {
       const host = siteDomain(new URL(url).hostname);
@@ -83,15 +83,27 @@ async function readOurselves(question: string, sources: ResearchSource[], allowe
       return false;
     }
   };
+  const isFeed = (type: string, body: string) => /(rss|atom)\+xml|\/xml|text\/xml/i.test(type) || /^\s*(<\?xml[^>]*>\s*)?<(rss|feed)\b/i.test(body.slice(0, 500));
   const pages = (
     await Promise.all(
-      sources.filter((s) => allowed(s.url)).slice(0, 2).map(async (s) => {
+      sources.filter((s) => allowed(s.url)).slice(0, 3).map(async (s) => {
         try {
           const file = await safeFetch(s.url);
+          const body = file.body.toString("utf8");
+          // A news feed: its stories, newest first.
+          if (isFeed(file.contentType, body)) {
+            const text = feedText(body);
+            return text ? { url: s.url, title: s.title || "Latest stories", text, pageAge: s.pageAge } : null;
+          }
           if (!file.contentType.includes("html")) return null;
-          const html = file.body.toString("utf8");
-          const text = clipPage(htmlToText(html).replace(/\n{3,}/g, "\n\n").trim(), OWN_READ_TEXT);
-          return text.length < 200 ? null : { url: s.url, title: pageTitle(html) ?? s.title, text, pageAge: s.pageAge };
+          let text = clipPage(htmlToText(body).replace(/\n{3,}/g, "\n\n").trim(), OWN_READ_TEXT);
+          // For news and current events, the page's own feed lists its latest stories in order.
+          const feed = time === "now" || time === "recent" ? feedLink(body, file.finalUrl || s.url) : null;
+          if (feed) {
+            const stories = await safeFetch(feed).then((f) => feedText(f.body.toString("utf8"))).catch(() => "");
+            if (stories) text = `Latest stories (from the page's feed):\n${stories}\n\n${text}`.slice(0, OWN_READ_TEXT);
+          }
+          return text.length < 200 ? null : { url: s.url, title: pageTitle(body) ?? s.title, text, pageAge: s.pageAge };
         } catch {
           return null;
         }
@@ -127,6 +139,15 @@ export async function researchWeb(opts: { question: string; time?: TimeClass; pl
   if (cached) return cached.answer as unknown as Answer;
 
   const now = new Date();
+  // Pages the request itself points at (e.g. a news site's front page): searched with, and read by us if need be.
+  const seeds: ResearchSource[] = (opts.seedUrls ?? []).slice(0, 5).map((url) => ({ url, title: "", retrievedAt: now.toISOString() }));
+  const readOwn = async (found: ResearchSource[]) => {
+    const seen = new Set<string>();
+    const candidates = [...seeds, ...found].filter((s) => !seen.has(s.url) && seen.add(s.url));
+    if (!candidates.length) return null;
+    const own = await readOurselves(question, candidates, opts.allowedDomains ?? [], now, time).catch(() => null);
+    return own && (own.status === "answered" || own.status === "partial") ? own : null;
+  };
   let answer: Answer;
   try {
     const result = await llm().research({
@@ -139,14 +160,21 @@ export async function researchWeb(opts: { question: string; time?: TimeClass; pl
     });
     if (result.errors.length) console.warn("research tool errors", result.errors.join(", "));
     answer = buildAnswer(result.text, result.sources, result.evidence, now);
-    // Pages were found but none could be opened (the answer rests on search snippets): read them ourselves.
-    if (result.sources.length && !result.pagesRead) {
-      const own = await readOurselves(question, result.sources, opts.allowedDomains ?? [], now).catch(() => null);
-      if (own && (own.status === "answered" || own.status === "partial")) answer = own;
+    // Nothing found, the answer rests on search snippets (no page could be opened), or the site the
+    // request names wasn't among what was read: we read the pages ourselves (the ones the request
+    // points at first), as some sites refuse the search's reader.
+    const unanswered = answer.status === "not_found" || answer.status === "unavailable";
+    const host = (url: string) => { try { return siteDomain(new URL(url).hostname); } catch { return url; } };
+    const namedSiteMissed = seeds.length > 0 && !answer.sources.some((s) => seeds.some((seed) => host(s.url) === host(seed.url)));
+    if (unanswered || namedSiteMissed || (result.sources.length && !result.pagesRead)) {
+      const own = await readOwn(result.sources);
+      if (own) answer = own;
     }
   } catch (error) {
     console.error("research unavailable", error instanceof Error ? error.message : error);
-    return { status: "unavailable", text: "I couldn't look that up just now. Please try again in a moment.", sources: [], retrievedAt: now.toISOString() };
+    const own = await readOwn([]);
+    if (!own) return { status: "unavailable", text: "I couldn't look that up just now. Please try again in a moment.", sources: [], retrievedAt: now.toISOString() };
+    answer = own;
   }
   if (answer.status === "answered") {
     await db.from("research_cache").upsert({ key, answer: asJson(answer), expires_at: new Date(now.getTime() + cacheSeconds(time) * 1000).toISOString() });

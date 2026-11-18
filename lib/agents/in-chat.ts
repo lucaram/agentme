@@ -9,7 +9,7 @@ import { composePlan } from "@/lib/coordination/orchestrator";
 import { CHAT_ASSIST_SYSTEM, wrapUntrusted } from "./prompts";
 import { DEFAULT_DRAFT, parseAgentCommand, splitInline } from "./commands";
 import { routeRequest, researchWeb } from "@/lib/research";
-import { answerForDraft, answerMessage, lookedUpNote } from "@/lib/research/answer";
+import { answerForDraft, answerMessage, lookedUpNote, routePages } from "@/lib/research/answer";
 import { describeRetry, hit } from "@/lib/limits";
 import { WHICH_PLACE, placeNote } from "@/lib/research/place";
 import { placeFor } from "@/lib/research/usual-place";
@@ -107,7 +107,7 @@ export async function handleAgentCommand(opts: { userId: string; agent: AgentRow
       await keepOwn(WHICH_PLACE);
       return true;
     }
-    const answer = await researchWeb({ question: where.question, time: route.time, place: where.place });
+    const answer = await researchWeb({ question: where.question, time: route.time, place: where.place, seedUrls: routePages(route.pages) });
     const addition = answerForDraft(answer);
     // What was taken from a quoted message is shown: the question that actually went out.
     const notes = [quoted ? lookedUpNote(where.question) : "", where.assumed ? placeNote(where.assumed) : ""].filter(Boolean);
